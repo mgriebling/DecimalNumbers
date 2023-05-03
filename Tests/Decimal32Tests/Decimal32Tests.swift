@@ -1,5 +1,6 @@
 import XCTest
 @testable import Decimal32
+@testable import UInt128
 
 let verbose = true  // set to false to skip test-by-test passes
 
@@ -1136,115 +1137,118 @@ final class Decimal32Tests: XCTestCase {
             TestCase("bid32_to_uint64_int", 0, "9.223372E+18", 9223372000000000000, 0x00)               // 38
        ]
         
-        var testID = 1
-        var prevID = ""
+      var testID = 1
+      var prevID = ""
+      
+      func checkValues(_ test: TestCase, _ x: UInt64, _ s: Status, _ msg: String) {
+        let pass1 = test.res == x
+        let pass2 = test.status == s
+        XCTAssert(pass1, "Expected: " + msg)
+        XCTAssert(pass2, "[\(test.status)] != [\(s)]")
+        let pf = pass1 && pass2 ? "passed" : "failed"
+        if verbose { print("Decimal32 test \(test.id)-\(testID) \(pf)") }
+      }
+      
+      func checkValues(_ test: TestCase, _ x: UInt128, _ s: Status, _ msg: String) {
+        let pass1 = test.reshi == x >> 64 && test.reslo == x & UInt128("FFFFFFFFFFFFFFFF", radix: 16)!
+        let pass2 = test.status == s
+        XCTAssert(pass1, "Expected: " + msg)
+        XCTAssert(pass2, "[\(test.status)] != [\(s)]")
+        let pf = pass1 && pass2 ? "passed" : "failed"
+        if verbose { print("Decimal32 test \(test.id)-\(testID) \(pf)") }
+      }
+      
+      for test in testCases {
+        Decimal32.rounding = test.roundMode; Decimal32.state = []
+        if prevID != test.id { testID = 1; prevID = test.id; print() } // reset for each type of test
         
-        func checkValues(_ test: TestCase, _ x: UInt64, _ s: Status, _ msg: String) {
-            let pass1 = test.res == x
-            let pass2 = test.status == s
-            XCTAssert(pass1, "Expected: " + msg)
-            XCTAssert(pass2, "[\(test.status)] != [\(s)]")
-            let pf = pass1 && pass2 ? "passed" : "failed"
-            if verbose { print("Decimal32 test \(test.id)-\(testID) \(pf)") }
-        }
-        
-//        func checkValues(_ test: TestCase, _ x: UInt128, _ s: Status, _ msg: String) {
-//            let pass1 = test.reshi == x.hi && test.reslo == x.lo
-//            let pass2 = test.status == s
-//            XCTAssert(pass1, "Expected: " + msg)
-//            XCTAssert(pass2, "[\(test.status)] != [\(s)]")
-//            let pf = pass1 && pass2 ? "passed" : "failed"
-//            if verbose { print("Decimal32 test \(test.id)-\(testID) \(pf)") }
-//        }
-        
-//        for test in testCases {
-//            Decimal32.rounding = test.roundMode; Decimal32.state = []
-//            if prevID != test.id { testID = 1; prevID = test.id; print() } // reset for each type of test
-//
-//            switch test.id {
-//                case "bid32_from_string":
-//                    let t1 = Decimal32(stringLiteral: test.istr)
-//                    let dtest = Decimal32(raw:UInt32(test.res))
-//                    let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]", test.res, t1.x)
-//                    checkValues(test, UInt64(t1.x), Decimal32.state, error)
-//                case "bid32_to_binary64":
-//                    let t1 = Decimal32(stringLiteral: test.istr).double
-//                    let d1 = Double(bitPattern: test.res)
-//                    let error = "\(d1) != \(t1)"
-//                    checkValues(test, t1.bitPattern, Decimal32.state, error)
-//                case "bid32_to_int64_int":
-//                    let t1 = Decimal32(stringLiteral: test.istr)
-//                    let error = "\(test.res) != \(t1.int)"
-//                    checkValues(test, UInt64(bitPattern: Int64(t1.int)), Decimal32.state, error)
-//                case "bid32_to_uint64_int":
-//                    let t1 = Decimal32(stringLiteral: test.istr)
-//                    let error = "\(test.res) != \(t1.uint)"
-//                    checkValues(test, UInt64(t1.uint), Decimal32.state, error)
-//                case "bid32_negate":
-//                    var t1 = Decimal32(stringLiteral: test.istr); t1.negate()
-//                    let dtest = Decimal32(raw:UInt32(test.res))
-//                    let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]", test.res, t1.x)
-//                    checkValues(test, UInt64(t1.x), Decimal32.state, error)
-////                case "bid32_to_bid128":
-////                    let t1 = Decimal32(stringLiteral: test.istr)
-////                    let b128 = t1.decimal128
-////                    let d128 = Decimal128(raw: UInt128(upper: test.reshi, lower: test.reslo))
-////                    let error = String(format: "0x%08X%08X[\(d128)] != 0x%08X%08X[\(b128)]", test.reshi, test.reslo, b128.x.hi, b128.x.lo)
-////                    checkValues(test, b128.x, Decimal32.state, error)
-////                case "bid32_to_bid64":
-////                    let t1 = Decimal32(stringLiteral: test.istr)
-////                    let b64 = t1.decimal64.x
-////                    let error = "\(test.res) != \(b64)"
-////                    checkValues(test, b64, Decimal32.state, error)
-//                case "bid32_abs":
-//                    let t1 = Decimal32(stringLiteral: test.istr).magnitude
-//                    let state = Decimal32.state
-//                    let dtest = Decimal32(raw:UInt32(test.res))
-//                    let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]", test.res, t1.x)
-//                    checkValues(test, UInt64(t1.x), state, error)
-//                case "bid32_isCanonical", "bid32_isFinite", "bid32_isInf", "bid32_isNaN", "bid32_isNormal",
-//                    "bid32_isSignaling", "bid32_isSigned", "bid32_isSubnormal", "bid32_isZero":
-//                    let t1 = Decimal32(stringLiteral: test.istr)
-//                    var flag = 0
-//                    if test.id.hasSuffix("isCanonical") {
-//                        flag = t1.isCanonical ? 1 : 0
-//                    } else if test.id.hasSuffix("isFinite") {
-//                        flag = t1.isFinite ? 1 : 0
-//                    } else if test.id.hasSuffix("isInf") {
-//                        flag = t1.isInfinite ? 1 : 0
-//                    } else if test.id.hasSuffix("isNaN") {
-//                        flag = t1.isNaN ? 1 : 0
-//                    } else if test.id.hasSuffix("isNormal") {
-//                        flag = t1.isNormal ? 1 : 0
-//                    } else if test.id.hasSuffix("isSignaling") {
-//                        flag = t1.isSignalingNaN ? 1 : 0
-//                    } else if test.id.hasSuffix("isSigned") {
-//                        flag = t1.isSignMinus ? 1 : 0
-//                    } else if test.id.hasSuffix("isSubnormal") {
-//                        flag = t1.isSubnormal ? 1 : 0
-//                    } else if test.id.hasSuffix("isZero") {
-//                        flag = t1.isZero ? 1 : 0
-//                    }
-//                    checkValues(test, UInt64(flag), Decimal32.state, "\(test.res) != \(flag)")
-//                case "bid32_add", "bid32_div", "bid32_mul":
-//                    let t1 = Decimal32(stringLiteral: test.istr)
-//                    let t2 = Decimal32(stringLiteral: test.istr2)
-//                    let res: Decimal32
-//                    if test.id.hasSuffix("add") {
-//                        res = t1 + t2
-//                    } else if test.id.hasSuffix("mul") {
-//                        res = t1 * t2
-//                    } else {
-//                        res = t1 / t2
-//                    }
-//                    let dtest = Decimal32(raw:UInt32(test.res))
-//                    let error = String(format: "Expected: 0x%08X[\(dtest)] != 0x%08X[\(res)]", test.res, res.x)
-//                    checkValues(test, UInt64(res.x), Decimal32.state, error)
-//                default:
-//                    XCTAssert(false, "Unknown test identifier: \(test.id)")
+        switch test.id {
+          case "bid32_from_string":
+            let t1 = Decimal32(stringLiteral: test.istr)
+            let dtest = Decimal32(raw:UInt32(test.res))
+            let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]", test.res, t1.x)
+            checkValues(test, UInt64(t1.x), Decimal32.state, error)
+          case "bid32_to_binary64":
+            let t1 = Decimal32(stringLiteral: test.istr).double
+            let d1 = Double(bitPattern: test.res)
+            let error = "\(d1) != \(t1)"
+            checkValues(test, t1.bitPattern, Decimal32.state, error)
+          case "bid32_to_int64_int":
+            let t1 = Decimal32(stringLiteral: test.istr)
+            let error = "\(test.res) != \(t1.int)"
+            checkValues(test, UInt64(bitPattern: Int64(t1.int)), Decimal32.state, error)
+          case "bid32_to_uint64_int":
+            let t1 = Decimal32(stringLiteral: test.istr)
+            let error = "\(test.res) != \(t1.uint)"
+            checkValues(test, UInt64(t1.uint), Decimal32.state, error)
+          case "bid32_negate":
+            var t1 = Decimal32(stringLiteral: test.istr); t1.negate()
+            let dtest = Decimal32(raw:UInt32(test.res))
+            let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]", test.res, t1.x)
+            checkValues(test, UInt64(t1.x), Decimal32.state, error)
+            //                case "bid32_to_bid128":
+            //                    let t1 = Decimal32(stringLiteral: test.istr)
+            //                    let b128 = t1.decimal128
+            //                    let d128 = Decimal128(raw: UInt128(upper: test.reshi, lower: test.reslo))
+            //                    let error = String(format: "0x%08X%08X[\(d128)] != 0x%08X%08X[\(b128)]", test.reshi, test.reslo, b128.x.hi, b128.x.lo)
+            //                    checkValues(test, b128.x, Decimal32.state, error)
+          case "bid32_to_bid64":
+//            if testID == 114 {
+//              print("fail")
 //            }
-//            testID += 1
-//        }
+            let t1 = Decimal32(stringLiteral: test.istr)
+            let b64 = t1.decimal64
+            let error = "\(test.res) != \(b64)"
+            checkValues(test, b64, Decimal32.state, error)
+          case "bid32_abs":
+            let t1 = Decimal32(stringLiteral: test.istr).magnitude
+            let state = Decimal32.state
+            let dtest = Decimal32(raw:UInt32(test.res))
+            let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]", test.res, t1.x)
+            checkValues(test, UInt64(t1.x), state, error)
+          case "bid32_isCanonical", "bid32_isFinite", "bid32_isInf", "bid32_isNaN", "bid32_isNormal",
+            "bid32_isSignaling", "bid32_isSigned", "bid32_isSubnormal", "bid32_isZero":
+            let t1 = Decimal32(stringLiteral: test.istr)
+            var flag = 0
+            if test.id.hasSuffix("isCanonical") {
+              flag = t1.isCanonical ? 1 : 0
+            } else if test.id.hasSuffix("isFinite") {
+              flag = t1.isFinite ? 1 : 0
+            } else if test.id.hasSuffix("isInf") {
+              flag = t1.isInfinite ? 1 : 0
+            } else if test.id.hasSuffix("isNaN") {
+              flag = t1.isNaN ? 1 : 0
+            } else if test.id.hasSuffix("isNormal") {
+              flag = t1.isNormal ? 1 : 0
+            } else if test.id.hasSuffix("isSignaling") {
+              flag = t1.isSignalingNaN ? 1 : 0
+            } else if test.id.hasSuffix("isSigned") {
+              flag = t1.isSignMinus ? 1 : 0
+            } else if test.id.hasSuffix("isSubnormal") {
+              flag = t1.isSubnormal ? 1 : 0
+            } else if test.id.hasSuffix("isZero") {
+              flag = t1.isZero ? 1 : 0
+            }
+            checkValues(test, UInt64(flag), Decimal32.state, "\(test.res) != \(flag)")
+          case "bid32_add", "bid32_div", "bid32_mul":
+            let t1 = Decimal32(stringLiteral: test.istr)
+            let t2 = Decimal32(stringLiteral: test.istr2)
+            let res: Decimal32
+            if test.id.hasSuffix("add") {
+              res = t1 + t2
+            } else if test.id.hasSuffix("mul") {
+              res = t1 * t2
+            } else {
+              res = t1 / t2
+            }
+            let dtest = Decimal32(raw:UInt32(test.res))
+            let error = String(format: "Expected: 0x%08X[\(dtest)] != 0x%08X[\(res)]", test.res, res.x)
+            checkValues(test, UInt64(res.x), Decimal32.state, error)
+          default:
+            XCTAssert(false, "Unknown test identifier: \(test.id)")
+        }
+        testID += 1
+      }
       
       // Sanity check that the masks were generated correctly from bit defns
       XCTAssert(Decimal32.SIGN_MASK             == 0x8000_0000)
@@ -1264,8 +1268,6 @@ final class Decimal32Tests: XCTestCase {
       
       // back to default rounding mode
       Decimal32.rounding = .toNearestOrEven
-      let z = Decimal32(123456)
-      let zi = z.int
       let s = "123456789"
       let y1 = Decimal32(stringLiteral: s)
       XCTAssert(y1.description == "1.234568e+8")
