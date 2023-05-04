@@ -1345,6 +1345,12 @@ final class Decimal32Tests: XCTestCase {
       a1 = a1 - q * b1
       print("\(a1)")
       
+//      for i in 0...4 {
+//        for j in 0...18 {
+//          print("\(i) = " + String(Decimal32.bid_round_const_table(i, j), radix: 10))
+//        }
+//      }
+      
       // Equivalent to the C 'round' function:
       let w = Decimal32(6.5)
       print(w.rounded(.toNearestOrAwayFromZero))

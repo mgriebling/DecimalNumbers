@@ -1,6 +1,6 @@
 //
 //  Decimal32.swift
-//  
+//
 //
 //  Created by Mike Griebling on 2022-03-07.
 //
@@ -299,7 +299,7 @@ public extension Decimal32 {
     // if (exp_x - 101 = -95) the number may be subnormal
     if result.exp < 6 {
       let sig_x_prime = UInt64(result.sig) *
-      UInt64(Self.bid_ten2k64[result.exp])
+      UInt64(Self.bid_ten2k64(result.exp))
       return sig_x_prime >= 1000000 // subnormal test
     } else {
       return true // normal
@@ -313,7 +313,7 @@ public extension Decimal32 {
     // if (exp_x - 101 = -95) the number may be subnormal
     if result.exp < 6 {
       let sig_x_prime = UInt64(result.sig) *
-      UInt64(Self.bid_ten2k64[result.exp])
+      UInt64(Self.bid_ten2k64(result.exp))
       return sig_x_prime < 1000000  // subnormal test
     } else {
       return false // normal
@@ -443,11 +443,11 @@ extension Decimal32 {
         
         // get digits to be shifted out
         let extra_digits = -expon
-        coeff += UInt32(bid_round_const_table[roundIndex][extra_digits])
+        coeff += UInt32(bid_round_const_table(roundIndex, extra_digits))
         
         // get coeff*(2^M[extra_digits])/10^extra_digits
         var Q : UInt128 = UInt128(w: [0, 0])
-        __mul_64x64_to_128 (&Q, UInt64(coeff), bid_reciprocals10_64[extra_digits]);
+        __mul_64x64_to_128 (&Q, UInt64(coeff), bid_reciprocals10_64(extra_digits));
         
         // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-128
         let amount = bid_short_recip_scale[extra_digits]
@@ -466,7 +466,7 @@ extension Decimal32 {
             remainder_h >>= amount2
             remainder_h = remainder_h & Q.high
             
-            if remainder_h == 0 && Q.low < bid_reciprocals10_64[extra_digits] {
+            if remainder_h == 0 && Q.low < bid_reciprocals10_64(extra_digits) {
               _C64 -= 1
             }
           }
@@ -482,17 +482,17 @@ extension Decimal32 {
           switch rmode {
             case BID_ROUNDING_TO_NEAREST, BID_ROUNDING_TIES_AWAY:
               // test whether fractional part is 0
-              if (remainder_h == SIGN_MASK64 && (Q.low < bid_reciprocals10_64[extra_digits])) {
+              if (remainder_h == SIGN_MASK64 && (Q.low < bid_reciprocals10_64(extra_digits))) {
                 status = Status.clearFlags // BID_EXACT_STATUS;
               }
             case BID_ROUNDING_DOWN, BID_ROUNDING_TO_ZERO:
-              if remainder_h == 0 && Q.low < bid_reciprocals10_64[extra_digits] {
+              if remainder_h == 0 && Q.low < bid_reciprocals10_64(extra_digits) {
                 status = Status.clearFlags // BID_EXACT_STATUS;
               }
             default:
               // round up
               var Stemp = UInt64(0), carry = UInt64(0)
-              __add_carry_out (&Stemp, &carry, Q.low, bid_reciprocals10_64[extra_digits]);
+              __add_carry_out (&Stemp, &carry, Q.low, bid_reciprocals10_64(extra_digits));
               if (remainder_h >> (64 - amount)) + carry >= UInt64(1) << amount {
                 status = Status.clearFlags // BID_EXACT_STATUS;
               }
@@ -576,7 +576,7 @@ extension Decimal32 {
     (x & INFINITY_MASK) == INFINITY_MASK
   }
   
-  static private func isNaN(_ x: Word) -> Bool { 
+  static private func isNaN(_ x: Word) -> Bool {
     (x & NAN_MASK) == NAN_MASK
   }
   
@@ -702,7 +702,7 @@ extension Decimal32 {
         exp = Int(((comb & SPE_MASK12) >> 3) | (comb & 0x3f))
       }
     }
-    let d1 = bid_d2b2[(trailing >> 10) & 0x3ff]
+    let d1 = bid_d2b2((trailing >> 10) & 0x3ff)
     let d2 = bid_d2b[trailing & 0x3ff]
     
     let bcoeff = UInt32(d2 + d1 + UInt64(1_000_000 * d0))
@@ -845,7 +845,7 @@ extension Decimal32 {
       if (exponent_x < 0) && (exponent_x + Decimal32.MAX_DIGITS >= 0) {
         pfpsf.insert(.underflow)
         if exponent_x == -1 {
-          if (coefficient_x + bid_round_const_table[rmode1][extra_digits] >=
+          if (coefficient_x + bid_round_const_table(rmode1, extra_digits) >=
               bid_power10_table_128[extra_digits + 7].low) {
             pfpsf = []
           }
@@ -853,9 +853,9 @@ extension Decimal32 {
           exponent_x = 0
         }
       }
-      coefficient_x += bid_round_const_table[rmode1][extra_digits]
+      coefficient_x += bid_round_const_table(rmode1, extra_digits)
       var Q = UInt128()
-      __mul_64x64_to_128(&Q, coefficient_x, bid_reciprocals10_64[extra_digits])
+      __mul_64x64_to_128(&Q, coefficient_x, bid_reciprocals10_64(extra_digits))
       
       // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-128
       let amount = bid_short_recip_scale[extra_digits]
@@ -869,7 +869,7 @@ extension Decimal32 {
         // get remainder
         let remainder_h = Q.high << (64 - amount)
         
-        if remainder_h == 0 && Q.low < bid_reciprocals10_64[extra_digits] {
+        if remainder_h == 0 && Q.low < bid_reciprocals10_64(extra_digits) {
           coefficient_x-=1
         }
       }
@@ -882,18 +882,18 @@ extension Decimal32 {
         case BID_ROUNDING_TO_NEAREST, BID_ROUNDING_TIES_AWAY:
           // test whether fractional part is 0
           if (remainder_h == (UInt64(SIGN_MASK) << 32) &&
-              (Q.low < bid_reciprocals10_64[extra_digits])) {
+              (Q.low < bid_reciprocals10_64(extra_digits))) {
             status = []
           }
         case BID_ROUNDING_DOWN, BID_ROUNDING_TO_ZERO:
-          if remainder_h == 0 && Q.low < bid_reciprocals10_64[extra_digits] {
+          if remainder_h == 0 && Q.low < bid_reciprocals10_64(extra_digits) {
             status = []
           }
         default:
           // round up
           var Stemp = UInt64(), carry = UInt64()
           __add_carry_out(&Stemp, &carry, Q.low,
-                          bid_reciprocals10_64[extra_digits]);
+                          bid_reciprocals10_64(extra_digits));
           if (remainder_h >> (64 - amount)) + carry >= (UInt64(1) << amount) {
             status = []
           }
@@ -1029,10 +1029,10 @@ extension Decimal32 {
           // C* and f* need shifting and masking, as shown by
           // bid_shiftright128[] and bid_maskhigh128[]
           // 1 <= x <= 16
-          // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+          // kx = 10^(-x) = bid_ten2mk64(ind - 1)
           // C* = (C1 + 1/2 * 10^x) * 10^(-x)
           // the approximation of 10^(-x) was rounded up to 64 bits
-          __mul_64x64_to_128(&P128, C1, bid_ten2mk64[ind - 1])
+          __mul_64x64_to_128(&P128, C1, bid_ten2mk64(ind - 1))
           
           // if (0 < f* < 10^(-x)) then the result is a midpoint
           //   if floor(C*) is even then C* = floor(C*) - logical right
@@ -1056,7 +1056,7 @@ extension Decimal32 {
           // if (0 < f* < 10^(-x)) then the result is a midpoint
           // since round_to_even, subtract 1 if current result is odd
           if (res & 0x1 != 0) && (fstar.high == 0) &&
-              (fstar.low < bid_ten2mk64[ind - 1]) {
+              (fstar.low < bid_ten2mk64(ind - 1)) {
             res -= 1
           }
           // determine inexactness of the rounding of C*
@@ -1068,7 +1068,7 @@ extension Decimal32 {
             if (fstar.low > SIGN_MASK64) {
               // f* > 1/2 and the result may be exact
               // fstar.lo - MASK_SIGN is f* - 1/2
-              if ((fstar.low - SIGN_MASK64) > bid_ten2mk64[ind - 1]) {
+              if ((fstar.low - SIGN_MASK64) > bid_ten2mk64(ind - 1)) {
                 // set the inexact flag
                 pfpsf.insert(.inexact)
               }    // else the result is exact
@@ -1082,7 +1082,7 @@ extension Decimal32 {
               // f2* > 1/2 and the result may be exact
               // Calculate f2* - 1/2
               if fstar.high > bid_onehalf128[ind - 1] ||
-                  fstar.low > bid_ten2mk64[ind - 1] {
+                  fstar.low > bid_ten2mk64(ind - 1) {
                 // set the inexact flag
                 pfpsf.insert(.inexact)
               }    // else the result is exact
@@ -1113,10 +1113,10 @@ extension Decimal32 {
           // C* and f* need shifting and masking, as shown by
           // bid_shiftright128[] and bid_maskhigh128[]
           // 1 <= x <= 16
-          // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+          // kx = 10^(-x) = bid_ten2mk64(ind - 1)
           // C* = (C1 + 1/2 * 10^x) * 10^(-x)
           // the approximation of 10^(-x) was rounded up to 64 bits
-          __mul_64x64_to_128(&P128, C1, bid_ten2mk64[ind - 1])
+          __mul_64x64_to_128(&P128, C1, bid_ten2mk64(ind - 1))
           
           // if (0 < f* < 10^(-x)) then the result is a midpoint
           //   C* = floor(C*) - logical right shift; C* has p decimal digits,
@@ -1145,7 +1145,7 @@ extension Decimal32 {
             if fstar.low > SIGN_MASK64 {
               // f* > 1/2 and the result may be exact
               // fstar.low - SIGN_MASK64 is f* - 1/2
-              if (fstar.low - SIGN_MASK64) > bid_ten2mk64[ind - 1] {
+              if (fstar.low - SIGN_MASK64) > bid_ten2mk64(ind - 1) {
                 // set the inexact flag
                 pfpsf.insert(.inexact)
               }    // else the result is exact
@@ -1159,7 +1159,7 @@ extension Decimal32 {
               // f2* > 1/2 and the result may be exact
               // Calculate f2* - 1/2
               if fstar.high > bid_onehalf128[ind - 1] ||
-                  fstar.low > bid_ten2mk64[ind - 1] {
+                  fstar.low > bid_ten2mk64(ind - 1) {
                 // set the inexact flag
                 pfpsf.insert(.inexact)
               }    // else the result is exact
@@ -1187,10 +1187,10 @@ extension Decimal32 {
           // C* and f* need shifting and masking, as shown by
           // bid_shiftright128[] and bid_maskhigh128[]
           // 1 <= x <= 16
-          // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+          // kx = 10^(-x) = bid_ten2mk64(ind - 1)
           // C* = C1 * 10^(-x)
           // the approximation of 10^(-x) was rounded up to 64 bits
-          __mul_64x64_to_128(&P128, C1, bid_ten2mk64[ind - 1])
+          __mul_64x64_to_128(&P128, C1, bid_ten2mk64(ind - 1))
           
           // C* = floor(C*) (logical right shift; C has p decimal digits,
           //       correct by Property 1)
@@ -1207,7 +1207,7 @@ extension Decimal32 {
                             low: P128.low)
           }
           // if (f* > 10^(-x)) then the result is inexact
-          if (fstar.high != 0) || (fstar.low >= bid_ten2mk64[ind - 1]) {
+          if (fstar.high != 0) || (fstar.low >= bid_ten2mk64(ind - 1)) {
             if x_sign != 0 {
               // if negative and not exact, increment magnitude
               res+=1
@@ -1237,10 +1237,10 @@ extension Decimal32 {
           // C* and f* need shifting and masking, as shown by
           // bid_shiftright128[] and bid_maskhigh128[]
           // 1 <= x <= 16
-          // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+          // kx = 10^(-x) = bid_ten2mk64(ind - 1)
           // C* = C1 * 10^(-x)
           // the approximation of 10^(-x) was rounded up to 64 bits
-          __mul_64x64_to_128(&P128, C1, bid_ten2mk64[ind - 1])
+          __mul_64x64_to_128(&P128, C1, bid_ten2mk64(ind - 1))
           
           // C* = floor(C*) (logical right shift; C has p decimal digits,
           //       correct by Property 1)
@@ -1257,7 +1257,7 @@ extension Decimal32 {
                             low: P128.low)
           }
           // if (f* > 10^(-x)) then the result is inexact
-          if (fstar.high != 0) || (fstar.low >= bid_ten2mk64[ind - 1]) {
+          if (fstar.high != 0) || (fstar.low >= bid_ten2mk64(ind - 1)) {
             if x_sign == 0 {
               // if positive and not exact, increment magnitude
               res+=1
@@ -1287,10 +1287,10 @@ extension Decimal32 {
           // C* and f* need shifting and masking, as shown by
           // bid_shiftright128[] and bid_maskhigh128[]
           // 1 <= x <= 16
-          // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+          // kx = 10^(-x) = bid_ten2mk64(ind - 1)
           // C* = C1 * 10^(-x)
           // the approximation of 10^(-x) was rounded up to 64 bits
-          __mul_64x64_to_128(&P128, C1, bid_ten2mk64[ind - 1])
+          __mul_64x64_to_128(&P128, C1, bid_ten2mk64(ind - 1))
           
           // C* = floor(C*) (logical right shift; C has p decimal digits,
           //       correct by Property 1)
@@ -1307,7 +1307,7 @@ extension Decimal32 {
                             low: P128.low)
           }
           // if (f* > 10^(-x)) then the result is inexact
-          if (fstar.high != 0) || (fstar.low >= bid_ten2mk64[ind - 1]) {
+          if (fstar.high != 0) || (fstar.low >= bid_ten2mk64(ind - 1)) {
             pfpsf.insert(.inexact)
           }
           // set exponent to zero as it was negative before.
@@ -1518,9 +1518,9 @@ extension Decimal32 {
     
     // add a constant to P, depending on rounding mode
     // 0.5*10^(digits_p - 16) for round-to-nearest
-    P += bid_round_const_table[irmode][extra_digits]
+    P += bid_round_const_table(irmode, extra_digits)
     var Tmp = UInt128()
-    __mul_64x64_to_128(&Tmp, P, bid_reciprocals10_64[extra_digits])
+    __mul_64x64_to_128(&Tmp, P, bid_reciprocals10_64(extra_digits))
     
     // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-64
     let amount = bid_short_recip_scale[extra_digits]
@@ -1528,7 +1528,7 @@ extension Decimal32 {
     
     // remainder
     let R = P - Q * bid_power10_table_128[extra_digits].low
-    if R == bid_round_const_table[irmode][extra_digits] {
+    if R == bid_round_const_table(irmode, extra_digits) {
       status = []
     } else {
       status.insert(.inexact)
@@ -1663,9 +1663,9 @@ extension Decimal32 {
     
     // add a constant to P, depending on rounding mode
     // 0.5*10^(digits_p - 16) for round-to-nearest
-    P += bid_round_const_table[rmode1][extra_digits]
+    P += bid_round_const_table(rmode1, extra_digits)
     var Tmp = UInt128()
-    __mul_64x64_to_128(&Tmp, P, bid_reciprocals10_64[extra_digits])
+    __mul_64x64_to_128(&Tmp, P, bid_reciprocals10_64(extra_digits))
     
     // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-64
     let amount = bid_short_recip_scale[extra_digits];
@@ -1674,7 +1674,7 @@ extension Decimal32 {
     // remainder
     let R = P - Q * bid_power10_table_128[extra_digits].low
     
-    if R == bid_round_const_table[rmode1][extra_digits] {
+    if R == bid_round_const_table(rmode1, extra_digits) {
       status = []
     } else {
       status.insert(.inexact)
@@ -1893,11 +1893,11 @@ extension Decimal32 {
         }
         
         if nzeros != 0 {
-          var CT = UInt64(Q) * bid_bid_reciprocals10_32[nzeros]
+          var CT = UInt64(Q) * bid_reciprocals10_32(nzeros)
           CT >>= 32
           
           // now get P/10^extra_digits: shift C64 right by M[extra_digits]-128
-          let amount = bid_bid_bid_recip_scale32[nzeros];
+          let amount = bid_recip_scale32[nzeros];
           Q = UInt32(CT >> amount)
           
           diff_expon += nzeros
@@ -1917,15 +1917,16 @@ extension Decimal32 {
         }
         
         if (digit_h & 1) == 0 {
-          nzeros += Int(3 & UInt32(bid_packed_10000_zeros[Int(digit_h >> 3)] >> (digit_h & 7)))
+          nzeros += Int(3 & UInt32(
+            bid_packed_10000_zeros[Int(digit_h >> 3)] >> (digit_h & 7)))
         }
         
         if nzeros != 0 {
-          var CT = UInt64(Q) * bid_bid_reciprocals10_32[nzeros]
+          var CT = UInt64(Q) * bid_reciprocals10_32(nzeros)
           CT >>= 32
           
           // now get P/10^extra_digits: shift C64 right by M[extra_digits]-128
-          let amount = bid_bid_bid_recip_scale32[nzeros]
+          let amount = bid_recip_scale32[nzeros]
           Q = UInt32(CT >> amount)
         }
         diff_expon += nzeros
@@ -2356,7 +2357,7 @@ extension Decimal32 {
     if exp_x > exp_y {    // to simplify the loop below,
       // otherwise adjust the x significand upwards
       __mul_64x64_to_128(&sig_n_prime, UInt64(sig_x),
-                         bid_ten2k64[exp_x - exp_y]);
+                         bid_ten2k64(exp_x - exp_y))
       // return 0 if values are equal
       if (sig_n_prime.high == 0 && (sig_n_prime.low == sig_y)) {
         return false
@@ -2368,7 +2369,7 @@ extension Decimal32 {
     }
     // adjust the y significand upwards
     __mul_64x64_to_128(&sig_n_prime, UInt64(sig_y),
-                       bid_ten2k64[exp_y - exp_x]);
+                       bid_ten2k64(exp_y - exp_x))
     // return 0 if values are equal
     if (sig_n_prime.high == 0 && (sig_n_prime.low == sig_x)) {
       return false
@@ -2719,13 +2720,13 @@ extension Decimal32 {
     // 0.5*10^(digits_p - 16) for round-to-nearest
     var Stemp = UInt128()
     if extra_digits <= 18 {
-      __add_128_64(&P, P, bid_round_const_table[rmode1][extra_digits])
+      __add_128_64(&P, P, bid_round_const_table(rmode1, extra_digits))
     } else {
-      __mul_64x64_to_128(&Stemp, bid_round_const_table[rmode1][18],
+      __mul_64x64_to_128(&Stemp, bid_round_const_table(rmode1, 18),
                          bid_power10_table_128[extra_digits-18].low)
       __add_128_128 (&P, P, Stemp)
       if rmode == BID_ROUNDING_UP {
-        __add_128_64(&P, P, bid_round_const_table[rmode1][extra_digits-18])
+        __add_128_64(&P, P, bid_round_const_table(rmode1, extra_digits-18))
       }
     }
     
@@ -2821,13 +2822,13 @@ extension Decimal32 {
       //                    rmode = 3 - rmode;
       //                }
       if extra_digits <= 18 {
-        __add_128_64 (&P, P, bid_round_const_table[rmode1][extra_digits]);
+        __add_128_64 (&P, P, bid_round_const_table(rmode1, extra_digits));
       } else {
-        __mul_64x64_to_128(&Stemp, bid_round_const_table[rmode1][18],
+        __mul_64x64_to_128(&Stemp, bid_round_const_table(rmode1, 18),
                            bid_power10_table_128[extra_digits-18].low);
         __add_128_128(&P, P, Stemp)
         if rmode == BID_ROUNDING_UP {
-          __add_128_64(&P, P, bid_round_const_table[rmode1][extra_digits-18]);
+          __add_128_64(&P, P, bid_round_const_table(rmode1, extra_digits-18))
         }
       }
       
@@ -2942,11 +2943,11 @@ extension Decimal32 {
             ind = MAX_DIGITS - q1; // 1 <= ind <= P7 - 1
             // pad with P7 - q1 zeros, until exponent = emin
             // C1 = C1 * 10^ind
-            C1 = C1 * UInt32(bid_ten2k64[ind])
+            C1 = C1 * UInt32(bid_ten2k64(ind))
             x_exp = x_exp - ind
           } else { // pad with zeros until the exponent reaches emin
             ind = x_exp
-            C1 = C1 * UInt32(bid_ten2k64[ind])
+            C1 = C1 * UInt32(bid_ten2k64(ind))
             x_exp = MIN_EXPON
           }
         }
@@ -3121,7 +3122,7 @@ extension Decimal32 {
           return bid32(s, EXPONENT_BIAS, Int(cint.low))
         }
       } else if a <= 48 {
-        var pow5 = bid_coefflimits_bid32[a]
+        var pow5 = bid_coefflimits_bid32(a)
         cint = srl128(cint.high, cint.low, t)
         if le128(cint.high, cint.low, pow5.high, pow5.low) {
           var cc = cint
@@ -3547,7 +3548,7 @@ extension Decimal32 {
         } else { // if (2 <= q <= 7) => 14 <= 21 - q <= 19
           // Note: C * 10^(21-q) has 20 or 21 digits; 0xa0000000000000000
           // has 21 digits
-          __mul_64x64_to_128(&C, UInt64(C1), bid_ten2k64[21 - q])
+          __mul_64x64_to_128(&C, UInt64(C1), bid_ten2k64(21 - q))
           if C.high >= 0x0a {
             // actually C.w[1] == 0x0a && C.w[0] >= 0x0000000000000000ull) {
             // set invalid flag
@@ -3588,11 +3589,11 @@ extension Decimal32 {
         // C* and f* need shifting and masking, as shown by
         // bid_shiftright128[] and bid_maskhigh128[]
         // 1 <= x <= 6
-        // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+        // kx = 10^(-x) = bid_ten2mk64(ind - 1)
         // C* = C1 * 10^(-x)
         // the approximation of 10^(-x) was rounded up to 54 bits
         var P128 = UInt128()
-        __mul_64x64_to_128(&P128, UInt64(C1), bid_ten2mk64[ind - 1])
+        __mul_64x64_to_128(&P128, UInt64(C1), bid_ten2mk64(ind - 1))
         var Cstar = P128.high
         
         // the top Ex bits of 10^(-x) are T* = bid_ten2mk128trunc[ind].w[0], e.g.
@@ -3611,7 +3612,7 @@ extension Decimal32 {
         res = UInt64(C1) // the result is positive
       } else { // if (exp > 0) => 1 <= exp <= 9, 1 <= q < 9, 2 <= q + exp <= 10
         // res = +C * 10^exp (exact)
-        res = UInt64(C1) * bid_ten2k64[exp] // the result is positive
+        res = UInt64(C1) * bid_ten2k64(exp) // the result is positive
       }
     }
     return UInt(res)
@@ -3659,7 +3660,7 @@ extension Decimal32 {
         // <=> C * 10^(20-q) >= 0x5000000000000000a, 1<=q<=7
         // 1 <= q <= 7 => 13 <= 20-q <= 19 => 10^(20-q) is 64-bit, and so is C1
         
-        __mul_64x64_to_128(&C, UInt64(C1), bid_ten2k64[20 - q]);
+        __mul_64x64_to_128(&C, UInt64(C1), bid_ten2k64(20 - q));
         // Note: C1 * 10^(11-q) has 19 or 20 digits; 0x5000000000000000a, has 20
         if (C.high > 0x05 || (C.high == 0x05 && C.low >= 0x0a)) {
           // set invalid flag
@@ -3676,7 +3677,7 @@ extension Decimal32 {
         // <=> if C * 10^(20-q) >= 0x50000000000000000, 1<=q<=7
         C = UInt128(high: 5, low: 0)
         // 1 <= q <= 7 => 13 <= 20-q <= 19 => 10^(20-q) is 64-bit, and so is C1
-        __mul_64x64_to_128(&C, UInt64(C1), bid_ten2k64[20 - q])
+        __mul_64x64_to_128(&C, UInt64(C1), bid_ten2k64(20 - q))
         if C.high >= 0x05 {
           // actually C.high == 0x05 && C.low >= 0x0000000000000000) {
           // set invalid flag
@@ -3706,11 +3707,11 @@ extension Decimal32 {
         // C* and f* need shifting and masking, as shown by
         // bid_shiftright128[] and bid_maskhigh128[]
         // 1 <= x <= 6
-        // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+        // kx = 10^(-x) = bid_ten2mk64(ind - 1)
         // C* = C1 * 10^(-x)
         // the approximation of 10^(-x) was rounded up to 54 bits
         var P128 = UInt128()
-        __mul_64x64_to_128(&P128, UInt64(C1), bid_ten2mk64[ind - 1])
+        __mul_64x64_to_128(&P128, UInt64(C1), bid_ten2mk64(ind - 1))
         var Cstar = P128.high
         // the top Ex bits of 10^(-x) are T* = bid_ten2mk128trunc[ind].lo, e.g.
         // if x=1, T*=bid_ten2mk128trunc[0].lo=0x1999999999999999
@@ -3740,9 +3741,9 @@ extension Decimal32 {
         // +/-C * 10^exp is guaranteed to fit in 64 bits)
         // res = +/-C * 10^exp (exact)
         if x_negative {
-          res = -Int(UInt64(C1) * bid_ten2k64[exp])
+          res = -Int(UInt64(C1) * bid_ten2k64(exp))
         } else {
-          res = Int(UInt64(C1) * bid_ten2k64[exp])
+          res = Int(UInt64(C1) * bid_ten2k64(exp))
         }
       }
     }
@@ -3757,16 +3758,20 @@ extension Decimal32 {
   }
   
   static func digitsIn(_ sig_x: UInt32) -> Int {
-    let tmp = Float(sig_x) // exact conversion
-    let x_nr_bits = 1 + Int(((UInt(tmp.bitPattern >> 23)) & 0xff) - 0x7f)
-    var q = Int(bid_nr_digits[x_nr_bits - 1].digits)
-    if q == 0 {
-      q = Int(bid_nr_digits[x_nr_bits - 1].digits1)
-      if UInt64(sig_x) >= bid_nr_digits[x_nr_bits - 1].threshold_lo {
-        q+=1
-      }
-    }
-    return q
+    // find power of 10 just greater than sig_x
+    var tenPower = 10, digits = 1
+    while sig_x >= tenPower { tenPower *= 10; digits += 1 }
+    return digits
+//    let tmp = Float(sig_x) // exact conversion
+//    let x_nr_bits = 1 + Int(((UInt(tmp.bitPattern >> 23)) & 0xff) - 0x7f)
+//    var q = Int(bid_nr_digits[x_nr_bits - 1].digits)
+//    if q == 0 {
+//      q = Int(bid_nr_digits[x_nr_bits - 1].digits1)
+//      if UInt64(sig_x) >= bid_nr_digits[x_nr_bits - 1].threshold_lo {
+//        q+=1
+//      }
+//    }
+//    return q
   }
   
   static func __mul_128x128_full(_ Qh:inout UInt128, _ Ql:inout UInt128,
@@ -3792,16 +3797,16 @@ extension Decimal32 {
   // number is less than the value represented by the second and third entries
   // concatenated, then the number of decimal digits k is the fourth entry, else
   // the number of decimal digits is the fourth entry plus 1
-  struct DEC_DIGITS {
-    let digits: UInt
-    let threshold_hi:UInt64
-    let threshold_lo:UInt64
-    let digits1: UInt
-    
-    init(_ d: UInt, _ hi: UInt64, _ lo: UInt64, _ d1: UInt) {
-      digits = d; threshold_hi = hi; threshold_lo = lo; digits1 = d1
-    }
-  }
+//  struct DEC_DIGITS {
+//    let digits: UInt
+//    let threshold_hi:UInt64
+//    let threshold_lo:UInt64
+//    let digits1: UInt
+//
+//    init(_ d: UInt, _ hi: UInt64, _ lo: UInt64, _ d1: UInt) {
+//      digits = d; threshold_hi = hi; threshold_lo = lo; digits1 = d1
+//    }
+//  }
   
   // bid_maskhigh128[] contains the mask to apply to the top 128 bits of the
   // 128x128-bit product in order to obtain the high bits of f2*
@@ -3924,6 +3929,13 @@ extension Decimal32 {
     109,    // 237 - 128, 1/10^35
   ]
   
+  
+//  static func bid_reciprocals10_128(_ i: Int) -> UInt128 {
+//    if i == 0 { return 1 }
+//    let twoPower = bid_recip_scale[i]+128
+//    return (UInt128(1) << twoPower) / bid_power10_table_128[i] + 1
+//  }
+  
   static let bid_reciprocals10_128: [UInt128] = [
     UInt128(w: [0, 0]),   // 0 extra digits
     UInt128(w: [0x3333333333333334, 0x3333333333333333]), // 1 extra digit
@@ -3964,85 +3976,97 @@ extension Decimal32 {
   ]
   
   static let bid_packed_10000_zeros: [UInt8] = [
-    0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0
+    0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
+    0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
+    0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
+    0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
+    0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
+    0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
+    0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
+    0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
+    0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
+    0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
+    0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
+    0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
+    0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
+    0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
+    0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
+    0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
+    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4,
+    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
+    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0,
+    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
+    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
+    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
+    0x10, 0x40, 0x0
   ]
   
   
@@ -4153,95 +4177,51 @@ extension Decimal32 {
   ]
   
   
-  static let bid_bid_bid_recip_scale32 : [UInt8] = [
-    1,
-    33-32,
-    35-32,
-    39-32,
-    43-32,
-    46-32,
-    50-32,
-    53-32,
-    57-32
+  static let bid_recip_scale32 : [UInt8] = [
+    1, 1, 3, 7, 9, 14, 18, 21, 25
   ]
   
   
-  static let bid_bid_reciprocals10_32: [UInt64] = [
-    1, //dummy,
-    0x33333334,
-    0x147AE148,
-    0x20C49BA6,
-    0x346DC5D7, //4
-    0x29F16B12,
-    0x431BDE83,
-    0x35AFE536,
-    0x55E63B89
-  ]
+  static func bid_reciprocals10_32(_ i: Int) -> UInt64 {
+    if i == 0 { return 1 }
+    let twoPower = bid_recip_scale32[i]+32
+    return (UInt64(1) << twoPower) / UInt64(bid_power10_table_128[i]) + 1
+  }
+  
+//  static let bid_bid_reciprocals10_32: [UInt64] = [
+//    1, //dummy,
+//    0x33333334,
+//    0x147AE148,
+//    0x20C49BA6,
+//    0x346DC5D7,
+//    0x29F16B12,
+//    0x431BDE83,
+//    0x35AFE536,
+//    0x55E63B89
+//  ]
   
   static let bid_power10_index_binexp: [UInt64] = [
-    0x000000000000000a,
-    0x000000000000000a,
-    0x000000000000000a,
-    0x000000000000000a,
-    0x0000000000000064,
-    0x0000000000000064,
-    0x0000000000000064,
-    0x00000000000003e8,
-    0x00000000000003e8,
-    0x00000000000003e8,
-    0x0000000000002710,
-    0x0000000000002710,
-    0x0000000000002710,
-    0x0000000000002710,
-    0x00000000000186a0,
-    0x00000000000186a0,
-    0x00000000000186a0,
-    0x00000000000f4240,
-    0x00000000000f4240,
-    0x00000000000f4240,
-    0x0000000000989680,
-    0x0000000000989680,
-    0x0000000000989680,
-    0x0000000000989680,
-    0x0000000005f5e100,
-    0x0000000005f5e100,
-    0x0000000005f5e100,
-    0x000000003b9aca00,
-    0x000000003b9aca00,
-    0x000000003b9aca00,
-    0x00000002540be400,
-    0x00000002540be400,
-    0x00000002540be400,
-    0x00000002540be400,
-    0x000000174876e800,
-    0x000000174876e800,
-    0x000000174876e800,
-    0x000000e8d4a51000,
-    0x000000e8d4a51000,
-    0x000000e8d4a51000,
-    0x000009184e72a000,
-    0x000009184e72a000,
-    0x000009184e72a000,
-    0x000009184e72a000,
-    0x00005af3107a4000,
-    0x00005af3107a4000,
-    0x00005af3107a4000,
-    0x00038d7ea4c68000,
-    0x00038d7ea4c68000,
-    0x00038d7ea4c68000,
-    0x002386f26fc10000,
-    0x002386f26fc10000,
-    0x002386f26fc10000,
-    0x002386f26fc10000,
-    0x016345785d8a0000,
-    0x016345785d8a0000,
-    0x016345785d8a0000,
-    0x0de0b6b3a7640000,
-    0x0de0b6b3a7640000,
-    0x0de0b6b3a7640000,
-    0x8ac7230489e80000,
-    0x8ac7230489e80000,
-    0x8ac7230489e80000,
+    0x000000000000000a, 0x000000000000000a, 0x000000000000000a,
+    0x000000000000000a, 0x0000000000000064, 0x0000000000000064,
+    0x0000000000000064, 0x00000000000003e8, 0x00000000000003e8,
+    0x00000000000003e8, 0x0000000000002710, 0x0000000000002710,
+    0x0000000000002710, 0x0000000000002710, 0x00000000000186a0,
+    0x00000000000186a0, 0x00000000000186a0, 0x00000000000f4240,
+    0x00000000000f4240, 0x00000000000f4240, 0x0000000000989680,
+    0x0000000000989680, 0x0000000000989680, 0x0000000000989680,
+    0x0000000005f5e100, 0x0000000005f5e100, 0x0000000005f5e100,
+    0x000000003b9aca00, 0x000000003b9aca00, 0x000000003b9aca00,
+    0x00000002540be400, 0x00000002540be400, 0x00000002540be400,
+    0x00000002540be400, 0x000000174876e800, 0x000000174876e800,
+    0x000000174876e800, 0x000000e8d4a51000, 0x000000e8d4a51000,
+    0x000000e8d4a51000, 0x000009184e72a000, 0x000009184e72a000,
+    0x000009184e72a000, 0x000009184e72a000, 0x00005af3107a4000,
+    0x00005af3107a4000, 0x00005af3107a4000, 0x00038d7ea4c68000,
+    0x00038d7ea4c68000, 0x00038d7ea4c68000, 0x002386f26fc10000,
+    0x002386f26fc10000, 0x002386f26fc10000, 0x002386f26fc10000,
+    0x016345785d8a0000, 0x016345785d8a0000, 0x016345785d8a0000,
+    0x0de0b6b3a7640000, 0x0de0b6b3a7640000, 0x0de0b6b3a7640000,
+    0x8ac7230489e80000, 0x8ac7230489e80000, 0x8ac7230489e80000,
     0x8ac7230489e80000
   ]
   
@@ -6262,674 +6242,56 @@ extension Decimal32 {
   ]
   
   static let bid_exponents_binary64 = [
-    -55,
-     -51,
-     -48,
-     -45,
-     -41,
-     -38,
-     -35,
-     -31,
-     -28,
-     -25,
-     -22,
-     -18,
-     -15,
-     -12,
-     -8,
-     -5,
-     -2,
-     2,
-     5,
-     8,
-     12,
-     15,
-     18,
-     22,
-     25,
-     28,
-     32,
-     35,
-     38,
-     42,
-     45,
-     48,
-     52,
-     55,
-     58,
-     62,
-     65,
-     68,
-     71,
-     75,
-     78,
-     81,
-     85,
-     88,
-     91,
-     95,
-     98,
-     101,
-     105,
-     108,
-     111,
-     115,
-     118,
-     121,
-     125,
-     128,
-     131,
-     135,
-     138,
-     141,
-     145,
-     148,
-     151,
-     155,
-     158,
-     161,
-     164,
-     168,
-     171,
-     174,
-     178,
-     181,
-     184,
-     188,
-     191,
-     194,
-     198,
-     201,
-     204,
-     208,
-     211,
-     214,
-     218,
-     221,
-     224,
-     228,
-     231,
-     234,
-     238,
-     241,
-     244,
-     248,
-     251,
-     254,
-     258,
-     261,
-     264,
-     267,
-     271,
-     274,
-     277,
-     281,
-     284,
-     287,
-     291,
-     294,
-     297,
-     301,
-     304,
-     307,
-     311,
-     314,
-     317,
-     321,
-     324,
-     327,
-     331,
-     334,
-     337,
-     341,
-     344,
-     347,
-     351,
-     354,
-     357,
-     360,
-     364,
-     367,
-     370,
-     374,
-     377,
-     380,
-     384,
-     387,
-     390,
-     394,
-     397,
-     400,
-     404,
-     407,
-     410,
-     414,
-     417,
-     420,
-     424,
-     427,
-     430,
-     434,
-     437,
-     440,
-     444,
-     447,
-     450,
-     454,
-     457,
-     460,
-     463,
-     467,
-     470,
-     473,
-     477,
-     480,
-     483,
-     487,
-     490,
-     493,
-     497,
-     500,
-     503,
-     507,
-     510,
-     513,
-     517,
-     520,
-     523,
-     527,
-     530,
-     533,
-     537,
-     540,
-     543,
-     547,
-     550,
-     553,
-     556,
-     560,
-     563,
-     566,
-     570,
-     573,
-     576,
-     580,
-     583,
-     586,
-     590,
-     593,
-     596,
-     600,
-     603,
-     606,
-     610,
-     613,
-     616,
-     620,
-     623,
-     626,
-     630,
-     633,
-     636,
-     640,
-     643,
-     646,
-     649,
-     653,
-     656,
-     659,
-     663,
-     666,
-     669,
-     673,
-     676,
-     679,
-     683,
-     686,
-     689,
-     693,
-     696,
-     699,
-     703,
-     706,
-     709,
-     713,
-     716,
-     719,
-     723,
-     726,
-     729,
-     733,
-     736,
-     739,
-     743,
-     746,
-     749,
-     752,
-     756,
-     759,
-     762,
-     766,
-     769,
-     772,
-     776,
-     779,
-     782,
-     786,
-     789,
-     792,
-     796,
-     799,
-     802,
-     806,
-     809,
-     812,
-     816,
-     819,
-     822,
-     826,
-     829,
-     832,
-     836,
-     839,
-     842,
-     845,
-     849,
-     852,
-     855,
-     859,
-     862,
-     865,
-     869,
-     872,
-     875,
-     879,
-     882,
-     885,
-     889,
-     892,
-     895,
-     899,
-     902,
-     905,
-     909,
-     912,
-     915,
-     919,
-     922,
-     925,
-     929,
-     932,
-     935,
-     939,
-     942,
-     945,
-     948,
-     952,
-     955,
-     958,
-     962,
-     965,
-     968,
-     972,
-     975,
-     978,
-     982,
-     985,
-     988,
-     992,
-     995,
-     998,
-     1002,
-     1005,
-     1008,
-     1012,
-     1015,
-     1018,
-     1022,
-     1025,
-     1028,
-     1032,
-     1035,
-     1038,
-     1041,
-     1045,
-     1048,
-     1051,
-     1055,
-     1058,
-     1061,
-     1065,
-     1068,
-     1071,
-     1075,
-     1078,
-     1081,
-     1085,
-     1088,
-     1091,
-     1095,
-     1098,
-     1101,
-     1105,
-     1108,
-     1111,
-     1115,
-     1118,
-     1121,
-     1125,
-     1128,
-     1131,
-     1134,
-     1138,
-     1141,
-     1144,
-     1148,
-     1151,
-     1154,
-     1158,
-     1161,
-     1164,
-     1168,
-     1171,
-     1174,
-     1178,
-     1181,
-     1184,
-     1188,
-     1191,
-     1194,
-     1198,
-     1201,
-     1204,
-     1208,
-     1211,
-     1214,
-     1218,
-     1221,
-     1224,
-     1228,
-     1231,
-     1234,
-     1237,
-     1241,
-     1244,
-     1247,
-     1251,
-     1254,
-     1257,
-     1261,
-     1264,
-     1267,
-     1271,
-     1274,
-     1277,
-     1281,
-     1284,
-     1287,
-     1291,
-     1294,
-     1297,
-     1301,
-     1304,
-     1307,
-     1311,
-     1314,
-     1317,
-     1321,
-     1324,
-     1327,
-     1330,
-     1334,
-     1337,
-     1340,
-     1344,
-     1347,
-     1350,
-     1354,
-     1357,
-     1360,
-     1364,
-     1367,
-     1370,
-     1374,
-     1377,
-     1380,
-     1384,
-     1387,
-     1390,
-     1394,
-     1397,
-     1400,
-     1404,
-     1407,
-     1410,
-     1414,
-     1417,
-     1420,
-     1424,
-     1427,
-     1430,
-     1433,
-     1437,
-     1440,
-     1443,
-     1447,
-     1450,
-     1453,
-     1457,
-     1460,
-     1463,
-     1467,
-     1470,
-     1473,
-     1477,
-     1480,
-     1483,
-     1487,
-     1490,
-     1493,
-     1497,
-     1500,
-     1503,
-     1507,
-     1510,
-     1513,
-     1517,
-     1520,
-     1523,
-     1526,
-     1530,
-     1533,
-     1536,
-     1540,
-     1543,
-     1546,
-     1550,
-     1553,
-     1556,
-     1560,
-     1563,
-     1566,
-     1570,
-     1573,
-     1576,
-     1580,
-     1583,
-     1586,
-     1590,
-     1593,
-     1596,
-     1600,
-     1603,
-     1606,
-     1610,
-     1613,
-     1616,
-     1620,
-     1623,
-     1626,
-     1629,
-     1633,
-     1636,
-     1639,
-     1643,
-     1646,
-     1649,
-     1653,
-     1656,
-     1659,
-     1663,
-     1666,
-     1669,
-     1673,
-     1676,
-     1679,
-     1683,
-     1686,
-     1689,
-     1693,
-     1696,
-     1699,
-     1703,
-     1706,
-     1709,
-     1713,
-     1716,
-     1719,
-     1722,
-     1726,
-     1729,
-     1732,
-     1736,
-     1739,
-     1742,
-     1746,
-     1749,
-     1752,
-     1756,
-     1759,
-     1762,
-     1766,
-     1769,
-     1772,
-     1776,
-     1779,
-     1782,
-     1786,
-     1789,
-     1792,
-     1796,
-     1799,
-     1802,
-     1806,
-     1809,
-     1812,
-     1815,
-     1819,
-     1822,
-     1825,
-     1829,
-     1832,
-     1835,
-     1839,
-     1842,
-     1845,
-     1849,
-     1852,
-     1855,
-     1859,
-     1862,
-     1865,
-     1869,
-     1872,
-     1875,
-     1879,
-     1882,
-     1885,
-     1889,
-     1892,
-     1895,
-     1899,
-     1902,
-     1905,
-     1909,
-     1912,
-     1915,
-     1918,
-     1922,
-     1925,
-     1928,
-     1932,
-     1935,
-     1938,
-     1942,
-     1945,
-     1948,
-     1952,
-     1955,
-     1958,
-     1962,
-     1965,
-     1968,
-     1972,
-     1975,
-     1978,
-     1982,
-     1985,
-     1988,
-     1992,
-     1995,
-     1998,
-     2002,
-     2005,
-     2008,
-     2011,
-     2015,
-     2018,
-     2021,
-     2025,
-     2028,
-     2031,
-     2035,
-     2038,
-     2041,
-     2045,
-     2048,
-     2051,
-     2055,
-     2058,
-     2061,
-     2065,
-     2068,
-     2071,
-     2075,
-     2078,
-     2081,
-     2085,
-     2088,
-     2091,
-     2095,
-     2098,
-     2101,
-     2105,
-     2108,
-     2111,
-     2114,
-     2118,
-     2121,
-     2124,
-     2128,
-     2131,
-     2134,
-     2138,
-     2141,
-     2144,
-     2148,
-     2151,
-     2154,
-     2158,
-     2161,
+     -55, -51, -48, -45, -41, -38, -35, -31, -28, -25, -22, -18, -15, -12, -8,
+     -5, -2, 2, 5, 8, 12, 15, 18, 22, 25, 28, 32, 35, 38, 42, 45, 48, 52, 55,
+     58, 62, 65, 68, 71, 75, 78, 81, 85, 88, 91, 95, 98, 101, 105, 108, 111,
+     115, 118, 121, 125, 128, 131, 135, 138, 141, 145, 148, 151, 155, 158, 161,
+     164, 168, 171, 174, 178, 181, 184, 188, 191, 194, 198, 201, 204, 208, 211,
+     214, 218, 221, 224, 228, 231, 234, 238, 241, 244, 248, 251, 254, 258, 261,
+     264, 267, 271, 274, 277, 281, 284, 287, 291, 294, 297, 301, 304, 307, 311,
+     314, 317, 321, 324, 327, 331, 334, 337, 341, 344, 347, 351, 354, 357, 360,
+     364, 367, 370, 374, 377, 380, 384, 387, 390, 394, 397, 400, 404, 407, 410,
+     414, 417, 420, 424, 427, 430, 434, 437, 440, 444, 447, 450, 454, 457, 460,
+     463, 467, 470, 473, 477, 480, 483, 487, 490, 493, 497, 500, 503, 507, 510,
+     513, 517, 520, 523, 527, 530, 533, 537, 540, 543, 547, 550, 553, 556, 560,
+     563, 566, 570, 573, 576, 580, 583, 586, 590, 593, 596, 600, 603, 606, 610,
+     613, 616, 620, 623, 626, 630, 633, 636, 640, 643, 646, 649, 653, 656, 659,
+     663, 666, 669, 673, 676, 679, 683, 686, 689, 693, 696, 699, 703, 706, 709,
+     713, 716, 719, 723, 726, 729, 733, 736, 739, 743, 746, 749, 752, 756, 759,
+     762, 766, 769, 772, 776, 779, 782, 786, 789, 792, 796, 799, 802, 806, 809,
+     812, 816, 819, 822, 826, 829, 832, 836, 839, 842, 845, 849, 852, 855, 859,
+     862, 865, 869, 872, 875, 879, 882, 885, 889, 892, 895, 899, 902, 905, 909,
+     912, 915, 919, 922, 925, 929, 932, 935, 939, 942, 945, 948, 952, 955, 958,
+     962, 965, 968, 972, 975, 978, 982, 985, 988, 992, 995, 998, 1002, 1005,
+     1008, 1012, 1015, 1018, 1022, 1025, 1028, 1032, 1035, 1038, 1041, 1045,
+     1048, 1051, 1055, 1058, 1061, 1065, 1068, 1071, 1075, 1078, 1081, 1085,
+     1088, 1091, 1095, 1098, 1101, 1105, 1108, 1111, 1115, 1118, 1121, 1125,
+     1128, 1131, 1134, 1138, 1141, 1144, 1148, 1151, 1154, 1158, 1161, 1164,
+     1168, 1171, 1174, 1178, 1181, 1184, 1188, 1191, 1194, 1198, 1201, 1204,
+     1208, 1211, 1214, 1218, 1221, 1224, 1228, 1231, 1234, 1237, 1241, 1244,
+     1247, 1251, 1254, 1257, 1261, 1264, 1267, 1271, 1274, 1277, 1281, 1284,
+     1287, 1291, 1294, 1297, 1301, 1304, 1307, 1311, 1314, 1317, 1321, 1324,
+     1327, 1330, 1334, 1337, 1340, 1344, 1347, 1350, 1354, 1357, 1360, 1364,
+     1367, 1370, 1374, 1377, 1380, 1384, 1387, 1390, 1394, 1397, 1400, 1404,
+     1407, 1410, 1414, 1417, 1420, 1424, 1427, 1430, 1433, 1437, 1440, 1443,
+     1447, 1450, 1453, 1457, 1460, 1463, 1467, 1470, 1473, 1477, 1480, 1483,
+     1487, 1490, 1493, 1497, 1500, 1503, 1507, 1510, 1513, 1517, 1520, 1523,
+     1526, 1530, 1533, 1536, 1540, 1543, 1546, 1550, 1553, 1556, 1560, 1563,
+     1566, 1570, 1573, 1576, 1580, 1583, 1586, 1590, 1593, 1596, 1600, 1603,
+     1606, 1610, 1613, 1616, 1620, 1623, 1626, 1629, 1633, 1636, 1639, 1643,
+     1646, 1649, 1653, 1656, 1659, 1663, 1666, 1669, 1673, 1676, 1679, 1683,
+     1686, 1689, 1693, 1696, 1699, 1703, 1706, 1709, 1713, 1716, 1719, 1722,
+     1726, 1729, 1732, 1736, 1739, 1742, 1746, 1749, 1752, 1756, 1759, 1762,
+     1766, 1769, 1772, 1776, 1779, 1782, 1786, 1789, 1792, 1796, 1799, 1802,
+     1806, 1809, 1812, 1815, 1819, 1822, 1825, 1829, 1832, 1835, 1839, 1842,
+     1845, 1849, 1852, 1855, 1859, 1862, 1865, 1869, 1872, 1875, 1879, 1882,
+     1885, 1889, 1892, 1895, 1899, 1902, 1905, 1909, 1912, 1915, 1918, 1922,
+     1925, 1928, 1932, 1935, 1938, 1942, 1945, 1948, 1952, 1955, 1958, 1962,
+     1965, 1968, 1972, 1975, 1978, 1982, 1985, 1988, 1992, 1995, 1998, 2002,
+     2005, 2008, 2011, 2015, 2018, 2021, 2025, 2028, 2031, 2035, 2038, 2041,
+     2045, 2048, 2051, 2055, 2058, 2061, 2065, 2068, 2071, 2075, 2078, 2081,
+     2085, 2088, 2091, 2095, 2098, 2101, 2105, 2108, 2111, 2114, 2118, 2121,
+     2124, 2128, 2131, 2134, 2138, 2141, 2144, 2148, 2151, 2154, 2158, 2161
   ]
   
   
@@ -7284,7 +6646,7 @@ extension Decimal32 {
     770, 771, 772, 773, 774, 775, 776, 777, 778, 779, 796, 797, 976, 977, 998, 999
   ]
   
-  static let bid_d2b2 = bid_d2b.map { $0 * 1000 }
+  static func bid_d2b2(_ i: Int) -> UInt64 { bid_d2b[i] * 1000 }
   
   // Table of powers of 5
   static let bid_power_five: [UInt128] = [
@@ -7339,57 +6701,65 @@ extension Decimal32 {
     UInt128(w: [10796982567420264257, 192592994438723])
   ]
   
-  static let bid_coefflimits_bid32 : [UInt128] = [
-    UInt128(w: [10000000, 0]),
-    UInt128(w: [2000000, 0]),
-    UInt128(w: [400000, 0]),
-    UInt128(w: [80000, 0]),
-    UInt128(w: [16000, 0]),
-    UInt128(w: [3200, 0]),
-    UInt128(w: [640, 0]),
-    UInt128(w: [128, 0]),
-    UInt128(w: [25, 0]),
-    UInt128(w: [5, 0]),
-    UInt128(w: [1, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0]),
-    UInt128(w: [0, 0])
+  static let coefflimits: [UInt64] = [
+    10000000, 2000000, 400000, 80000, 16000, 3200, 640, 128, 25, 5, 1
   ]
+  
+  static func bid_coefflimits_bid32(_ i: Int) -> UInt128 {
+    i > 10 ? 0 : UInt128(coefflimits[i])
+  }
+  
+//  static let bid_coefflimits_bid32 : [UInt128] = [
+//    UInt128(w: [10000000, 0]),
+//    UInt128(w: [2000000, 0]),
+//    UInt128(w: [400000, 0]),
+//    UInt128(w: [80000, 0]),
+//    UInt128(w: [16000, 0]),
+//    UInt128(w: [3200, 0]),
+//    UInt128(w: [640, 0]),
+//    UInt128(w: [128, 0]),
+//    UInt128(w: [25, 0]),
+//    UInt128(w: [5, 0]),
+//    UInt128(w: [1, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0]),
+//    UInt128(w: [0, 0])
+//  ]
   
   
   static let bid_multipliers1_bid32: [UInt256] = [
@@ -8722,7 +8092,6 @@ extension Decimal32 {
     UInt256(w: [4816793266420906552, 7553931806387506371,  16421485779378771074, 111987237108])
   ]
   
-  
   static let bid_exponents_bid32: [Int16] = [
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
      -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4,
@@ -9432,524 +8801,233 @@ extension Decimal32 {
   ]
   
   static let bid_roundbound_128: [UInt128] = [
-    UInt128(w: [0, (1 << 63)]),      // BID_ROUNDING_TO_NEAREST|positive|even
-    UInt128(w: [~0, (1 << 63) - 1]), // BID_ROUNDING_TO_NEAREST|positive|odd
-    UInt128(w: [0, (1 << 63)]),      // BID_ROUNDING_TO_NEAREST|negative|even
-    UInt128(w: [~0, (1 << 63) - 1]), // BID_ROUNDING_TO_NEAREST|negative|odd
-    
-    UInt128(w: [~0, ~0]),            // BID_ROUNDING_DOWN      |positive|even
-    UInt128(w: [~0, ~0]),            // BID_ROUNDING_DOWN      |positive|odd
-    UInt128(w: [0, 0]),              // BID_ROUNDING_DOWN      |negative|even
-    UInt128(w: [0, 0]),              // BID_ROUNDING_DOWN      |negative|odd
-    
-    UInt128(w: [0, 0]),              // BID_ROUNDING_UP        |positive|even
-    UInt128(w: [0, 0]),              // BID_ROUNDING_UP        |positive|odd
-    UInt128(w: [~0, ~0]),            // BID_ROUNDING_UP        |negative|even
-    UInt128(w: [~0, ~0]),            // BID_ROUNDING_UP        |negative|odd
-    
-    UInt128(w: [~0, ~0]),            // BID_ROUNDING_TO_ZERO   |positive|even
-    UInt128(w: [~0, ~0]),            // BID_ROUNDING_TO_ZERO   |positive|odd
-    UInt128(w: [~0, ~0]),            // BID_ROUNDING_TO_ZERO   |negative|even
-    UInt128(w: [~0, ~0]),            // BID_ROUNDING_TO_ZERO   |negative|odd
-    
-    UInt128(w: [~0, (1 << 63) - 1]), // BID_ROUNDING_TIES_AWAY |positive|even
-    UInt128(w: [~0, (1 << 63) - 1]), // BID_ROUNDING_TIES_AWAY |positive|odd
-    UInt128(w: [~0, (1 << 63) - 1]), // BID_ROUNDING_TIES_AWAY |negative|even
-    UInt128(w: [~0, (1 << 63) - 1])  // BID_ROUNDING_TIES_AWAY |negative|odd
+    // BID_ROUNDING_TO_NEAREST
+    UInt128(w: [0, (1 << 63)]),      // positive|even
+    UInt128(w: [~0, (1 << 63) - 1]), // positive|odd
+    UInt128(w: [0, (1 << 63)]),      // negative|even
+    UInt128(w: [~0, (1 << 63) - 1]), // negative|odd
+
+    // BID_ROUNDING_DOWN
+    UInt128(w: [~0, ~0]),            // positive|even
+    UInt128(w: [~0, ~0]),            // positive|odd
+    UInt128(w: [0, 0]),              // negative|even
+    UInt128(w: [0, 0]),              // negative|odd
+
+    // BID_ROUNDING_UP
+    UInt128(w: [0, 0]),              // positive|even
+    UInt128(w: [0, 0]),              // positive|odd
+    UInt128(w: [~0, ~0]),            // negative|even
+    UInt128(w: [~0, ~0]),            // negative|odd
+
+    // BID_ROUNDING_TO_ZERO
+    UInt128(w: [~0, ~0]),            // positive|even
+    UInt128(w: [~0, ~0]),            // positive|odd
+    UInt128(w: [~0, ~0]),            // negative|even
+    UInt128(w: [~0, ~0]),            // negative|odd
+
+    // BID_ROUNDING_TIES_AWAY
+    UInt128(w: [~0, (1 << 63) - 1]), // positive|even
+    UInt128(w: [~0, (1 << 63) - 1]), // positive|odd
+    UInt128(w: [~0, (1 << 63) - 1]), // negative|even
+    UInt128(w: [~0, (1 << 63) - 1])  // negative|odd
+  ]
+  
+  static let bid_short_recip_scale: [Int8] = [
+    1, 1, 5, 7, 11, 12, 17, 21, 24, 27, 31, 34, 37, 41, 44, 47, 51, 54
   ]
   
   // bid_ten2k64[i] = 10^i, 0 <= i <= 19
-  static let bid_ten2k64 : [UInt64] = [
-    0x0000000000000001,   // 10^0
-    0x000000000000000a,   // 10^1
-    0x0000000000000064,   // 10^2
-    0x00000000000003e8,   // 10^3
-    0x0000000000002710,   // 10^4
-    0x00000000000186a0,   // 10^5
-    0x00000000000f4240,   // 10^6
-    0x0000000000989680,   // 10^7
-    0x0000000005f5e100,   // 10^8
-    0x000000003b9aca00,   // 10^9
-    0x00000002540be400,   // 10^10
-    0x000000174876e800,   // 10^11
-    0x000000e8d4a51000,   // 10^12
-    0x000009184e72a000,   // 10^13
-    0x00005af3107a4000,   // 10^14
-    0x00038d7ea4c68000,   // 10^15
-    0x002386f26fc10000,   // 10^16
-    0x016345785d8a0000,   // 10^17
-    0x0de0b6b3a7640000,   // 10^18
-    0x8ac7230489e80000    // 10^19 (20 digits)
-  ]
-  
-  static func bid_midpoint64(_ i:Int) -> UInt64 {
-    5 * bid_ten2k64[i]
+  static func bid_ten2k64(_ i:Int) -> UInt64 {
+    UInt64(bid_power10_table_128[i])
   }
   
-//  // bid_midpoint64[i - 1] = 1/2 * 10^i = 5 * 10^(i-1), 1 <= i <= 19
-//  static let bid_midpoint64 : [UInt64] = [
-//    0x0000000000000005,    // 1/2 * 10^1 = 5 * 10^0
-//    0x0000000000000032,    // 1/2 * 10^2 = 5 * 10^1
-//    0x00000000000001f4,    // 1/2 * 10^3 = 5 * 10^2
-//    0x0000000000001388,    // 1/2 * 10^4 = 5 * 10^3
-//    0x000000000000c350,    // 1/2 * 10^5 = 5 * 10^4
-//    0x000000000007a120,    // 1/2 * 10^6 = 5 * 10^5
-//    0x00000000004c4b40,    // 1/2 * 10^7 = 5 * 10^6
-//    0x0000000002faf080,    // 1/2 * 10^8 = 5 * 10^7
-//    0x000000001dcd6500,    // 1/2 * 10^9 = 5 * 10^8
-//    0x000000012a05f200,    // 1/2 * 10^10 = 5 * 10^9
-//    0x0000000ba43b7400,    // 1/2 * 10^11 = 5 * 10^10
-//    0x000000746a528800,    // 1/2 * 10^12 = 5 * 10^11
-//    0x0000048c27395000,    // 1/2 * 10^13 = 5 * 10^12
-//    0x00002d79883d2000,    // 1/2 * 10^14 = 5 * 10^13
-//    0x0001c6bf52634000,    // 1/2 * 10^15 = 5 * 10^14
-//    0x0011c37937e08000,    // 1/2 * 10^16 = 5 * 10^15
-//    0x00b1a2bc2ec50000,    // 1/2 * 10^17 = 5 * 10^16
-//    0x06f05b59d3b20000,    // 1/2 * 10^18 = 5 * 10^17
-//    0x4563918244f40000     // 1/2 * 10^19 = 5 * 10^18
-//  ]
+  static func bid_midpoint64(_ i:Int) -> UInt64 { 5 * bid_ten2k64(i) }
+  
+  // Ex-64 from 10^(-x) ~= Kx * 2^(-Ex); Kx rounded up to 64 bits, 1 <= x <= 17
+  static func bid_Ex64m64(_ i:Int) -> UInt8 {
+    UInt8(bid_short_recip_scale[i+3])
+  }
+  
+  // bid_ten2mk64 power-of-two scaling
+  static let bid_powers : [UInt8] = [
+    64, 64, 64, 67, 70, 73, 77, 80, 83, 87, 90, 93, 97, 100, 103, 107
+  ]
   
   // Values of 10^(-x) trancated to Ex bits beyond the binary point, and
   // in the right position to be compared with the fraction from C * kx,
   // 1 <= x <= 17; the fraction consists of the low Ex bits in C * kx
   // (these values are aligned with the low 64 bits of the fraction)
-  static let bid_ten2mxtrunc64 : [UInt64] = [
-    0xcccccccccccccccc,    // (ten2mx >> 64) = cccccccccccccccc
-    0xa3d70a3d70a3d70a,    // (ten2mx >> 64) = a3d70a3d70a3d70a
-    0x83126e978d4fdf3b,    // (ten2mx >> 64) = 83126e978d4fdf3b
-    0xd1b71758e219652b,    // (ten2mx >> 64) = d1b71758e219652b
-    0xa7c5ac471b478423,    // (ten2mx >> 64) = a7c5ac471b478423
-    0x8637bd05af6c69b5,    // (ten2mx >> 64) = 8637bd05af6c69b5
-    0xd6bf94d5e57a42bc,    // (ten2mx >> 64) = d6bf94d5e57a42bc
-    0xabcc77118461cefc,    // (ten2mx >> 64) = abcc77118461cefc
-    0x89705f4136b4a597,    // (ten2mx >> 64) = 89705f4136b4a597
-    0xdbe6fecebdedd5be,    // (ten2mx >> 64) = dbe6fecebdedd5be
-    0xafebff0bcb24aafe,    // (ten2mx >> 64) = afebff0bcb24aafe
-    0x8cbccc096f5088cb,    // (ten2mx >> 64) = 8cbccc096f5088cb
-    0xe12e13424bb40e13,    // (ten2mx >> 64) = e12e13424bb40e13
-    0xb424dc35095cd80f,    // (ten2mx >> 64) = b424dc35095cd80f
-    0x901d7cf73ab0acd9,    // (ten2mx >> 64) = 901d7cf73ab0acd9
-    0xe69594bec44de15b,    // (ten2mx >> 64) = e69594bec44de15b
-    0xb877aa3236a4b449    // (ten2mx >> 64) = b877aa3236a4b449
+  static func bid_ten2mk64(_ i:Int) -> UInt64 {
+     UInt64((UInt128(1) << bid_powers[i]) / bid_power10_table_128[i+1])+1
+  }
+  
+  // Values of 10^(-x) trancated to Ex bits beyond the binary point, and
+  // in the right position to be compared with the fraction from C * kx,
+  // 1 <= x <= 17; the fraction consists of the low Ex bits in C * kx
+  // (these values are aligned with the low 64 bits of the fraction)
+  static func bid_ten2mxtrunc64(_ i:Int) -> UInt64 {
+    UInt64((UInt128(1) << (64+bid_Ex64m64(i))) / bid_power10_table_128[i+1])
+  }
+
+  // Kx from 10^(-x) ~= Kx * 2^(-Ex); Kx rounded up to 64 bits, 1 <= x <= 17
+  static func bid_Kx64(_ i:Int) -> UInt64 {
+    bid_ten2mxtrunc64(i)+1
+  }
+   
+  static func bid_reciprocals10_64(_ i: Int) -> UInt64 {
+    if i == 0 { return 1 }
+    let twoPower = bid_short_recip_scale[i]+64
+    return UInt64(UInt128(1) << twoPower / bid_power10_table_128[i]) + 1
+  }
+
+  
+  // bid_shiftright128[] contains the right shift count to obtain C2* from
+  // the top 128 bits of the 128x128-bit product C2 * Kx
+  static let bid_shiftright128: [UInt8] = [
+    0, 0, 0, 3, 6, 9, 13, 16, 19, 23, 26, 29, 33, 36, 39, 43, 46, 49, 53, 56,
+    59, 63, 66, 69, 73, 76, 79, 83, 86, 89, 92, 96, 99, 102
   ]
   
   // Values of 1/2 in the right position to be compared with the fraction from
   // C * kx, 1 <= x <= 17; the fraction consists of the low Ex bits in C * kx
   // (these values are aligned with the high 64 bits of the fraction)
-  
-  static let bid_half64: [UInt64] = [
-    0x0000000000000004,    // half / 2^64 = 4
-    0x0000000000000020,    // half / 2^64 = 20
-    0x0000000000000100,    // half / 2^64 = 100
-    0x0000000000001000,    // half / 2^64 = 1000
-    0x0000000000008000,    // half / 2^64 = 8000
-    0x0000000000040000,    // half / 2^64 = 40000
-    0x0000000000400000,    // half / 2^64 = 400000
-    0x0000000002000000,    // half / 2^64 = 2000000
-    0x0000000010000000,    // half / 2^64 = 10000000
-    0x0000000100000000,    // half / 2^64 = 100000000
-    0x0000000800000000,    // half / 2^64 = 800000000
-    0x0000004000000000,    // half / 2^64 = 4000000000
-    0x0000040000000000,    // half / 2^64 = 40000000000
-    0x0000200000000000,    // half / 2^64 = 200000000000
-    0x0001000000000000,    // half / 2^64 = 1000000000000
-    0x0010000000000000,    // half / 2^64 = 10000000000000
-    0x0080000000000000    // half / 2^64 = 80000000000000
-  ]
+  static func bid_half64(_ i: Int) -> UInt64 {
+    (UInt64(1) << bid_shiftright128[i+3] - 1)
+  }
   
   // Values of mask in the right position to obtain the high Ex - 64 bits
   // of the fraction from C * kx, 1 <= x <= 17; the fraction consists of
   // the low Ex bits in C * kx
-  static let bid_mask64: [UInt64] = [
-    0x0000000000000007,    // mask / 2^64
-    0x000000000000003f,    // mask / 2^64
-    0x00000000000001ff,    // mask / 2^64
-    0x0000000000001fff,    // mask / 2^64
-    0x000000000000ffff,    // mask / 2^64
-    0x000000000007ffff,    // mask / 2^64
-    0x00000000007fffff,    // mask / 2^64
-    0x0000000003ffffff,    // mask / 2^64
-    0x000000001fffffff,    // mask / 2^64
-    0x00000001ffffffff,    // mask / 2^64
-    0x0000000fffffffff,    // mask / 2^64
-    0x0000007fffffffff,    // mask / 2^64
-    0x000007ffffffffff,    // mask / 2^64
-    0x00003fffffffffff,    // mask / 2^64
-    0x0001ffffffffffff,    // mask / 2^64
-    0x001fffffffffffff,    // mask / 2^64
-    0x00ffffffffffffff    // mask / 2^64
-  ]
+  static func bid_mask64(_ i:Int) -> UInt64 {
+    (UInt64(1) << bid_shiftright128[i+3]) - 1
+  }
+
+//  static let bid_nr_digits : [DEC_DIGITS] = [
+//    // only the first entry is used if it is not 0
+//    DEC_DIGITS(1, 0x0000000000000000, 0x000000000000000a, 1),    //   1-bit n < 10^1
+//    DEC_DIGITS(1, 0x0000000000000000, 0x000000000000000a, 1),    //   2-bit n < 10^1
+//    DEC_DIGITS(1, 0x0000000000000000, 0x000000000000000a, 1),    //   3-bit n < 10^1
+//    DEC_DIGITS(0, 0x0000000000000000, 0x000000000000000a, 1),    //   4-bit n ? 10^1
+//    DEC_DIGITS(2, 0x0000000000000000, 0x0000000000000064, 2),    //   5-bit n < 10^2
+//    DEC_DIGITS(2, 0x0000000000000000, 0x0000000000000064, 2),    //   6-bit n < 10^2
+//    DEC_DIGITS(0, 0x0000000000000000, 0x0000000000000064, 2),    //   7-bit n ? 10^2
+//    DEC_DIGITS(3, 0x0000000000000000, 0x00000000000003e8, 3),    //   8-bit n < 10^3
+//    DEC_DIGITS(3, 0x0000000000000000, 0x00000000000003e8, 3),    //   9-bit n < 10^3
+//    DEC_DIGITS(0, 0x0000000000000000, 0x00000000000003e8, 3),    //  10-bit n ? 10^3
+//    DEC_DIGITS(4, 0x0000000000000000, 0x0000000000002710, 4),    //  11-bit n < 10^4
+//    DEC_DIGITS(4, 0x0000000000000000, 0x0000000000002710, 4),    //  12-bit n < 10^4
+//    DEC_DIGITS(4, 0x0000000000000000, 0x0000000000002710, 4),    //  13-bit n < 10^4
+//    DEC_DIGITS(0, 0x0000000000000000, 0x0000000000002710, 4),    //  14-bit n ? 10^4
+//    DEC_DIGITS(5, 0x0000000000000000, 0x00000000000186a0, 5),    //  15-bit n < 10^5
+//    DEC_DIGITS(5, 0x0000000000000000, 0x00000000000186a0, 5),    //  16-bit n < 10^5
+//    DEC_DIGITS(0, 0x0000000000000000, 0x00000000000186a0, 5),    //  17-bit n ? 10^5
+//    DEC_DIGITS(6, 0x0000000000000000, 0x00000000000f4240, 6),    //  18-bit n < 10^6
+//    DEC_DIGITS(6, 0x0000000000000000, 0x00000000000f4240, 6),    //  19-bit n < 10^6
+//    DEC_DIGITS(0, 0x0000000000000000, 0x00000000000f4240, 6),    //  20-bit n ? 10^6
+//    DEC_DIGITS(7, 0x0000000000000000, 0x0000000000989680, 7),    //  21-bit n < 10^7
+//    DEC_DIGITS(7, 0x0000000000000000, 0x0000000000989680, 7),    //  22-bit n < 10^7
+//    DEC_DIGITS(7, 0x0000000000000000, 0x0000000000989680, 7),    //  23-bit n < 10^7
+//    DEC_DIGITS(0, 0x0000000000000000, 0x0000000000989680, 7),    //  24-bit n ? 10^7
+//    DEC_DIGITS(8, 0x0000000000000000, 0x0000000005f5e100, 8),    //  25-bit n < 10^8
+//    DEC_DIGITS(8, 0x0000000000000000, 0x0000000005f5e100, 8),    //  26-bit n < 10^8
+//    DEC_DIGITS(0, 0x0000000000000000, 0x0000000005f5e100, 8),    //  27-bit n ? 10^8
+//    DEC_DIGITS(9, 0x0000000000000000, 0x000000003b9aca00, 9),    //  28-bit n < 10^9
+//    DEC_DIGITS(9, 0x0000000000000000, 0x000000003b9aca00, 9),    //  29-bit n < 10^9
+//    DEC_DIGITS(0, 0x0000000000000000, 0x000000003b9aca00, 9),    //  30-bit n ? 10^9
+//    DEC_DIGITS(10, 0x0000000000000000, 0x00000002540be400, 10),    //  31-bit n < 10^10
+//    DEC_DIGITS(10, 0x0000000000000000, 0x00000002540be400, 10),    //  32-bit n < 10^10
+//    DEC_DIGITS(10, 0x0000000000000000, 0x00000002540be400, 10),    //  33-bit n < 10^10
+//    DEC_DIGITS(0, 0x0000000000000000, 0x00000002540be400, 10),    //  34-bit n ? 10^10
+//    DEC_DIGITS(11, 0x0000000000000000, 0x000000174876e800, 11),    //  35-bit n < 10^11
+//    DEC_DIGITS(11, 0x0000000000000000, 0x000000174876e800, 11),    //  36-bit n < 10^11
+//    DEC_DIGITS(0, 0x0000000000000000, 0x000000174876e800, 11),    //  37-bit n ? 10^11
+//    DEC_DIGITS(12, 0x0000000000000000, 0x000000e8d4a51000, 12),    //  38-bit n < 10^12
+//    DEC_DIGITS(12, 0x0000000000000000, 0x000000e8d4a51000, 12),    //  39-bit n < 10^12
+//    DEC_DIGITS(0, 0x0000000000000000, 0x000000e8d4a51000, 12),    //  40-bit n ? 10^12
+//    DEC_DIGITS(13, 0x0000000000000000, 0x000009184e72a000, 13),    //  41-bit n < 10^13
+//    DEC_DIGITS(13, 0x0000000000000000, 0x000009184e72a000, 13),    //  42-bit n < 10^13
+//    DEC_DIGITS(13, 0x0000000000000000, 0x000009184e72a000, 13),    //  43-bit n < 10^13
+//    DEC_DIGITS(0, 0x0000000000000000, 0x000009184e72a000, 13),    //  44-bit n ? 10^13
+//    DEC_DIGITS(14, 0x0000000000000000, 0x00005af3107a4000, 14),    //  45-bit n < 10^14
+//    DEC_DIGITS(14, 0x0000000000000000, 0x00005af3107a4000, 14),    //  46-bit n < 10^14
+//    DEC_DIGITS(0, 0x0000000000000000, 0x00005af3107a4000, 14),    //  47-bit n ? 10^14
+//    DEC_DIGITS(15, 0x0000000000000000, 0x00038d7ea4c68000, 15),    //  48-bit n < 10^15
+//    DEC_DIGITS(15, 0x0000000000000000, 0x00038d7ea4c68000, 15),    //  49-bit n < 10^15
+//    DEC_DIGITS(0, 0x0000000000000000, 0x00038d7ea4c68000, 15),    //  50-bit n ? 10^15
+//    DEC_DIGITS(16, 0x0000000000000000, 0x002386f26fc10000, 16),    //  51-bit n < 10^16
+//    DEC_DIGITS(16, 0x0000000000000000, 0x002386f26fc10000, 16),    //  52-bit n < 10^16
+//    DEC_DIGITS(16, 0x0000000000000000, 0x002386f26fc10000, 16),    //  53-bit n < 10^16
+//    DEC_DIGITS(0, 0x0000000000000000, 0x002386f26fc10000, 16),    //  54-bit n ? 10^16
+//    DEC_DIGITS(17, 0x0000000000000000, 0x016345785d8a0000, 17),    //  55-bit n < 10^17
+//    DEC_DIGITS(17, 0x0000000000000000, 0x016345785d8a0000, 17),    //  56-bit n < 10^17
+//    DEC_DIGITS(0, 0x0000000000000000, 0x016345785d8a0000, 17),    //  57-bit n ? 10^17
+//    DEC_DIGITS(18, 0x0000000000000000, 0x0de0b6b3a7640000, 18),    //  58-bit n < 10^18
+//    DEC_DIGITS(18, 0x0000000000000000, 0x0de0b6b3a7640000, 18),    //  59-bit n < 10^18
+//    DEC_DIGITS(0, 0x0000000000000000, 0x0de0b6b3a7640000, 18),    //  60-bit n ? 10^18
+//    DEC_DIGITS(19, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  61-bit n < 10^19
+//    DEC_DIGITS(19, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  62-bit n < 10^19
+//    DEC_DIGITS(19, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  63-bit n < 10^19
+//    DEC_DIGITS(0, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  64-bit n ? 10^19
+//    DEC_DIGITS(20, 0x0000000000000005, 0x6bc75e2d63100000, 20),    //  65-bit n < 10^20
+//    DEC_DIGITS(20, 0x0000000000000005, 0x6bc75e2d63100000, 20),    //  66-bit n < 10^20
+//    DEC_DIGITS(0, 0x0000000000000005, 0x6bc75e2d63100000, 20),    //  67-bit n ? 10^20
+//    DEC_DIGITS(21, 0x0000000000000036, 0x35c9adc5dea00000, 21),    //  68-bit n < 10^21
+//    DEC_DIGITS(21, 0x0000000000000036, 0x35c9adc5dea00000, 21),    //  69-bit n < 10^21
+//    DEC_DIGITS(0, 0x0000000000000036, 0x35c9adc5dea00000, 21),    //  70-bit n ? 10^21
+//    DEC_DIGITS(22, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  71-bit n < 10^22
+//    DEC_DIGITS(22, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  72-bit n < 10^22
+//    DEC_DIGITS(22, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  73-bit n < 10^22
+//    DEC_DIGITS(0, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  74-bit n ? 10^22
+//    DEC_DIGITS(23, 0x000000000000152d, 0x02c7e14af6800000, 23),    //  75-bit n < 10^23
+//    DEC_DIGITS(23, 0x000000000000152d, 0x02c7e14af6800000, 23),    //  76-bit n < 10^23
+//    DEC_DIGITS(0, 0x000000000000152d, 0x02c7e14af6800000, 23),    //  77-bit n ? 10^23
+//    DEC_DIGITS(24, 0x000000000000d3c2, 0x1bcecceda1000000, 24),    //  78-bit n < 10^24
+//    DEC_DIGITS(24, 0x000000000000d3c2, 0x1bcecceda1000000, 24),    //  79-bit n < 10^24
+//    DEC_DIGITS(0, 0x000000000000d3c2, 0x1bcecceda1000000, 24),    //  80-bit n ? 10^24
+//    DEC_DIGITS(25, 0x0000000000084595, 0x161401484a000000, 25),    //  81-bit n < 10^25
+//    DEC_DIGITS(25, 0x0000000000084595, 0x161401484a000000, 25),    //  82-bit n < 10^25
+//    DEC_DIGITS(25, 0x0000000000084595, 0x161401484a000000, 25),    //  83-bit n < 10^25
+//    DEC_DIGITS(0, 0x0000000000084595, 0x161401484a000000, 25),    //  84-bit n ? 10^25
+//    DEC_DIGITS(26, 0x000000000052b7d2, 0xdcc80cd2e4000000, 26),    //  85-bit n < 10^26
+//    DEC_DIGITS(26, 0x000000000052b7d2, 0xdcc80cd2e4000000, 26),    //  86-bit n < 10^26
+//    DEC_DIGITS(0, 0x000000000052b7d2, 0xdcc80cd2e4000000, 26),    //  87-bit n ? 10^26
+//    DEC_DIGITS(27, 0x00000000033b2e3c, 0x9fd0803ce8000000, 27),    //  88-bit n < 10^27
+//    DEC_DIGITS(27, 0x00000000033b2e3c, 0x9fd0803ce8000000, 27),    //  89-bit n < 10^27
+//    DEC_DIGITS(0, 0x00000000033b2e3c, 0x9fd0803ce8000000, 27),    //  90-bit n ? 10^27
+//    DEC_DIGITS(28, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  91-bit n < 10^28
+//    DEC_DIGITS(28, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  92-bit n < 10^28
+//    DEC_DIGITS(28, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  93-bit n < 10^28
+//    DEC_DIGITS(0, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  94-bit n ? 10^28
+//    DEC_DIGITS(29, 0x00000001431e0fae, 0x6d7217caa0000000, 29),    //  95-bit n < 10^29
+//    DEC_DIGITS(29, 0x00000001431e0fae, 0x6d7217caa0000000, 29),    //  96-bit n < 10^29
+//    DEC_DIGITS(0, 0x00000001431e0fae, 0x6d7217caa0000000, 29),    //  97-bit n ? 10^29
+//    DEC_DIGITS(30, 0x0000000c9f2c9cd0, 0x4674edea40000000, 30),    //  98-bit n < 10^30
+//    DEC_DIGITS(30, 0x0000000c9f2c9cd0, 0x4674edea40000000, 30),    //  99-bit n < 10^30
+//    DEC_DIGITS(0, 0x0000000c9f2c9cd0, 0x4674edea40000000, 30),    // 100-bit n ? 10^30
+//    DEC_DIGITS(31, 0x0000007e37be2022, 0xc0914b2680000000, 31),    // 101-bit n < 10^31
+//    DEC_DIGITS(31, 0x0000007e37be2022, 0xc0914b2680000000, 31),    // 102-bit n < 10^31
+//    DEC_DIGITS(0, 0x0000007e37be2022, 0xc0914b2680000000, 31),    // 103-bit n ? 10^31
+//    DEC_DIGITS(32, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 104-bit n < 10^32
+//    DEC_DIGITS(32, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 105-bit n < 10^32
+//    DEC_DIGITS(32, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 106-bit n < 10^32
+//    DEC_DIGITS(0, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 107-bit n ? 10^32
+//    DEC_DIGITS(33, 0x0000314dc6448d93, 0x38c15b0a00000000, 33),    // 108-bit n < 10^33
+//    DEC_DIGITS(33, 0x0000314dc6448d93, 0x38c15b0a00000000, 33),    // 109-bit n < 10^33
+//    DEC_DIGITS(0, 0x0000314dc6448d93, 0x38c15b0a00000000, 33),    // 100-bit n ? 10^33
+//    DEC_DIGITS(34, 0x0001ed09bead87c0, 0x378d8e6400000000, 34),    // 111-bit n < 10^34
+//    DEC_DIGITS(34, 0x0001ed09bead87c0, 0x378d8e6400000000, 34),    // 112-bit n < 10^34
+//    DEC_DIGITS(0, 0x0001ed09bead87c0, 0x378d8e6400000000, 34)    // 113-bit n ? 10^34
+//    //{ 35, 0x0013426172c74d82, 0x2b878fe800000000, 35 }  // 114-bit n < 10^35
+//  ]
   
-  // Ex-64 from 10^(-x) ~= Kx * 2^(-Ex); Kx rounded up to 64 bits, 1 <= x <= 17
-  static let bid_Ex64m64 : [UInt8] = [
-    3,    // 67 - 64, Ex = 67
-    6,    // 70 - 64, Ex = 70
-    9,    // 73 - 64, Ex = 73
-    13,    // 77 - 64, Ex = 77
-    16,    // 80 - 64, Ex = 80
-    19,    // 83 - 64, Ex = 83
-    23,    // 87 - 64, Ex = 87
-    26,    // 90 - 64, Ex = 90
-    29,    // 93 - 64, Ex = 93
-    33,    // 97 - 64, Ex = 97
-    36,    // 100 - 64, Ex = 100
-    39,    // 103 - 64, Ex = 103
-    43,    // 107 - 64, Ex = 107
-    46,    // 110 - 64, Ex = 110
-    49,    // 113 - 64, Ex = 113
-    53,    // 117 - 64, Ex = 117
-    56    // 120 - 64, Ex = 120
-  ]
-  
-  // Kx from 10^(-x) ~= Kx * 2^(-Ex); Kx rounded up to 64 bits, 1 <= x <= 17
-  static let bid_Kx64: [UInt64] = [
-    0xcccccccccccccccd,    // 10^-1 ~= cccccccccccccccd * 2^-67
-    0xa3d70a3d70a3d70b,    // 10^-2 ~= a3d70a3d70a3d70b * 2^-70
-    0x83126e978d4fdf3c,    // 10^-3 ~= 83126e978d4fdf3c * 2^-73
-    0xd1b71758e219652c,    // 10^-4 ~= d1b71758e219652c * 2^-77
-    0xa7c5ac471b478424,    // 10^-5 ~= a7c5ac471b478424 * 2^-80
-    0x8637bd05af6c69b6,    // 10^-6 ~= 8637bd05af6c69b6 * 2^-83
-    0xd6bf94d5e57a42bd,    // 10^-7 ~= d6bf94d5e57a42bd * 2^-87
-    0xabcc77118461cefd,    // 10^-8 ~= abcc77118461cefd * 2^-90
-    0x89705f4136b4a598,    // 10^-9 ~= 89705f4136b4a598 * 2^-93
-    0xdbe6fecebdedd5bf,    // 10^-10 ~= dbe6fecebdedd5bf * 2^-97
-    0xafebff0bcb24aaff,    // 10^-11 ~= afebff0bcb24aaff * 2^-100
-    0x8cbccc096f5088cc,    // 10^-12 ~= 8cbccc096f5088cc * 2^-103
-    0xe12e13424bb40e14,    // 10^-13 ~= e12e13424bb40e14 * 2^-107
-    0xb424dc35095cd810,    // 10^-14 ~= b424dc35095cd810 * 2^-110
-    0x901d7cf73ab0acda,    // 10^-15 ~= 901d7cf73ab0acda * 2^-113
-    0xe69594bec44de15c,    // 10^-16 ~= e69594bec44de15c * 2^-117
-    0xb877aa3236a4b44a     // 10^-17 ~= b877aa3236a4b44a * 2^-120
-  ]
-  
-  
-  static let bid_nr_digits : [DEC_DIGITS] = [   // only the first entry is used if it is not 0
-    DEC_DIGITS(1, 0x0000000000000000, 0x000000000000000a, 1),    //   1-bit n < 10^1
-    DEC_DIGITS(1, 0x0000000000000000, 0x000000000000000a, 1),    //   2-bit n < 10^1
-    DEC_DIGITS(1, 0x0000000000000000, 0x000000000000000a, 1),    //   3-bit n < 10^1
-    DEC_DIGITS(0, 0x0000000000000000, 0x000000000000000a, 1),    //   4-bit n ? 10^1
-    DEC_DIGITS(2, 0x0000000000000000, 0x0000000000000064, 2),    //   5-bit n < 10^2
-    DEC_DIGITS(2, 0x0000000000000000, 0x0000000000000064, 2),    //   6-bit n < 10^2
-    DEC_DIGITS(0, 0x0000000000000000, 0x0000000000000064, 2),    //   7-bit n ? 10^2
-    DEC_DIGITS(3, 0x0000000000000000, 0x00000000000003e8, 3),    //   8-bit n < 10^3
-    DEC_DIGITS(3, 0x0000000000000000, 0x00000000000003e8, 3),    //   9-bit n < 10^3
-    DEC_DIGITS(0, 0x0000000000000000, 0x00000000000003e8, 3),    //  10-bit n ? 10^3
-    DEC_DIGITS(4, 0x0000000000000000, 0x0000000000002710, 4),    //  11-bit n < 10^4
-    DEC_DIGITS(4, 0x0000000000000000, 0x0000000000002710, 4),    //  12-bit n < 10^4
-    DEC_DIGITS(4, 0x0000000000000000, 0x0000000000002710, 4),    //  13-bit n < 10^4
-    DEC_DIGITS(0, 0x0000000000000000, 0x0000000000002710, 4),    //  14-bit n ? 10^4
-    DEC_DIGITS(5, 0x0000000000000000, 0x00000000000186a0, 5),    //  15-bit n < 10^5
-    DEC_DIGITS(5, 0x0000000000000000, 0x00000000000186a0, 5),    //  16-bit n < 10^5
-    DEC_DIGITS(0, 0x0000000000000000, 0x00000000000186a0, 5),    //  17-bit n ? 10^5
-    DEC_DIGITS(6, 0x0000000000000000, 0x00000000000f4240, 6),    //  18-bit n < 10^6
-    DEC_DIGITS(6, 0x0000000000000000, 0x00000000000f4240, 6),    //  19-bit n < 10^6
-    DEC_DIGITS(0, 0x0000000000000000, 0x00000000000f4240, 6),    //  20-bit n ? 10^6
-    DEC_DIGITS(7, 0x0000000000000000, 0x0000000000989680, 7),    //  21-bit n < 10^7
-    DEC_DIGITS(7, 0x0000000000000000, 0x0000000000989680, 7),    //  22-bit n < 10^7
-    DEC_DIGITS(7, 0x0000000000000000, 0x0000000000989680, 7),    //  23-bit n < 10^7
-    DEC_DIGITS(0, 0x0000000000000000, 0x0000000000989680, 7),    //  24-bit n ? 10^7
-    DEC_DIGITS(8, 0x0000000000000000, 0x0000000005f5e100, 8),    //  25-bit n < 10^8
-    DEC_DIGITS(8, 0x0000000000000000, 0x0000000005f5e100, 8),    //  26-bit n < 10^8
-    DEC_DIGITS(0, 0x0000000000000000, 0x0000000005f5e100, 8),    //  27-bit n ? 10^8
-    DEC_DIGITS(9, 0x0000000000000000, 0x000000003b9aca00, 9),    //  28-bit n < 10^9
-    DEC_DIGITS(9, 0x0000000000000000, 0x000000003b9aca00, 9),    //  29-bit n < 10^9
-    DEC_DIGITS(0, 0x0000000000000000, 0x000000003b9aca00, 9),    //  30-bit n ? 10^9
-    DEC_DIGITS(10, 0x0000000000000000, 0x00000002540be400, 10),    //  31-bit n < 10^10
-    DEC_DIGITS(10, 0x0000000000000000, 0x00000002540be400, 10),    //  32-bit n < 10^10
-    DEC_DIGITS(10, 0x0000000000000000, 0x00000002540be400, 10),    //  33-bit n < 10^10
-    DEC_DIGITS(0, 0x0000000000000000, 0x00000002540be400, 10),    //  34-bit n ? 10^10
-    DEC_DIGITS(11, 0x0000000000000000, 0x000000174876e800, 11),    //  35-bit n < 10^11
-    DEC_DIGITS(11, 0x0000000000000000, 0x000000174876e800, 11),    //  36-bit n < 10^11
-    DEC_DIGITS(0, 0x0000000000000000, 0x000000174876e800, 11),    //  37-bit n ? 10^11
-    DEC_DIGITS(12, 0x0000000000000000, 0x000000e8d4a51000, 12),    //  38-bit n < 10^12
-    DEC_DIGITS(12, 0x0000000000000000, 0x000000e8d4a51000, 12),    //  39-bit n < 10^12
-    DEC_DIGITS(0, 0x0000000000000000, 0x000000e8d4a51000, 12),    //  40-bit n ? 10^12
-    DEC_DIGITS(13, 0x0000000000000000, 0x000009184e72a000, 13),    //  41-bit n < 10^13
-    DEC_DIGITS(13, 0x0000000000000000, 0x000009184e72a000, 13),    //  42-bit n < 10^13
-    DEC_DIGITS(13, 0x0000000000000000, 0x000009184e72a000, 13),    //  43-bit n < 10^13
-    DEC_DIGITS(0, 0x0000000000000000, 0x000009184e72a000, 13),    //  44-bit n ? 10^13
-    DEC_DIGITS(14, 0x0000000000000000, 0x00005af3107a4000, 14),    //  45-bit n < 10^14
-    DEC_DIGITS(14, 0x0000000000000000, 0x00005af3107a4000, 14),    //  46-bit n < 10^14
-    DEC_DIGITS(0, 0x0000000000000000, 0x00005af3107a4000, 14),    //  47-bit n ? 10^14
-    DEC_DIGITS(15, 0x0000000000000000, 0x00038d7ea4c68000, 15),    //  48-bit n < 10^15
-    DEC_DIGITS(15, 0x0000000000000000, 0x00038d7ea4c68000, 15),    //  49-bit n < 10^15
-    DEC_DIGITS(0, 0x0000000000000000, 0x00038d7ea4c68000, 15),    //  50-bit n ? 10^15
-    DEC_DIGITS(16, 0x0000000000000000, 0x002386f26fc10000, 16),    //  51-bit n < 10^16
-    DEC_DIGITS(16, 0x0000000000000000, 0x002386f26fc10000, 16),    //  52-bit n < 10^16
-    DEC_DIGITS(16, 0x0000000000000000, 0x002386f26fc10000, 16),    //  53-bit n < 10^16
-    DEC_DIGITS(0, 0x0000000000000000, 0x002386f26fc10000, 16),    //  54-bit n ? 10^16
-    DEC_DIGITS(17, 0x0000000000000000, 0x016345785d8a0000, 17),    //  55-bit n < 10^17
-    DEC_DIGITS(17, 0x0000000000000000, 0x016345785d8a0000, 17),    //  56-bit n < 10^17
-    DEC_DIGITS(0, 0x0000000000000000, 0x016345785d8a0000, 17),    //  57-bit n ? 10^17
-    DEC_DIGITS(18, 0x0000000000000000, 0x0de0b6b3a7640000, 18),    //  58-bit n < 10^18
-    DEC_DIGITS(18, 0x0000000000000000, 0x0de0b6b3a7640000, 18),    //  59-bit n < 10^18
-    DEC_DIGITS(0, 0x0000000000000000, 0x0de0b6b3a7640000, 18),    //  60-bit n ? 10^18
-    DEC_DIGITS(19, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  61-bit n < 10^19
-    DEC_DIGITS(19, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  62-bit n < 10^19
-    DEC_DIGITS(19, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  63-bit n < 10^19
-    DEC_DIGITS(0, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  64-bit n ? 10^19
-    DEC_DIGITS(20, 0x0000000000000005, 0x6bc75e2d63100000, 20),    //  65-bit n < 10^20
-    DEC_DIGITS(20, 0x0000000000000005, 0x6bc75e2d63100000, 20),    //  66-bit n < 10^20
-    DEC_DIGITS(0, 0x0000000000000005, 0x6bc75e2d63100000, 20),    //  67-bit n ? 10^20
-    DEC_DIGITS(21, 0x0000000000000036, 0x35c9adc5dea00000, 21),    //  68-bit n < 10^21
-    DEC_DIGITS(21, 0x0000000000000036, 0x35c9adc5dea00000, 21),    //  69-bit n < 10^21
-    DEC_DIGITS(0, 0x0000000000000036, 0x35c9adc5dea00000, 21),    //  70-bit n ? 10^21
-    DEC_DIGITS(22, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  71-bit n < 10^22
-    DEC_DIGITS(22, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  72-bit n < 10^22
-    DEC_DIGITS(22, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  73-bit n < 10^22
-    DEC_DIGITS(0, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  74-bit n ? 10^22
-    DEC_DIGITS(23, 0x000000000000152d, 0x02c7e14af6800000, 23),    //  75-bit n < 10^23
-    DEC_DIGITS(23, 0x000000000000152d, 0x02c7e14af6800000, 23),    //  76-bit n < 10^23
-    DEC_DIGITS(0, 0x000000000000152d, 0x02c7e14af6800000, 23),    //  77-bit n ? 10^23
-    DEC_DIGITS(24, 0x000000000000d3c2, 0x1bcecceda1000000, 24),    //  78-bit n < 10^24
-    DEC_DIGITS(24, 0x000000000000d3c2, 0x1bcecceda1000000, 24),    //  79-bit n < 10^24
-    DEC_DIGITS(0, 0x000000000000d3c2, 0x1bcecceda1000000, 24),    //  80-bit n ? 10^24
-    DEC_DIGITS(25, 0x0000000000084595, 0x161401484a000000, 25),    //  81-bit n < 10^25
-    DEC_DIGITS(25, 0x0000000000084595, 0x161401484a000000, 25),    //  82-bit n < 10^25
-    DEC_DIGITS(25, 0x0000000000084595, 0x161401484a000000, 25),    //  83-bit n < 10^25
-    DEC_DIGITS(0, 0x0000000000084595, 0x161401484a000000, 25),    //  84-bit n ? 10^25
-    DEC_DIGITS(26, 0x000000000052b7d2, 0xdcc80cd2e4000000, 26),    //  85-bit n < 10^26
-    DEC_DIGITS(26, 0x000000000052b7d2, 0xdcc80cd2e4000000, 26),    //  86-bit n < 10^26
-    DEC_DIGITS(0, 0x000000000052b7d2, 0xdcc80cd2e4000000, 26),    //  87-bit n ? 10^26
-    DEC_DIGITS(27, 0x00000000033b2e3c, 0x9fd0803ce8000000, 27),    //  88-bit n < 10^27
-    DEC_DIGITS(27, 0x00000000033b2e3c, 0x9fd0803ce8000000, 27),    //  89-bit n < 10^27
-    DEC_DIGITS(0, 0x00000000033b2e3c, 0x9fd0803ce8000000, 27),    //  90-bit n ? 10^27
-    DEC_DIGITS(28, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  91-bit n < 10^28
-    DEC_DIGITS(28, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  92-bit n < 10^28
-    DEC_DIGITS(28, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  93-bit n < 10^28
-    DEC_DIGITS(0, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  94-bit n ? 10^28
-    DEC_DIGITS(29, 0x00000001431e0fae, 0x6d7217caa0000000, 29),    //  95-bit n < 10^29
-    DEC_DIGITS(29, 0x00000001431e0fae, 0x6d7217caa0000000, 29),    //  96-bit n < 10^29
-    DEC_DIGITS(0, 0x00000001431e0fae, 0x6d7217caa0000000, 29),    //  97-bit n ? 10^29
-    DEC_DIGITS(30, 0x0000000c9f2c9cd0, 0x4674edea40000000, 30),    //  98-bit n < 10^30
-    DEC_DIGITS(30, 0x0000000c9f2c9cd0, 0x4674edea40000000, 30),    //  99-bit n < 10^30
-    DEC_DIGITS(0, 0x0000000c9f2c9cd0, 0x4674edea40000000, 30),    // 100-bit n ? 10^30
-    DEC_DIGITS(31, 0x0000007e37be2022, 0xc0914b2680000000, 31),    // 101-bit n < 10^31
-    DEC_DIGITS(31, 0x0000007e37be2022, 0xc0914b2680000000, 31),    // 102-bit n < 10^31
-    DEC_DIGITS(0, 0x0000007e37be2022, 0xc0914b2680000000, 31),    // 103-bit n ? 10^31
-    DEC_DIGITS(32, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 104-bit n < 10^32
-    DEC_DIGITS(32, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 105-bit n < 10^32
-    DEC_DIGITS(32, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 106-bit n < 10^32
-    DEC_DIGITS(0, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 107-bit n ? 10^32
-    DEC_DIGITS(33, 0x0000314dc6448d93, 0x38c15b0a00000000, 33),    // 108-bit n < 10^33
-    DEC_DIGITS(33, 0x0000314dc6448d93, 0x38c15b0a00000000, 33),    // 109-bit n < 10^33
-    DEC_DIGITS(0, 0x0000314dc6448d93, 0x38c15b0a00000000, 33),    // 100-bit n ? 10^33
-    DEC_DIGITS(34, 0x0001ed09bead87c0, 0x378d8e6400000000, 34),    // 111-bit n < 10^34
-    DEC_DIGITS(34, 0x0001ed09bead87c0, 0x378d8e6400000000, 34),    // 112-bit n < 10^34
-    DEC_DIGITS(0, 0x0001ed09bead87c0, 0x378d8e6400000000, 34)    // 113-bit n ? 10^34
-    //{ 35, 0x0013426172c74d82, 0x2b878fe800000000, 35 }  // 114-bit n < 10^35
-  ]
-  
-  static let bid_ten2mk64 : [UInt64] = [
-    0x199999999999999a,    //  10^(-1) * 2^ 64
-    0x028f5c28f5c28f5d,    //  10^(-2) * 2^ 64
-    0x004189374bc6a7f0,    //  10^(-3) * 2^ 64
-    0x00346dc5d638865a,    //  10^(-4) * 2^ 67
-    0x0029f16b11c6d1e2,    //  10^(-5) * 2^ 70
-    0x00218def416bdb1b,    //  10^(-6) * 2^ 73
-    0x0035afe535795e91,    //  10^(-7) * 2^ 77
-    0x002af31dc4611874,    //  10^(-8) * 2^ 80
-    0x00225c17d04dad2a,    //  10^(-9) * 2^ 83
-    0x0036f9bfb3af7b76,    // 10^(-10) * 2^ 87
-    0x002bfaffc2f2c92b,    // 10^(-11) * 2^ 90
-    0x00232f33025bd423,    // 10^(-12) * 2^ 93
-    0x00384b84d092ed04,    // 10^(-13) * 2^ 97
-    0x002d09370d425737,    // 10^(-14) * 2^100
-    0x0024075f3dceac2c,    // 10^(-15) * 2^103
-    0x0039a5652fb11379,    // 10^(-16) * 2^107
-  ]
-  
-  // bid_shiftright128[] contains the right shift count to obtain C2* from
-  // the top 128 bits of the 128x128-bit product C2 * Kx
-  static let bid_shiftright128: [Int] = [
-    0,    // 128 - 128
-    0,    // 128 - 128
-    0,    // 128 - 128
-    
-    3,    // 131 - 128
-    6,    // 134 - 128
-    9,    // 137 - 128
-    13,    // 141 - 128
-    16,    // 144 - 128
-    19,    // 147 - 128
-    23,    // 151 - 128
-    26,    // 154 - 128
-    29,    // 157 - 128
-    33,    // 161 - 128
-    36,    // 164 - 128
-    39,    // 167 - 128
-    43,    // 171 - 128
-    46,    // 174 - 128
-    49,    // 177 - 128
-    53,    // 181 - 128
-    56,    // 184 - 128
-    59,    // 187 - 128
-    63,    // 191 - 128
-    
-    66,    // 194 - 128
-    69,    // 197 - 128
-    73,    // 201 - 128
-    76,    // 204 - 128
-    79,    // 207 - 128
-    83,    // 211 - 128
-    86,    // 214 - 128
-    89,    // 217 - 128
-    92,    // 220 - 128
-    96,    // 224 - 128
-    99,    // 227 - 128
-    102    // 230 - 128
-  ]
-  
-  static let bid_reciprocals10_64: [UInt64] = [
-    1,    // dummy value for 0 extra digits
-    0x3333333333333334,    // 1 extra digit
-    0x51eb851eb851eb86,
-    0x20c49ba5e353f7cf,
-    0x346dc5d63886594b,
-    0x29f16b11c6d1e109,
-    0x218def416bdb1a6e,
-    0x35afe535795e90b0,
-    0x2af31dc4611873c0,
-    0x225c17d04dad2966,
-    0x36f9bfb3af7b7570,
-    0x2bfaffc2f2c92ac0,
-    0x232f33025bd42233,
-    0x384b84d092ed0385,
-    0x2d09370d42573604,
-    0x24075f3dceac2b37,
-    0x39a5652fb1137857,
-    0x2e1dea8c8da92d13
-  ]
-  
-  static let bid_short_recip_scale: [Int8] = [
-    1,
-    65 - 64,
-    69 - 64,
-    71 - 64,
-    75 - 64,
-    78 - 64,
-    81 - 64,
-    85 - 64,
-    88 - 64,
-    91 - 64,
-    95 - 64,
-    98 - 64,
-    101 - 64,
-    105 - 64,
-    108 - 64,
-    111 - 64,
-    115 - 64,    //114 - 64
-    118 - 64
-  ]
-  
-  static let bid_round_const_table : [[UInt64]] = [
-    [    // RN
-      0,    // 0 extra digits
-      5,    // 1 extra digits
-      50,    // 2 extra digits
-      500,    // 3 extra digits
-      5000,    // 4 extra digits
-      50000,    // 5 extra digits
-      500000,    // 6 extra digits
-      5000000,    // 7 extra digits
-      50000000,    // 8 extra digits
-      500000000,    // 9 extra digits
-      5000000000,    // 10 extra digits
-      50000000000,    // 11 extra digits
-      500000000000,    // 12 extra digits
-      5000000000000,    // 13 extra digits
-      50000000000000,    // 14 extra digits
-      500000000000000,    // 15 extra digits
-      5000000000000000,    // 16 extra digits
-      50000000000000000,    // 17 extra digits
-      500000000000000000    // 18 extra digits
-    ],
-    [    // RD
-      0,    // 0 extra digits
-      0,    // 1 extra digits
-      0,    // 2 extra digits
-      00,    // 3 extra digits
-      000,    // 4 extra digits
-      0000,    // 5 extra digits
-      00000,    // 6 extra digits
-      000000,    // 7 extra digits
-      0000000,    // 8 extra digits
-      00000000,    // 9 extra digits
-      000000000,    // 10 extra digits
-      0000000000,    // 11 extra digits
-      00000000000,    // 12 extra digits
-      000000000000,    // 13 extra digits
-      0000000000000,    // 14 extra digits
-      00000000000000,    // 15 extra digits
-      000000000000000,    // 16 extra digits
-      0000000000000000,    // 17 extra digits
-      00000000000000000    // 18 extra digits
-    ],
-    [    // round to Inf
-      0,    // 0 extra digits
-      9,    // 1 extra digits
-      99,    // 2 extra digits
-      999,    // 3 extra digits
-      9999,    // 4 extra digits
-      99999,    // 5 extra digits
-      999999,    // 6 extra digits
-      9999999,    // 7 extra digits
-      99999999,    // 8 extra digits
-      999999999,    // 9 extra digits
-      9999999999,    // 10 extra digits
-      99999999999,    // 11 extra digits
-      999999999999,    // 12 extra digits
-      9999999999999,    // 13 extra digits
-      99999999999999,    // 14 extra digits
-      999999999999999,    // 15 extra digits
-      9999999999999999,    // 16 extra digits
-      99999999999999999,    // 17 extra digits
-      999999999999999999    // 18 extra digits
-    ],
-    [    // RZ
-      0,    // 0 extra digits
-      0,    // 1 extra digits
-      0,    // 2 extra digits
-      00,    // 3 extra digits
-      000,    // 4 extra digits
-      0000,    // 5 extra digits
-      00000,    // 6 extra digits
-      000000,    // 7 extra digits
-      0000000,    // 8 extra digits
-      00000000,    // 9 extra digits
-      000000000,    // 10 extra digits
-      0000000000,    // 11 extra digits
-      00000000000,    // 12 extra digits
-      000000000000,    // 13 extra digits
-      0000000000000,    // 14 extra digits
-      00000000000000,    // 15 extra digits
-      000000000000000,    // 16 extra digits
-      0000000000000000,    // 17 extra digits
-      00000000000000000    // 18 extra digits
-    ],
-    [    // round ties away from 0
-      0,    // 0 extra digits
-      5,    // 1 extra digits
-      50,    // 2 extra digits
-      500,    // 3 extra digits
-      5000,    // 4 extra digits
-      50000,    // 5 extra digits
-      500000,    // 6 extra digits
-      5000000,    // 7 extra digits
-      50000000,    // 8 extra digits
-      500000000,    // 9 extra digits
-      5000000000,    // 10 extra digits
-      50000000000,    // 11 extra digits
-      500000000000,    // 12 extra digits
-      5000000000000,    // 13 extra digits
-      50000000000000,    // 14 extra digits
-      500000000000000,    // 15 extra digits
-      5000000000000000,    // 16 extra digits
-      50000000000000000,    // 17 extra digits
-      500000000000000000    // 18 extra digits
-    ]
-  ]
-  
+  static func bid_round_const_table(_ rnd:Int, _ i:Int) -> UInt64 {
+    if i == 0 { return 0 }
+    switch rnd {
+      case 0, 4: return 5 * bid_ten2k64(i-1)
+      case 2: return bid_ten2k64(i-1)-1
+      default: return 0 // covers rnd = 1, 3
+    }
+  }
   
   static func bid_round64_2_18 (
     _ q: Int, _ x:Int, _ C: UInt64, _ ptr_Cstar: inout UInt64,
@@ -9980,13 +9058,13 @@ extension Decimal32 {
     // P128 = (C + 1/2 * 10^x) * kx * 2^Ex = (C + 1/2 * 10^x) * Kx
     // the approximation kx of 10^(-x) was rounded up to 64 bits
     var P128 = UInt128()
-    __mul_64x64_to_128(&P128, C, bid_Kx64[ind]);
+    __mul_64x64_to_128(&P128, C, bid_Kx64(ind));
     // calculate C* = floor (P128) and f*
     // Cstar = P128 >> Ex
     // fstar = low Ex bits of P128
-    let shift = bid_Ex64m64[ind]    // in [3, 56]
+    let shift = bid_Ex64m64(ind)    // in [3, 56]
     var Cstar = P128.high >> shift
-    let fstar = UInt128(high: P128.high & bid_mask64[ind], low: P128.low)
+    let fstar = UInt128(high: P128.high & bid_mask64(ind), low: P128.low)
     // the top Ex bits of 10^(-x) are T* = bid_ten2mxtrunc64[ind], e.g.
     // if x=1, T*=bid_ten2mxtrunc64[0]=0xcccccccccccccccc
     // if (0 < f* < 10^(-x)) then the result is a midpoint
@@ -10004,19 +9082,20 @@ extension Decimal32 {
     //   the result is exact
     // else // if (f* - 1/2 > T*) then
     //   the result is inexact
-    if (fstar.high > bid_half64[ind] || (fstar.high == bid_half64[ind] &&
+    if (fstar.high > bid_half64(ind) || (fstar.high == bid_half64(ind) &&
                                          fstar.low != 0)) {
       // f* > 1/2 and the result may be exact
       // Calculate f* - 1/2
-      let tmp64 = fstar.high - bid_half64[ind];
-      if (tmp64 != 0 || fstar.low > bid_ten2mxtrunc64[ind]) {    // f* - 1/2 > 10^(-x)
+      let tmp64 = fstar.high - bid_half64(ind);
+      if (tmp64 != 0 || fstar.low > bid_ten2mxtrunc64(ind)) {
+        // f* - 1/2 > 10^(-x)
         ptr_is_inexact_lt_midpoint = true
       }    // else the result is exact
     } else {    // the result is inexact; f2* <= 1/2
       ptr_is_inexact_gt_midpoint = true
     }
     // check for midpoints (could do this before determining inexactness)
-    if (fstar.high == 0 && fstar.low <= bid_ten2mxtrunc64[ind]) {
+    if (fstar.high == 0 && fstar.low <= bid_ten2mxtrunc64(ind)) {
       // the result is a midpoint
       if (Cstar & 0x01 != 0) {    // Cstar is odd; MP in [EVEN, ODD]
         // if floor(C*) is odd C = floor(C*) - 1; the result may be 0
@@ -10032,8 +9111,8 @@ extension Decimal32 {
     }
     // check for rounding overflow, which occurs if Cstar = 10^(q-x)
     ind = q - x;    // 1 <= ind <= q - 1
-    if (Cstar == bid_ten2k64[ind]) {    // if  Cstar = 10^(q-x)
-      Cstar = bid_ten2k64[ind - 1];    // Cstar = 10^(q-x-1)
+    if (Cstar == bid_ten2k64(ind)) {    // if  Cstar = 10^(q-x)
+      Cstar = bid_ten2k64(ind - 1);    // Cstar = 10^(q-x-1)
       incr_exp = 1;
     } else {    // 10^33 <= Cstar <= 10^34 - 1
       incr_exp = 0;
@@ -10412,11 +9491,11 @@ extension Decimal32 {
       
       // get digits to be shifted out
       let extra_digits = 1-sexp
-      c += Int(bid_round_const_table[roundIndex][extra_digits])
+      c += Int(bid_round_const_table(roundIndex, extra_digits))
       
       // get coeff*(2^M[extra_digits])/10^extra_digits
       var Q = UInt128()
-      __mul_64x64_to_128(&Q, UInt64(c), bid_reciprocals10_64[extra_digits]);
+      __mul_64x64_to_128(&Q, UInt64(c), bid_reciprocals10_64(extra_digits))
       
       // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-128
       let amount = bid_short_recip_scale[extra_digits]
@@ -10426,7 +9505,8 @@ extension Decimal32 {
       
       if r == .toNearestOrAwayFromZero {
         if (_C64 & 1 != 0) {
-          // check whether fractional part of initial_P/10^extra_digits is exactly .5
+          // check whether fractional part of initial_P/10^extra_digits
+          // is exactly .5
           
           // get remainder
           let amount2 = 64 - amount
@@ -10435,7 +9515,7 @@ extension Decimal32 {
           remainder_h >>= amount2
           remainder_h = remainder_h & Q.high
           
-          if remainder_h == 0 && Q.low < bid_reciprocals10_64[extra_digits] {
+          if remainder_h == 0 && Q.low < bid_reciprocals10_64(extra_digits) {
             _C64 -= 1
           }
         }
@@ -10452,18 +9532,18 @@ extension Decimal32 {
           case .toNearestOrAwayFromZero, .toNearestOrEven:
             // test whether fractional part is 0
             if (remainder_h == (UInt64(SIGN_MASK) << 32) && (Q.low <
-                                        bid_reciprocals10_64[extra_digits])) {
+                                        bid_reciprocals10_64(extra_digits))) {
               status = Status.clearFlags
             }
           case .down, .towardZero:
-            if remainder_h == 0 && Q.low < bid_reciprocals10_64[extra_digits] {
+            if remainder_h == 0 && Q.low < bid_reciprocals10_64(extra_digits) {
               status = Status.clearFlags
             }
           default:
             // round up
             var Stemp = UInt64(0), carry = UInt64(0)
             __add_carry_out(&Stemp, &carry, Q.low,
-                            bid_reciprocals10_64[extra_digits]);
+                            bid_reciprocals10_64(extra_digits))
             if (remainder_h >> (64 - amount)) + carry >= UInt64(1) << amount {
               status = Status.clearFlags
             }
