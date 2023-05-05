@@ -5,7 +5,7 @@
 //  Created by Mike Griebling on 2022-03-13.
 //
 
-import Foundation
+// import Foundation
 
 /// A radix-10 (decimal) floating-point type.
 ///

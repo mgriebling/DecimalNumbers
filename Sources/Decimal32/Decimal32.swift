@@ -71,7 +71,8 @@ public struct Decimal32 : CustomStringConvertible, ExpressibleByStringLiteral,
   public static let infinity     = Self(raw: bid32_inf(0))
   
   public static let greatestFiniteMagnitude = Self(raw: bid32_max(0))
-  public static let leastNormalMagnitude    = Self(raw: bid32(0, 0, 1_000_000))
+  public static let leastNormalMagnitude    = Self(raw:
+                                              bid32(0,MIN_EXPON,MAX_NUMBER))
   public static let leastNonzeroMagnitude   = Self(raw: bid32(0, 0, 1))
   
   //////////////////////////////////////////////////////////////////////////
@@ -830,7 +831,7 @@ extension Decimal32 {
     if coefficient_x > Decimal32.MAX_NUMBER {
       let tempx = Float(coefficient_x)
       let bin_expon_cx = Int(((tempx.bitPattern >> 23) & 0xff) - 0x7f)
-      var extra_digits = Int(bid_estimate_decimal_digits[bin_expon_cx] - 7)
+      var extra_digits = Int(bid_estimate_decimal_digits(bin_expon_cx) - 7)
       // add test for range
       if coefficient_x >= bid_power10_index_binexp[bin_expon_cx] {
         extra_digits+=1
@@ -842,11 +843,11 @@ extension Decimal32 {
       }
       
       exponent_x += extra_digits
-      if (exponent_x < 0) && (exponent_x + Decimal32.MAX_DIGITS >= 0) {
+      if (exponent_x < 0) && (exponent_x + MAX_DIGITS >= 0) {
         pfpsf.insert(.underflow)
         if exponent_x == -1 {
           if (coefficient_x + bid_round_const_table(rmode1, extra_digits) >=
-              bid_power10_table_128[extra_digits + 7].low) {
+              bid_power10_table_128(extra_digits + 7).low) {
             pfpsf = []
           }
           extra_digits -= exponent_x
@@ -874,7 +875,7 @@ extension Decimal32 {
         }
       }
       
-      var status = Status.inexact //.insert(.inexact)
+      var status = Status.inexact
       // get remainder
       let remainder_h = Q.high << (64 - amount)
       
@@ -1050,7 +1051,7 @@ extension Decimal32 {
           } else if (ind - 1 <= 21) { // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
             let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
             res = (P128.high >> shift)
-            fstar = UInt128(high: P128.high & bid_maskhigh128[ind - 1],
+            fstar = UInt128(high: P128.high & bid_maskhigh128(ind - 1),
                             low: P128.low)
           }
           // if (0 < f* < 10^(-x)) then the result is a midpoint
@@ -1077,11 +1078,11 @@ extension Decimal32 {
               pfpsf.insert(.inexact)
             }
           } else {    // if 3 <= ind - 1 <= 21
-            if fstar.high > bid_onehalf128[ind - 1] ||
-                (fstar.high == bid_onehalf128[ind - 1] && fstar.low != 0) {
+            if fstar.high > bid_onehalf128(ind - 1) ||
+                (fstar.high == bid_onehalf128(ind - 1) && fstar.low != 0) {
               // f2* > 1/2 and the result may be exact
               // Calculate f2* - 1/2
-              if fstar.high > bid_onehalf128[ind - 1] ||
+              if fstar.high > bid_onehalf128(ind - 1) ||
                   fstar.low > bid_ten2mk64(ind - 1) {
                 // set the inexact flag
                 pfpsf.insert(.inexact)
@@ -1132,7 +1133,7 @@ extension Decimal32 {
           } else if ind - 1 <= 21 {  // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
             let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
             res = (P128.high >> shift)
-            fstar = UInt128(high: P128.high & bid_maskhigh128[ind - 1],
+            fstar = UInt128(high: P128.high & bid_maskhigh128(ind - 1),
                             low: P128.low)
           }
           // midpoints are already rounded correctly
@@ -1154,11 +1155,11 @@ extension Decimal32 {
               pfpsf.insert(.inexact)
             }
           } else {    // if 3 <= ind - 1 <= 21
-            if fstar.high > bid_onehalf128[ind - 1] ||
-                (fstar.high == bid_onehalf128[ind - 1] && fstar.low != 0) {
+            if fstar.high > bid_onehalf128(ind - 1) ||
+                (fstar.high == bid_onehalf128(ind - 1) && fstar.low != 0) {
               // f2* > 1/2 and the result may be exact
               // Calculate f2* - 1/2
-              if fstar.high > bid_onehalf128[ind - 1] ||
+              if fstar.high > bid_onehalf128(ind - 1) ||
                   fstar.low > bid_ten2mk64(ind - 1) {
                 // set the inexact flag
                 pfpsf.insert(.inexact)
@@ -1203,7 +1204,7 @@ extension Decimal32 {
           } else if ind - 1 <= 21 {    // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
             let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
             res = (P128.high >> shift)
-            fstar = UInt128(high: P128.high & bid_maskhigh128[ind - 1],
+            fstar = UInt128(high: P128.high & bid_maskhigh128(ind - 1),
                             low: P128.low)
           }
           // if (f* > 10^(-x)) then the result is inexact
@@ -1253,7 +1254,7 @@ extension Decimal32 {
           } else if ind - 1 <= 21 {    // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
             let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
             res = (P128.high >> shift)
-            fstar = UInt128(high: P128.high & bid_maskhigh128[ind - 1],
+            fstar = UInt128(high: P128.high & bid_maskhigh128(ind - 1),
                             low: P128.low)
           }
           // if (f* > 10^(-x)) then the result is inexact
@@ -1303,7 +1304,7 @@ extension Decimal32 {
           } else if ind - 1 <= 21 {    // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
             let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
             res = (P128.high >> shift)
-            fstar = UInt128(high: P128.high & bid_maskhigh128[ind - 1],
+            fstar = UInt128(high: P128.high & bid_maskhigh128(ind - 1),
                             low: P128.low)
           }
           // if (f* > 10^(-x)) then the result is inexact
@@ -1468,7 +1469,7 @@ extension Decimal32 {
       let tempx = Double(coefficient_a)
       let bin_expon = Int((tempx.bitPattern & BINARY_EXPONENT_MASK) >> 52) -
                       BINARY_EXPONENT_BIAS
-      let scale_ca = bid_estimate_decimal_digits[bin_expon]
+      let scale_ca = bid_estimate_decimal_digits(bin_expon)
       
       let d2 = 16 - scale_ca
       if diff_dec_expon > d2 {
@@ -1480,7 +1481,7 @@ extension Decimal32 {
     let sign_ab = sign_a != sign_b ? Int64(-1) : Int64()
     let CB = UInt64(bitPattern: (Int64(coefficient_b) + sign_ab) ^ sign_ab)
     
-    let SU = UInt64(coefficient_a) * bid_power10_table_128[diff_dec_expon].low
+    let SU = UInt64(coefficient_a) * bid_power10_table_128(diff_dec_expon).low
     var S = Int64(bitPattern: SU &+ CB)
     
     if S < 0 {
@@ -1498,8 +1499,8 @@ extension Decimal32 {
       let tempx = Double(P)
       let bin_expon = Int((tempx.bitPattern & BINARY_EXPONENT_MASK) >> 52) -
                       BINARY_EXPONENT_BIAS
-      n_digits = Int(bid_estimate_decimal_digits[bin_expon])
-      if P >= bid_power10_table_128[n_digits].low {
+      n_digits = Int(bid_estimate_decimal_digits(bin_expon))
+      if P >= bid_power10_table_128(n_digits).low {
         n_digits+=1
       }
     }
@@ -1527,7 +1528,7 @@ extension Decimal32 {
     var Q = Tmp.high >> amount
     
     // remainder
-    let R = P - Q * bid_power10_table_128[extra_digits].low
+    let R = P - Q * bid_power10_table_128(extra_digits).low
     if R == bid_round_const_table(irmode, extra_digits) {
       status = []
     } else {
@@ -1638,8 +1639,8 @@ extension Decimal32 {
     let tempx = Double(P)
     let bin_expon_p = (Int(tempx.bitPattern & BINARY_EXPONENT_MASK) >> 52) -
                       BINARY_EXPONENT_BIAS
-    var n_digits = Int(bid_estimate_decimal_digits[bin_expon_p])
-    if P >= bid_power10_table_128[n_digits].low {
+    var n_digits = Int(bid_estimate_decimal_digits(bin_expon_p))
+    if P >= bid_power10_table_128(n_digits).low {
       n_digits+=1
     }
     
@@ -1672,7 +1673,7 @@ extension Decimal32 {
     var Q = Tmp.high >> amount
     
     // remainder
-    let R = P - Q * bid_power10_table_128[extra_digits].low
+    let R = P - Q * bid_power10_table_128(extra_digits).low
     
     if R == bid_round_const_table(rmode1, extra_digits) {
       status = []
@@ -1695,7 +1696,7 @@ extension Decimal32 {
       }
       
       if ((R != 0) && (rmode == BID_ROUNDING_UP)) || ((rmode1&3 == 0) &&
-                          (R+R>=bid_power10_table_128[extra_digits].low)) {
+                          (R+R>=bid_power10_table_128(extra_digits).low)) {
         return bid32(sign_x != sign_y ? 1 : 0, 0, 1000000)
       }
     }
@@ -1832,8 +1833,8 @@ extension Decimal32 {
       // compare A, B
       let DU = (A - B) >> 31
       ed1 = 6 + Int(DU)
-      ed2 = Int(bid_estimate_decimal_digits[bin_index]) + ed1
-      let T = bid_power10_table_128[ed1].low
+      ed2 = bid_estimate_decimal_digits(bin_index) + ed1
+      let T = bid_power10_table_128(ed1).low
       CA = UInt64(A) * T
       
       Q = 0
@@ -1859,13 +1860,13 @@ extension Decimal32 {
       var DU = UInt32(bid_power10_index_binexp[bin_expon_cx]) - Q - 1;
       DU >>= 31;
       
-      ed2 = 7 - Int(bid_estimate_decimal_digits[bin_expon_cx]) - Int(DU)
+      ed2 = 7 - Int(bid_estimate_decimal_digits(bin_expon_cx)) - Int(DU)
       
-      let T = bid_power10_table_128[ed2].low
+      let T = bid_power10_table_128(ed2).low
       CA = UInt64(R) * T
       B = coefficient_y
       
-      Q *= UInt32(bid_power10_table_128[ed2].low)
+      Q *= UInt32(bid_power10_table_128(ed2).low)
       diff_expon -= ed2
     }
     
@@ -1916,9 +1917,12 @@ extension Decimal32 {
           digit_h = digit_low
         }
         
-        if (digit_h & 1) == 0 {
-          nzeros += Int(3 & UInt32(
-            bid_packed_10000_zeros[Int(digit_h >> 3)] >> (digit_h & 7)))
+        if digit_h.isMultiple(of: 2) {
+          if digit_h.isMultiple(of: 1000) { nzeros += 3 }
+          else if digit_h.isMultiple(of: 100) { nzeros += 2 }
+          else if digit_h.isMultiple(of: 10) { nzeros += 1 }
+//          nzeros += Int(3 & UInt32(
+//            bid_packed_10000_zeros[Int(digit_h >> 3)] >> (digit_h & 7)))
         }
         
         if nzeros != 0 {
@@ -2047,7 +2051,7 @@ extension Decimal32 {
         return x
       }
       // set exponent of y to exponent_x, scale coefficient_y
-      let T = bid_power10_table_128[diff_expon].low
+      let T = bid_power10_table_128(diff_expon).low
       let CYL = UInt64(coefficient_y) * T;
       if CYL > (UInt64(coefficient_x) << 1) {
         return x
@@ -2072,7 +2076,7 @@ extension Decimal32 {
       // get number of digits in coeff_x
       let tempx = Float(CX)
       let bin_expon = Int((tempx.bitPattern >> 23) & 0xff) - 0x7f
-      let digits_x = Int(bid_estimate_decimal_digits[bin_expon])
+      let digits_x = Int(bid_estimate_decimal_digits(bin_expon))
       // will not use this test, dividend will have 18 or 19 digits
       //if(CX >= bid_power10_table_128[digits_x].lo)
       //      digits_x++;
@@ -2086,7 +2090,7 @@ extension Decimal32 {
       }
       
       // scale dividend to 18 or 19 digits
-      CX *= bid_power10_table_128[e_scale].low
+      CX *= bid_power10_table_128(e_scale).low
       
       // quotient
       Q64 = CX / UInt64(coefficient_y)
@@ -2139,7 +2143,7 @@ extension Decimal32 {
     //--- get number of bits in the coefficient of x ---
     let tempx = Float32(coefficient_x)
     let bin_expon_cx = Int(((tempx.bitPattern >> 23) & 0xff) - 0x7f)
-    var digits_x = bid_estimate_decimal_digits[bin_expon_cx];
+    var digits_x = bid_estimate_decimal_digits(bin_expon_cx);
     // add test for range
     if coefficient_x >= bid_power10_index_binexp[bin_expon_cx] {
       digits_x+=1
@@ -2161,7 +2165,7 @@ extension Decimal32 {
     var exponent_q = exponent_x + EXPONENT_BIAS - scale
     scale += (exponent_q & 1)   // exp. bias is even
     
-    let CT = bid_power10_table_128[scale].low
+    let CT = bid_power10_table_128(scale).low
     let CA = UInt64(coefficient_x) * CT
     let dq = Double(CA).squareRoot()
     
@@ -2650,7 +2654,7 @@ extension Decimal32 {
       let tempx = Double(coefficient_a)
       let bin_expon = Int((tempx.bitPattern & BINARY_EXPONENT_MASK) >> 52) -
                           BINARY_EXPONENT_BIAS
-      let scale_ca = Int(bid_estimate_decimal_digits[bin_expon])
+      let scale_ca = Int(bid_estimate_decimal_digits(bin_expon))
       
       let d2 = 31 - scale_ca
       if diff_dec_expon > d2 {
@@ -2669,7 +2673,7 @@ extension Decimal32 {
                  low: UInt64((Int64(coefficient_b) + sign_ab) ^ sign_ab))
     
     var Tmp = UInt128(), P = UInt128()
-    __mul_64x128_low(&Tmp, coefficient_a, bid_power10_table_128[diff_dec_expon])
+    __mul_64x128_low(&Tmp, coefficient_a, bid_power10_table_128(diff_dec_expon))
     __add_128_128(&P, Tmp, CB)
     if Int64(P.high) < 0 {
       sign_a.toggle()
@@ -2684,8 +2688,8 @@ extension Decimal32 {
       let tempx = Double(P.high)
       bin_expon = Int((tempx.bitPattern & BINARY_EXPONENT_MASK) >> 52) -
                         BINARY_EXPONENT_BIAS + 64
-      n_digits = Int(bid_estimate_decimal_digits[bin_expon])
-      if __unsigned_compare_ge_128(P, bid_power10_table_128[n_digits]) {
+      n_digits = Int(bid_estimate_decimal_digits(bin_expon))
+      if __unsigned_compare_ge_128(P, bid_power10_table_128(n_digits)) {
         n_digits += 1
       }
     } else {
@@ -2693,8 +2697,8 @@ extension Decimal32 {
         let tempx = Double(P.low)
         bin_expon = Int((tempx.bitPattern & BINARY_EXPONENT_MASK) >> 52) -
                           BINARY_EXPONENT_BIAS
-        n_digits = Int(bid_estimate_decimal_digits[bin_expon])
-        if P.low >= bid_power10_table_128[n_digits].low {
+        n_digits = Int(bid_estimate_decimal_digits(bin_expon))
+        if P.low >= bid_power10_table_128(n_digits).low {
           n_digits += 1
         }
       } else { // result = 0
@@ -2723,7 +2727,7 @@ extension Decimal32 {
       __add_128_64(&P, P, bid_round_const_table(rmode1, extra_digits))
     } else {
       __mul_64x64_to_128(&Stemp, bid_round_const_table(rmode1, 18),
-                         bid_power10_table_128[extra_digits-18].low)
+                         bid_power10_table_128(extra_digits-18).low)
       __add_128_128 (&P, P, Stemp)
       if rmode == BID_ROUNDING_UP {
         __add_128_64(&P, P, bid_round_const_table(rmode1, extra_digits-18))
@@ -2732,9 +2736,9 @@ extension Decimal32 {
     
     // get P*(2^M[extra_digits])/10^extra_digits
     var Q_high = UInt128(), Q_low = UInt128(), C128 = UInt128()
-    __mul_128x128_full (&Q_high, &Q_low, P, bid_reciprocals10_128[extra_digits])
-    // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-128
-    var amount = bid_recip_scale[extra_digits]
+    __mul_128x128_full(&Q_high, &Q_low, P, bid_reciprocals10_128(extra_digits))
+    // now get P/10^extra_digits: shift Q_high right by M(extra_digits)-128
+    var amount = Int(bid_recip_scale[extra_digits])
     __shr_128_long (&C128, Q_high, amount)
     
     var C64 = C128.low
@@ -2755,9 +2759,9 @@ extension Decimal32 {
       
       // test whether fractional part is 0
       if ((remainder_h | rem_l) == 0
-          && (Q_low.high < bid_reciprocals10_128[extra_digits].high
-              || (Q_low.high == bid_reciprocals10_128[extra_digits].high
-                  && Q_low.low < bid_reciprocals10_128[extra_digits].low))) {
+          && (Q_low.high < bid_reciprocals10_128(extra_digits).high
+              || (Q_low.high == bid_reciprocals10_128(extra_digits).high
+                  && Q_low.low < bid_reciprocals10_128(extra_digits).low))) {
         C64 -= 1
       }
     }
@@ -2774,16 +2778,16 @@ extension Decimal32 {
       case BID_ROUNDING_TO_NEAREST, BID_ROUNDING_TIES_AWAY:
         // test whether fractional part is 0
         if ((remainder_h == 0x8000000000000000 && rem_l == 0)
-            && (Q_low.high < bid_reciprocals10_128[extra_digits].high
-                || (Q_low.high == bid_reciprocals10_128[extra_digits].high
-                    && Q_low.low < bid_reciprocals10_128[extra_digits].low))) {
+            && (Q_low.high < bid_reciprocals10_128(extra_digits).high
+                || (Q_low.high == bid_reciprocals10_128(extra_digits).high
+                    && Q_low.low < bid_reciprocals10_128(extra_digits).low))) {
           status = []
         }
       case BID_ROUNDING_DOWN, BID_ROUNDING_TO_ZERO:
         if ((remainder_h | rem_l) == 0
-            && (Q_low.high < bid_reciprocals10_128[extra_digits].high
-                || (Q_low.high == bid_reciprocals10_128[extra_digits].high
-                    && Q_low.low < bid_reciprocals10_128[extra_digits].low))) {
+            && (Q_low.high < bid_reciprocals10_128(extra_digits).high
+                || (Q_low.high == bid_reciprocals10_128(extra_digits).high
+                    && Q_low.low < bid_reciprocals10_128(extra_digits).low))) {
           status = []
         }
       default:
@@ -2791,9 +2795,9 @@ extension Decimal32 {
         var low = Stemp.low
         var high = Stemp.high
         __add_carry_out(&low, &CY, Q_low.low,
-                        bid_reciprocals10_128[extra_digits].low)
+                        bid_reciprocals10_128(extra_digits).low)
         __add_carry_in_out(&high, &carry, Q_low.high,
-                           bid_reciprocals10_128[extra_digits].high, CY)
+                           bid_reciprocals10_128(extra_digits).high, CY)
         Stemp = UInt128(high: high, low: low)
         if amount < 64 {
           if (remainder_h >> (64 - amount)) + carry >= (UInt64(1) << amount) {
@@ -2825,7 +2829,7 @@ extension Decimal32 {
         __add_128_64 (&P, P, bid_round_const_table(rmode1, extra_digits));
       } else {
         __mul_64x64_to_128(&Stemp, bid_round_const_table(rmode1, 18),
-                           bid_power10_table_128[extra_digits-18].low);
+                           bid_power10_table_128(extra_digits-18).low);
         __add_128_128(&P, P, Stemp)
         if rmode == BID_ROUNDING_UP {
           __add_128_64(&P, P, bid_round_const_table(rmode1, extra_digits-18))
@@ -2834,9 +2838,9 @@ extension Decimal32 {
       
       // get P*(2^M[extra_digits])/10^extra_digits
       __mul_128x128_full(&Q_high, &Q_low, P,
-                         bid_reciprocals10_128[extra_digits])
-      // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-128
-      amount = bid_recip_scale[extra_digits]
+                         bid_reciprocals10_128(extra_digits))
+      // now get P/10^extra_digits: shift Q_high right by M(extra_digits)-128
+      amount = Int(bid_recip_scale[extra_digits])
       __shr_128_long(&C128, Q_high, amount);
       
       C64 = C128.low
@@ -2863,8 +2867,8 @@ extension Decimal32 {
       let tempx = Double(coefficient_z)
       let bin_expon = Int(((tempx.bitPattern & BINARY_EXPONENT_MASK) >> 52)) -
                           BINARY_EXPONENT_BIAS
-      var scale_cz = Int(bid_estimate_decimal_digits[bin_expon])
-      if coefficient_z >= bid_power10_table_128[scale_cz].low {
+      var scale_cz = Int(bid_estimate_decimal_digits(bin_expon))
+      if coefficient_z >= bid_power10_table_128(scale_cz).low {
           scale_cz+=1
       }
       
@@ -2872,7 +2876,7 @@ extension Decimal32 {
       if diff_expon < scale_k {
           scale_k = diff_expon
       }
-      coefficient_z *= UInt32(bid_power10_table_128[scale_k].low)
+      coefficient_z *= UInt32(bid_power10_table_128(scale_k).low)
       
       return UInt64(bid32(sign_z, exponent_z - scale_k, coefficient_z,
                           rounding_mode, &fpsc))
@@ -3126,7 +3130,7 @@ extension Decimal32 {
         cint = srl128(cint.high, cint.low, t)
         if le128(cint.high, cint.low, pow5.high, pow5.low) {
           var cc = cint
-          pow5 = bid_power_five[a]
+          pow5 = bid_power_five(a)
           __mul_128x128_low(&cc, cc, pow5)
           return bid32(s, EXPONENT_BIAS - a, Int(cc.low))
         }
@@ -3312,14 +3316,6 @@ extension Decimal32 {
   @inlinable static func __shr_128_long(_ Q:inout UInt128, _ A:UInt128,
                                         _ k:Int) {
     Q = A >> k
-//    if k<64 {
-//      Q.low  = A.low >> k;
-//      Q.low |= A.high << (64-k);
-//      Q.high  = A.high >> k;
-//    } else {
-//      Q.low = A.high>>(k-64);
-//      Q.high = 0;
-//    }
   }
   
   // Shift 2-part 2^64 * hi + lo left by "c" bits
@@ -3448,7 +3444,8 @@ extension Decimal32 {
     // Round using round-sticky words
     // If we spill into the next binade, correct
     let rind = roundboundIndex(rmode, s != 0, c_prov)
-    if (lt128(bid_roundbound_128[rind].high, bid_roundbound_128[rind].low, z.w[4], z.w[3])) {
+    if (lt128(bid_roundbound_128[rind].high,
+              bid_roundbound_128[rind].low, z.w[4], z.w[3])) {
       c_prov = c_prov + 1;
     }
     c_prov = c_prov & ((1 << 52) - 1);
@@ -3757,21 +3754,11 @@ extension Decimal32 {
     P128 = UInt128(high: r.high, low: r.low)
   }
   
-  static func digitsIn(_ sig_x: UInt32) -> Int {
+  static func digitsIn<T:BinaryInteger>(_ sig_x: T) -> Int {
     // find power of 10 just greater than sig_x
-    var tenPower = 10, digits = 1
+    var tenPower = T(10), digits = 1
     while sig_x >= tenPower { tenPower *= 10; digits += 1 }
     return digits
-//    let tmp = Float(sig_x) // exact conversion
-//    let x_nr_bits = 1 + Int(((UInt(tmp.bitPattern >> 23)) & 0xff) - 0x7f)
-//    var q = Int(bid_nr_digits[x_nr_bits - 1].digits)
-//    if q == 0 {
-//      q = Int(bid_nr_digits[x_nr_bits - 1].digits1)
-//      if UInt64(sig_x) >= bid_nr_digits[x_nr_bits - 1].threshold_lo {
-//        q+=1
-//      }
-//    }
-//    return q
   }
   
   static func __mul_128x128_full(_ Qh:inout UInt128, _ Ql:inout UInt128,
@@ -3790,287 +3777,76 @@ extension Decimal32 {
     Ql = UInt128(high: QM2.low, low: ALBL.low)
   }
   
-  // the first entry of bid_nr_digits[i - 1] (where 1 <= i <= 113), indicates
-  // the number of decimal digits needed to represent a binary number with i bits;
-  // however, if a binary number of i bits may require either k or k + 1 decimal
-  // digits, then the first entry of bid_nr_digits[i - 1] is 0; in this case if the
-  // number is less than the value represented by the second and third entries
-  // concatenated, then the number of decimal digits k is the fourth entry, else
-  // the number of decimal digits is the fourth entry plus 1
-//  struct DEC_DIGITS {
-//    let digits: UInt
-//    let threshold_hi:UInt64
-//    let threshold_lo:UInt64
-//    let digits1: UInt
-//
-//    init(_ d: UInt, _ hi: UInt64, _ lo: UInt64, _ d1: UInt) {
-//      digits = d; threshold_hi = hi; threshold_lo = lo; digits1 = d1
-//    }
-//  }
-  
-  // bid_maskhigh128[] contains the mask to apply to the top 128 bits of the
-  // 128x128-bit product in order to obtain the high bits of f2*
-  // the 64-bit word order is L, H
-  static let bid_maskhigh128: [UInt64] = [
-    0x0000000000000000,    //  0 = 128 - 128 bits
-    0x0000000000000000,    //  0 = 128 - 128 bits
-    0x0000000000000000,    //  0 = 128 - 128 bits
-    0x0000000000000007,    //  3 = 131 - 128 bits
-    0x000000000000003f,    //  6 = 134 - 128 bits
-    0x00000000000001ff,    //  9 = 137 - 128 bits
-    0x0000000000001fff,    // 13 = 141 - 128 bits
-    0x000000000000ffff,    // 16 = 144 - 128 bits
-    0x000000000007ffff,    // 19 = 147 - 128 bits
-    0x00000000007fffff,    // 23 = 151 - 128 bits
-    0x0000000003ffffff,    // 26 = 154 - 128 bits
-    0x000000001fffffff,    // 29 = 157 - 128 bits
-    0x00000001ffffffff,    // 33 = 161 - 128 bits
-    0x0000000fffffffff,    // 36 = 164 - 128 bits
-    0x0000007fffffffff,    // 39 = 167 - 128 bits
-    0x000007ffffffffff,    // 43 = 171 - 128 bits
-    0x00003fffffffffff,    // 46 = 174 - 128 bits
-    0x0001ffffffffffff,    // 49 = 177 - 128 bits
-    0x001fffffffffffff,    // 53 = 181 - 128 bits
-    0x00ffffffffffffff,    // 56 = 184 - 128 bits
-    0x07ffffffffffffff,    // 59 = 187 - 128 bits
-    0x7fffffffffffffff,    // 63 = 191 - 128 bits
-    0x0000000000000003,    //  2 = 194 - 192 bits
-    0x000000000000001f,    //  5 = 197 - 192 bits
-    0x00000000000001ff,    //  9 = 201 - 192 bits
-    0x0000000000000fff,    // 12 = 204 - 192 bits
-    0x0000000000007fff,    // 15 = 207 - 192 bits
-    0x000000000007ffff,    // 21 = 211 - 192 bits
-    0x00000000003fffff,    // 22 = 214 - 192 bits
-    0x0000000001ffffff,    // 25 = 217 - 192 bits
-    0x000000000fffffff,    // 28 = 220 - 192 bits
-    0x00000000ffffffff,    // 32 = 224 - 192 bits
-    0x00000007ffffffff,    // 35 = 227 - 192 bits
-    0x0000003fffffffff    // 38 = 230 - 192 bits
+  // bid_shiftright128[] contains the right shift count to obtain C2* from
+  // the top 128 bits of the 128x128-bit product C2 * Kx
+  static let bid_shiftright128: [UInt8] = [
+    0, 0, 0, 3, 6, 9, 13, 16, 19, 23, 26, 29, 33, 36, 39, 43, 46, 49, 53, 56,
+    59, 63, 66, 69, 73, 76, 79, 83, 86, 89, 92, 96, 99, 102
   ]
   
+//  static let bid_power10_index_binexp(_ i:Int) -> UInt64 -> {
+//
+//  }
+  
+  static let bid_power10_index_binexp: [UInt64] = [
+    0x000000000000000a, 0x000000000000000a, 0x000000000000000a,
+    0x000000000000000a, 0x0000000000000064, 0x0000000000000064,
+    0x0000000000000064, 0x00000000000003e8, 0x00000000000003e8,
+    0x00000000000003e8, 0x0000000000002710, 0x0000000000002710,
+    0x0000000000002710, 0x0000000000002710, 0x00000000000186a0,
+    0x00000000000186a0, 0x00000000000186a0, 0x00000000000f4240,
+    0x00000000000f4240, 0x00000000000f4240, 0x0000000000989680,
+    0x0000000000989680, 0x0000000000989680, 0x0000000000989680,
+    0x0000000005f5e100, 0x0000000005f5e100, 0x0000000005f5e100,
+    0x000000003b9aca00, 0x000000003b9aca00, 0x000000003b9aca00,
+    0x00000002540be400, 0x00000002540be400, 0x00000002540be400,
+    0x00000002540be400, 0x000000174876e800, 0x000000174876e800,
+    0x000000174876e800, 0x000000e8d4a51000, 0x000000e8d4a51000,
+    0x000000e8d4a51000, 0x000009184e72a000, 0x000009184e72a000,
+    0x000009184e72a000, 0x000009184e72a000, 0x00005af3107a4000,
+    0x00005af3107a4000, 0x00005af3107a4000, 0x00038d7ea4c68000,
+    0x00038d7ea4c68000, 0x00038d7ea4c68000, 0x002386f26fc10000,
+    0x002386f26fc10000, 0x002386f26fc10000, 0x002386f26fc10000,
+    0x016345785d8a0000, 0x016345785d8a0000, 0x016345785d8a0000,
+    0x0de0b6b3a7640000, 0x0de0b6b3a7640000, 0x0de0b6b3a7640000,
+    0x8ac7230489e80000, 0x8ac7230489e80000, 0x8ac7230489e80000,
+    0x8ac7230489e80000
+  ]
   
   // bid_onehalf128[] contains the high bits of 1/2 positioned correctly for
   // comparison with the high bits of f2*
   // the 64-bit word order is L, H
-  static let bid_onehalf128: [UInt64] = [
-    0x0000000000000000,    //  0 bits
-    0x0000000000000000,    //  0 bits
-    0x0000000000000000,    //  0 bits
-    0x0000000000000004,    //  3 bits
-    0x0000000000000020,    //  6 bits
-    0x0000000000000100,    //  9 bits
-    0x0000000000001000,    // 13 bits
-    0x0000000000008000,    // 16 bits
-    0x0000000000040000,    // 19 bits
-    0x0000000000400000,    // 23 bits
-    0x0000000002000000,    // 26 bits
-    0x0000000010000000,    // 29 bits
-    0x0000000100000000,    // 33 bits
-    0x0000000800000000,    // 36 bits
-    0x0000004000000000,    // 39 bits
-    0x0000040000000000,    // 43 bits
-    0x0000200000000000,    // 46 bits
-    0x0001000000000000,    // 49 bits
-    0x0010000000000000,    // 53 bits
-    0x0080000000000000,    // 56 bits
-    0x0400000000000000,    // 59 bits
-    0x4000000000000000,    // 63 bits
-    0x0000000000000002,    // 66 bits
-    0x0000000000000010,    // 69 bits
-    0x0000000000000100,    // 73 bits
-    0x0000000000000800,    // 76 bits
-    0x0000000000004000,    // 79 bits
-    0x0000000000040000,    // 83 bits
-    0x0000000000200000,    // 86 bits
-    0x0000000001000000,    // 89 bits
-    0x0000000008000000,    // 92 bits
-    0x0000000080000000,    // 96 bits
-    0x0000000400000000,    // 99 bits
-    0x0000002000000000    // 102 bits
+  static func bid_onehalf128(_ i: Int) -> UInt64 {
+    if i < 3 { return 0 }
+    return UInt64(1) << (bid_shiftright128[i] - UInt8(i < 22 ? 0 : 64) - 1)
+  }
+  
+  // bid_maskhigh128[] contains the mask to apply to the top 128 bits of the
+  // 128x128-bit product in order to obtain the high bits of f2*
+  // the 64-bit word order is L, H
+  static func bid_maskhigh128(_ i:Int) -> UInt64 {
+    if i < 3 { return 0 }
+    return (UInt64(1) << (bid_shiftright128[i] - UInt8(i < 22 ? 0 : 64))) - 1
+  }
+  
+  static let bid_recip_scale32 : [UInt8] = [1, 1, 3, 7, 9, 14, 18, 21, 25]
+  
+  static let bid_recip_scale : [Int8] = [
+    1, 1, 1, 1, 3, 6, 9, 13, 16, 19, 23, 26, 29, 33, 36, 39, 43, 46, 49, 53,
+    56, 59, 63,  66, 69, 73, 76, 79, 83, 86, 89, 92, 96, 99, 102, 109
   ]
   
-  static let bid_recip_scale : [Int] = [
-    129 - 128,    // 1
-    129 - 128,    // 1/10
-    129 - 128,    // 1/10^2
-    129 - 128,    // 1/10^3
-    3,    // 131 - 128
-    6,    // 134 - 128
-    9,    // 137 - 128
-    13,    // 141 - 128
-    16,    // 144 - 128
-    19,    // 147 - 128
-    23,    // 151 - 128
-    26,    // 154 - 128
-    29,    // 157 - 128
-    33,    // 161 - 128
-    36,    // 164 - 128
-    39,    // 167 - 128
-    43,    // 171 - 128
-    46,    // 174 - 128
-    49,    // 177 - 128
-    53,    // 181 - 128
-    56,    // 184 - 128
-    59,    // 187 - 128
-    63,    // 191 - 128
-    
-    66,    // 194 - 128
-    69,    // 197 - 128
-    73,    // 201 - 128
-    76,    // 204 - 128
-    79,    // 207 - 128
-    83,    // 211 - 128
-    86,    // 214 - 128
-    89,    // 217 - 128
-    92,    // 220 - 128
-    96,    // 224 - 128
-    99,    // 227 - 128
-    102,    // 230 - 128
-    109,    // 237 - 128, 1/10^35
-  ]
+  static func bid_reciprocals10_128(_ i: Int) -> UInt128 {
+    if i == 0 { return UInt128() }
+    let shiftedOne = UInt128(1) << bid_recip_scale[i] // upper dividend
+    let result = bid_power10_table_128(i).dividingFullWidth(
+      (shiftedOne, UInt128()))
+    return result.quotient + 1
+  }
   
-  
-//  static func bid_reciprocals10_128(_ i: Int) -> UInt128 {
-//    if i == 0 { return 1 }
-//    let twoPower = bid_recip_scale[i]+128
-//    return (UInt128(1) << twoPower) / bid_power10_table_128[i] + 1
-//  }
-  
-  static let bid_reciprocals10_128: [UInt128] = [
-    UInt128(w: [0, 0]),   // 0 extra digits
-    UInt128(w: [0x3333333333333334, 0x3333333333333333]), // 1 extra digit
-    UInt128(w: [0x51eb851eb851eb86, 0x051eb851eb851eb8]), // 2 extra digits
-    UInt128(w: [0x3b645a1cac083127, 0x0083126e978d4fdf]), // 3 extra digits
-    UInt128(w: [0x4af4f0d844d013aa, 0x00346dc5d6388659]), //  10^(-4) * 2^131
-    UInt128(w: [0x08c3f3e0370cdc88, 0x0029f16b11c6d1e1]), //  10^(-5) * 2^134
-    UInt128(w: [0x6d698fe69270b06d, 0x00218def416bdb1a]), //  10^(-6) * 2^137
-    UInt128(w: [0xaf0f4ca41d811a47, 0x0035afe535795e90]), //  10^(-7) * 2^141
-    UInt128(w: [0xbf3f70834acdaea0, 0x002af31dc4611873]), //  10^(-8) * 2^144
-    UInt128(w: [0x65cc5a02a23e254d, 0x00225c17d04dad29]), //  10^(-9) * 2^147
-    UInt128(w: [0x6fad5cd10396a214, 0x0036f9bfb3af7b75]), // 10^(-10) * 2^151
-    UInt128(w: [0xbfbde3da69454e76, 0x002bfaffc2f2c92a]), // 10^(-11) * 2^154
-    UInt128(w: [0x32fe4fe1edd10b92, 0x00232f33025bd422]), // 10^(-12) * 2^157
-    UInt128(w: [0x84ca19697c81ac1c, 0x00384b84d092ed03]), // 10^(-13) * 2^161
-    UInt128(w: [0x03d4e1213067bce4, 0x002d09370d425736]), // 10^(-14) * 2^164
-    UInt128(w: [0x3643e74dc052fd83, 0x0024075f3dceac2b]), // 10^(-15) * 2^167
-    UInt128(w: [0x56d30baf9a1e626b, 0x0039a5652fb11378]), // 10^(-16) * 2^171
-    UInt128(w: [0x12426fbfae7eb522, 0x002e1dea8c8da92d]), // 10^(-17) * 2^174
-    UInt128(w: [0x41cebfcc8b9890e8, 0x0024e4bba3a48757]), // 10^(-18) * 2^177
-    UInt128(w: [0x694acc7a78f41b0d, 0x003b07929f6da558]), // 10^(-19) * 2^181
-    UInt128(w: [0xbaa23d2ec729af3e, 0x002f394219248446]), // 10^(-20) * 2^184
-    UInt128(w: [0xfbb4fdbf05baf298, 0x0025c768141d369e]), // 10^(-21) * 2^187
-    UInt128(w: [0x2c54c931a2c4b759, 0x003c7240202ebdcb]), // 10^(-22) * 2^191
-    UInt128(w: [0x89dd6dc14f03c5e1, 0x00305b66802564a2]), // 10^(-23) * 2^194
-    UInt128(w: [0xd4b1249aa59c9e4e, 0x0026af8533511d4e]), // 10^(-24) * 2^197
-    UInt128(w: [0x544ea0f76f60fd49, 0x003de5a1ebb4fbb1]), // 10^(-25) * 2^201
-    UInt128(w: [0x76a54d92bf80caa1, 0x00318481895d9627]), // 10^(-26) * 2^204
-    UInt128(w: [0x921dd7a89933d54e, 0x00279d346de4781f]), // 10^(-27) * 2^207
-    UInt128(w: [0x8362f2a75b862215, 0x003f61ed7ca0c032]), // 10^(-28) * 2^211
-    UInt128(w: [0xcf825bb91604e811, 0x0032b4bdfd4d668e]), // 10^(-29) * 2^214
-    UInt128(w: [0x0c684960de6a5341, 0x00289097fdd7853f]), // 10^(-30) * 2^217
-    UInt128(w: [0x3d203ab3e521dc34, 0x002073accb12d0ff]), // 10^(-31) * 2^220
-    UInt128(w: [0x2e99f7863b696053, 0x0033ec47ab514e65]), // 10^(-32) * 2^224
-    UInt128(w: [0x587b2c6b62bab376, 0x002989d2ef743eb7]), // 10^(-33) * 2^227
-    UInt128(w: [0xad2f56bc4efbc2c5, 0x00213b0f25f69892]), // 10^(-34) * 2^230
-    UInt128(w: [0x0f2abc9d8c9689d1, 0x01a95a5b7f87a0ef]), // 35 extra digits
-  ]
-  
-  static let bid_packed_10000_zeros: [UInt8] = [
-    0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x3, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20,
-    0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4,
-    0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1,
-    0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0,
-    0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40,
-    0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x2, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4, 0x10,
-    0x40, 0x0, 0x1, 0x4, 0x20, 0x40, 0x0, 0x1, 0x4, 0x10, 0x40, 0x0, 0x1, 0x4,
-    0x10, 0x40, 0x0
-  ]
-  
-  
+  // powers of 2/5 bid factors 
   static let bid_factors : [[Int8]] = [
+    // 0        1       2         3       4         5       6         7       8        9
     [0, 0],  [1, 0],  [0, 0],  [2, 0],  [0, 1],  [1, 0],  [0, 0],  [3, 0],  [0, 0],  [1, 1],
     [0, 0],  [2, 0],  [0, 0],  [1, 0],  [0, 1],  [4, 0],  [0, 0],  [1, 0],  [0, 0],  [2, 1],
     [0, 0],  [1, 0],  [0, 0],  [3, 0],  [0, 2],  [1, 0],  [0, 0],  [2, 0],  [0, 0],  [1, 1],
@@ -4176,55 +3952,11 @@ extension Decimal32 {
     [0, 0],  [1, 0],  [0, 0],  [10, 0]
   ]
   
-  
-  static let bid_recip_scale32 : [UInt8] = [
-    1, 1, 3, 7, 9, 14, 18, 21, 25
-  ]
-  
-  
   static func bid_reciprocals10_32(_ i: Int) -> UInt64 {
     if i == 0 { return 1 }
     let twoPower = bid_recip_scale32[i]+32
-    return (UInt64(1) << twoPower) / UInt64(bid_power10_table_128[i]) + 1
+    return (UInt64(1) << twoPower) / UInt64(bid_power10_table_128(i)) + 1
   }
-  
-//  static let bid_bid_reciprocals10_32: [UInt64] = [
-//    1, //dummy,
-//    0x33333334,
-//    0x147AE148,
-//    0x20C49BA6,
-//    0x346DC5D7,
-//    0x29F16B12,
-//    0x431BDE83,
-//    0x35AFE536,
-//    0x55E63B89
-//  ]
-  
-  static let bid_power10_index_binexp: [UInt64] = [
-    0x000000000000000a, 0x000000000000000a, 0x000000000000000a,
-    0x000000000000000a, 0x0000000000000064, 0x0000000000000064,
-    0x0000000000000064, 0x00000000000003e8, 0x00000000000003e8,
-    0x00000000000003e8, 0x0000000000002710, 0x0000000000002710,
-    0x0000000000002710, 0x0000000000002710, 0x00000000000186a0,
-    0x00000000000186a0, 0x00000000000186a0, 0x00000000000f4240,
-    0x00000000000f4240, 0x00000000000f4240, 0x0000000000989680,
-    0x0000000000989680, 0x0000000000989680, 0x0000000000989680,
-    0x0000000005f5e100, 0x0000000005f5e100, 0x0000000005f5e100,
-    0x000000003b9aca00, 0x000000003b9aca00, 0x000000003b9aca00,
-    0x00000002540be400, 0x00000002540be400, 0x00000002540be400,
-    0x00000002540be400, 0x000000174876e800, 0x000000174876e800,
-    0x000000174876e800, 0x000000e8d4a51000, 0x000000e8d4a51000,
-    0x000000e8d4a51000, 0x000009184e72a000, 0x000009184e72a000,
-    0x000009184e72a000, 0x000009184e72a000, 0x00005af3107a4000,
-    0x00005af3107a4000, 0x00005af3107a4000, 0x00038d7ea4c68000,
-    0x00038d7ea4c68000, 0x00038d7ea4c68000, 0x002386f26fc10000,
-    0x002386f26fc10000, 0x002386f26fc10000, 0x002386f26fc10000,
-    0x016345785d8a0000, 0x016345785d8a0000, 0x016345785d8a0000,
-    0x0de0b6b3a7640000, 0x0de0b6b3a7640000, 0x0de0b6b3a7640000,
-    0x8ac7230489e80000, 0x8ac7230489e80000, 0x8ac7230489e80000,
-    0x8ac7230489e80000
-  ]
-  
   
   static let bid_multipliers1_binary64: [UInt256] = [
     UInt256(w: [1837554224478941466, 10276842184138466546, 11651621577776737258, 7754513766366540701]),
@@ -6294,187 +6026,15 @@ extension Decimal32 {
      2124, 2128, 2131, 2134, 2138, 2141, 2144, 2148, 2151, 2154, 2158, 2161
   ]
   
+  static func bid_power10_table_128(_ i: Int) -> UInt128 {
+    power(UInt128(10), to: i)
+  }
   
-  static let bid_power10_table_128: [UInt128] = [
-    UInt128(w: [0x0000000000000001, 0x0000000000000000]),    // 10^0
-    UInt128(w: [0x000000000000000a, 0x0000000000000000]),    // 10^1
-    UInt128(w: [0x0000000000000064, 0x0000000000000000]),    // 10^2
-    UInt128(w: [0x00000000000003e8, 0x0000000000000000]),    // 10^3
-    UInt128(w: [0x0000000000002710, 0x0000000000000000]),    // 10^4
-    UInt128(w: [0x00000000000186a0, 0x0000000000000000]),    // 10^5
-    UInt128(w: [0x00000000000f4240, 0x0000000000000000]),    // 10^6
-    UInt128(w: [0x0000000000989680, 0x0000000000000000]),    // 10^7
-    UInt128(w: [0x0000000005f5e100, 0x0000000000000000]),    // 10^8
-    UInt128(w: [0x000000003b9aca00, 0x0000000000000000]),    // 10^9
-    UInt128(w: [0x00000002540be400, 0x0000000000000000]),    // 10^10
-    UInt128(w: [0x000000174876e800, 0x0000000000000000]),    // 10^11
-    UInt128(w: [0x000000e8d4a51000, 0x0000000000000000]),    // 10^12
-    UInt128(w: [0x000009184e72a000, 0x0000000000000000]),    // 10^13
-    UInt128(w: [0x00005af3107a4000, 0x0000000000000000]),    // 10^14
-    UInt128(w: [0x00038d7ea4c68000, 0x0000000000000000]),    // 10^15
-    UInt128(w: [0x002386f26fc10000, 0x0000000000000000]),    // 10^16
-    UInt128(w: [0x016345785d8a0000, 0x0000000000000000]),    // 10^17
-    UInt128(w: [0x0de0b6b3a7640000, 0x0000000000000000]),    // 10^18
-    UInt128(w: [0x8ac7230489e80000, 0x0000000000000000]),    // 10^19
-    UInt128(w: [0x6bc75e2d63100000, 0x0000000000000005]),    // 10^20
-    UInt128(w: [0x35c9adc5dea00000, 0x0000000000000036]),    // 10^21
-    UInt128(w: [0x19e0c9bab2400000, 0x000000000000021e]),    // 10^22
-    UInt128(w: [0x02c7e14af6800000, 0x000000000000152d]),    // 10^23
-    UInt128(w: [0x1bcecceda1000000, 0x000000000000d3c2]),    // 10^24
-    UInt128(w: [0x161401484a000000, 0x0000000000084595]),    // 10^25
-    UInt128(w: [0xdcc80cd2e4000000, 0x000000000052b7d2]),    // 10^26
-    UInt128(w: [0x9fd0803ce8000000, 0x00000000033b2e3c]),    // 10^27
-    UInt128(w: [0x3e25026110000000, 0x00000000204fce5e]),    // 10^28
-    UInt128(w: [0x6d7217caa0000000, 0x00000001431e0fae]),    // 10^29
-    UInt128(w: [0x4674edea40000000, 0x0000000c9f2c9cd0]),    // 10^30
-    UInt128(w: [0xc0914b2680000000, 0x0000007e37be2022]),    // 10^31
-    UInt128(w: [0x85acef8100000000, 0x000004ee2d6d415b]),    // 10^32
-    UInt128(w: [0x38c15b0a00000000, 0x0000314dc6448d93]),    // 10^33
-    UInt128(w: [0x378d8e6400000000, 0x0001ed09bead87c0]),    // 10^34
-    UInt128(w: [0x2b878fe800000000, 0x0013426172c74d82]),    // 10^35
-    UInt128(w: [0xb34b9f1000000000, 0x00c097ce7bc90715]),    // 10^36
-    UInt128(w: [0x00f436a000000000, 0x0785ee10d5da46d9]),    // 10^37
-    UInt128(w: [0x098a224000000000, 0x4b3b4ca85a86c47a]),    // 10^38
-  ]
-  
-  // tables used in computation
-  static let bid_estimate_decimal_digits: [Int8] = [
-    1,    //2^0 =1     < 10^0
-    1,    //2^1 =2     < 10^1
-    1,    //2^2 =4     < 10^1
-    1,    //2^3 =8     < 10^1
-    2,    //2^4 =16    < 10^2
-    2,    //2^5 =32    < 10^2
-    2,    //2^6 =64    < 10^2
-    3,    //2^7 =128   < 10^3
-    3,    //2^8 =256   < 10^3
-    3,    //2^9 =512   < 10^3
-    4,    //2^10=1024  < 10^4
-    4,    //2^11=2048  < 10^4
-    4,    //2^12=4096  < 10^4
-    4,    //2^13=8192  < 10^4
-    5,    //2^14=16384 < 10^5
-    5,    //2^15=32768 < 10^5
-    
-    5,    //2^16=65536     < 10^5
-    6,    //2^17=131072    < 10^6
-    6,    //2^18=262144    < 10^6
-    6,    //2^19=524288    < 10^6
-    7,    //2^20=1048576   < 10^7
-    7,    //2^21=2097152   < 10^7
-    7,    //2^22=4194304   < 10^7
-    7,    //2^23=8388608   < 10^7
-    8,    //2^24=16777216  < 10^8
-    8,    //2^25=33554432  < 10^8
-    8,    //2^26=67108864  < 10^8
-    9,    //2^27=134217728 < 10^9
-    9,    //2^28=268435456 < 10^9
-    9,    //2^29=536870912 < 10^9
-    10,    //2^30=1073741824< 10^10
-    10,    //2^31=2147483648< 10^10
-    
-    10,    //2^32=4294967296     < 10^10
-    10,    //2^33=8589934592     < 10^10
-    11,    //2^34=17179869184    < 10^11
-    11,    //2^35=34359738368    < 10^11
-    11,    //2^36=68719476736    < 10^11
-    12,    //2^37=137438953472   < 10^12
-    12,    //2^38=274877906944   < 10^12
-    12,    //2^39=549755813888   < 10^12
-    13,    //2^40=1099511627776  < 10^13
-    13,    //2^41=2199023255552  < 10^13
-    13,    //2^42=4398046511104  < 10^13
-    13,    //2^43=8796093022208  < 10^13
-    14,    //2^44=17592186044416 < 10^14
-    14,    //2^45=35184372088832 < 10^14
-    14,    //2^46=70368744177664 < 10^14
-    15,    //2^47=140737488355328< 10^15
-    
-    15,    //2^48=281474976710656    < 10^15
-    15,    //2^49=562949953421312    < 10^15
-    16,    //2^50=1125899906842624   < 10^16
-    16,    //2^51=2251799813685248   < 10^16
-    16,    //2^52=4503599627370496   < 10^16
-    16,    //2^53=9007199254740992   < 10^16
-    17,    //2^54=18014398509481984  < 10^17
-    17,    //2^55=36028797018963968  < 10^17
-    17,    //2^56=72057594037927936  < 10^17
-    18,    //2^57=144115188075855872 < 10^18
-    18,    //2^58=288230376151711744 < 10^18
-    18,    //2^59=576460752303423488 < 10^18
-    19,    //2^60=1152921504606846976< 10^19
-    19,    //2^61=2305843009213693952< 10^19
-    19,    //2^62=4611686018427387904< 10^19
-    19,    //2^63=9223372036854775808< 10^19
-    
-    20,    //2^64=18446744073709551616
-    20,    //2^65=36893488147419103232
-    20,    //2^66=73786976294838206464
-    21,    //2^67=147573952589676412928
-    21,    //2^68=295147905179352825856
-    21,    //2^69=590295810358705651712
-    22,    //2^70=1180591620717411303424
-    22,    //2^71=2361183241434822606848
-    22,    //2^72=4722366482869645213696
-    22,    //2^73=9444732965739290427392
-    23,    //2^74=18889465931478580854784
-    23,    //2^75=37778931862957161709568
-    23,    //2^76=75557863725914323419136
-    24,    //2^77=151115727451828646838272
-    24,    //2^78=302231454903657293676544
-    24,    //2^79=604462909807314587353088
-    
-    25,    //2^80=1208925819614629174706176
-    25,    //2^81=2417851639229258349412352
-    25,    //2^82=4835703278458516698824704
-    25,    //2^83=9671406556917033397649408
-    26,    //2^84=19342813113834066795298816
-    26,    //2^85=38685626227668133590597632
-    26,    //2^86=77371252455336267181195264
-    27,    //2^87=154742504910672534362390528
-    27,    //2^88=309485009821345068724781056
-    27,    //2^89=618970019642690137449562112
-    28,    //2^90=1237940039285380274899124224
-    28,    //2^91=2475880078570760549798248448
-    28,    //2^92=4951760157141521099596496896
-    28,    //2^93=9903520314283042199192993792
-    29,    //2^94=19807040628566084398385987584
-    29,    //2^95=39614081257132168796771975168
-    29,    //2^96=79228162514264337593543950336
-    
-    30,    //2^97=158456325028528675187087900672
-    30,    //2^98=316912650057057350374175801344
-    30,    //2^99=633825300114114700748351602688
-    31,    //2^100=1267650600228229401496703205376
-    31,    //2^101=2535301200456458802993406410752
-    31,    //2^102=5070602400912917605986812821504
-    32,    //2^103=10141204801825835211973625643008
-    32,    //2^104=20282409603651670423947251286016
-    32,    //2^105=40564819207303340847894502572032
-    32,    //2^106=81129638414606681695789005144064
-    33,    //2^107=162259276829213363391578010288128
-    33,    // 2^108
-    33,    // 2^109
-    34,    // 2^110
-    34,    // 2^111
-    34,    // 2^112
-    35,    // 2^113
-    35,    // 2^114
-    35,    // 2^115
-    35,    // 2^116
-    36,    // 2^117
-    36,    // 2^118
-    36,    // 2^119
-    37,    // 2^120
-    37,    // 2^121
-    37,    // 2^122
-    38,    // 2^123
-    38,    // 2^124
-    38,    // 2^125
-    38,    // 2^126
-    39,    // 2^127
-    39    // 2^128
-  ]
+  /// Returns the number of decimal digits in 2^i.
+  static func bid_estimate_decimal_digits(_ i: Int) -> Int {
+    let n = UInt128(1) << i
+    return digitsIn(n)
+  }
   
   static let bid_b2d : [UInt64] = [
     0x000, 0x001, 0x002, 0x003, 0x004, 0x005, 0x006, 0x007, 0x008, 0x009,
@@ -6648,58 +6208,7 @@ extension Decimal32 {
   
   static func bid_d2b2(_ i: Int) -> UInt64 { bid_d2b[i] * 1000 }
   
-  // Table of powers of 5
-  static let bid_power_five: [UInt128] = [
-    UInt128(w: [1, 0]),
-    UInt128(w: [5, 0]),
-    UInt128(w: [25, 0]),
-    UInt128(w: [125, 0]),
-    UInt128(w: [625, 0]),
-    UInt128(w: [3125, 0]),
-    UInt128(w: [15625, 0]),
-    UInt128(w: [78125, 0]),
-    UInt128(w: [390625, 0]),
-    UInt128(w: [1953125, 0]),
-    UInt128(w: [9765625, 0]),
-    UInt128(w: [48828125, 0]),
-    UInt128(w: [244140625, 0]),
-    UInt128(w: [1220703125, 0]),
-    UInt128(w: [6103515625, 0]),
-    UInt128(w: [30517578125, 0]),
-    UInt128(w: [152587890625, 0]),
-    UInt128(w: [762939453125, 0]),
-    UInt128(w: [3814697265625, 0]),
-    UInt128(w: [19073486328125, 0]),
-    UInt128(w: [95367431640625, 0]),
-    UInt128(w: [476837158203125, 0]),
-    UInt128(w: [2384185791015625, 0]),
-    UInt128(w: [11920928955078125, 0]),
-    UInt128(w: [59604644775390625, 0]),
-    UInt128(w: [298023223876953125, 0]),
-    UInt128(w: [1490116119384765625, 0]),
-    UInt128(w: [7450580596923828125, 0]),
-    UInt128(w: [359414837200037393, 2]),
-    UInt128(w: [1797074186000186965, 10]),
-    UInt128(w: [8985370930000934825, 50]),
-    UInt128(w: [8033366502585570893, 252]),
-    UInt128(w: [3273344365508751233, 1262]),
-    UInt128(w: [16366721827543756165, 6310]),
-    UInt128(w: [8046632842880574361, 31554]),
-    UInt128(w: [3339676066983768573, 157772]),
-    UInt128(w: [16698380334918842865, 788860]),
-    UInt128(w: [9704925379756007861, 3944304]),
-    UInt128(w: [11631138751360936073, 19721522]),
-    UInt128(w: [2815461535676025517, 98607613]),
-    UInt128(w: [14077307678380127585, 493038065]),
-    UInt128(w: [15046306170771983077, 2465190328]),
-    UInt128(w: [1444554559021708921, 12325951644]),
-    UInt128(w: [7222772795108544605, 61629758220]),
-    UInt128(w: [17667119901833171409, 308148791101]),
-    UInt128(w: [14548623214327650581, 1540743955509]),
-    UInt128(w: [17402883850509598057, 7703719777548]),
-    UInt128(w: [13227442957709783821, 38518598887744]),
-    UInt128(w: [10796982567420264257, 192592994438723])
-  ]
+  static func bid_power_five(_ i: Int) -> UInt128 { power(UInt128(5), to: i) }
   
   static let coefflimits: [UInt64] = [
     10000000, 2000000, 400000, 80000, 16000, 3200, 640, 128, 25, 5, 1
@@ -6708,59 +6217,6 @@ extension Decimal32 {
   static func bid_coefflimits_bid32(_ i: Int) -> UInt128 {
     i > 10 ? 0 : UInt128(coefflimits[i])
   }
-  
-//  static let bid_coefflimits_bid32 : [UInt128] = [
-//    UInt128(w: [10000000, 0]),
-//    UInt128(w: [2000000, 0]),
-//    UInt128(w: [400000, 0]),
-//    UInt128(w: [80000, 0]),
-//    UInt128(w: [16000, 0]),
-//    UInt128(w: [3200, 0]),
-//    UInt128(w: [640, 0]),
-//    UInt128(w: [128, 0]),
-//    UInt128(w: [25, 0]),
-//    UInt128(w: [5, 0]),
-//    UInt128(w: [1, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0]),
-//    UInt128(w: [0, 0])
-//  ]
-  
   
   static let bid_multipliers1_bid32: [UInt256] = [
     UInt256(w: [0, 0, 0, 0]),
@@ -8800,36 +8256,38 @@ extension Decimal32 {
     UInt128(w: [17070256266838890610, 164721842862976])
   ]
   
+  static let midPoint = UInt128(high: 1 << 63, low: 0)
+  
   static let bid_roundbound_128: [UInt128] = [
     // BID_ROUNDING_TO_NEAREST
-    UInt128(w: [0, (1 << 63)]),      // positive|even
-    UInt128(w: [~0, (1 << 63) - 1]), // positive|odd
-    UInt128(w: [0, (1 << 63)]),      // negative|even
-    UInt128(w: [~0, (1 << 63) - 1]), // negative|odd
+    midPoint,      // positive|even
+    midPoint - 1,  // positive|odd
+    midPoint,      // negative|even
+    midPoint - 1,  // negative|odd
 
     // BID_ROUNDING_DOWN
-    UInt128(w: [~0, ~0]),            // positive|even
-    UInt128(w: [~0, ~0]),            // positive|odd
-    UInt128(w: [0, 0]),              // negative|even
-    UInt128(w: [0, 0]),              // negative|odd
+    UInt128.max,   // positive|even
+    UInt128.max,   // positive|odd
+    UInt128.min,   // negative|even
+    UInt128.min,   // negative|odd
 
     // BID_ROUNDING_UP
-    UInt128(w: [0, 0]),              // positive|even
-    UInt128(w: [0, 0]),              // positive|odd
-    UInt128(w: [~0, ~0]),            // negative|even
-    UInt128(w: [~0, ~0]),            // negative|odd
+    UInt128.min,   // positive|even
+    UInt128.min,   // positive|odd
+    UInt128.max,   // negative|even
+    UInt128.max,   // negative|odd
 
     // BID_ROUNDING_TO_ZERO
-    UInt128(w: [~0, ~0]),            // positive|even
-    UInt128(w: [~0, ~0]),            // positive|odd
-    UInt128(w: [~0, ~0]),            // negative|even
-    UInt128(w: [~0, ~0]),            // negative|odd
+    UInt128.max,   // positive|even
+    UInt128.max,   // positive|odd
+    UInt128.max,   // negative|even
+    UInt128.max,   // negative|odd
 
     // BID_ROUNDING_TIES_AWAY
-    UInt128(w: [~0, (1 << 63) - 1]), // positive|even
-    UInt128(w: [~0, (1 << 63) - 1]), // positive|odd
-    UInt128(w: [~0, (1 << 63) - 1]), // negative|even
-    UInt128(w: [~0, (1 << 63) - 1])  // negative|odd
+    midPoint - 1,  // positive|even
+    midPoint - 1,  // positive|odd
+    midPoint - 1,  // negative|even
+    midPoint - 1   // negative|odd
   ]
   
   static let bid_short_recip_scale: [Int8] = [
@@ -8838,7 +8296,7 @@ extension Decimal32 {
   
   // bid_ten2k64[i] = 10^i, 0 <= i <= 19
   static func bid_ten2k64(_ i:Int) -> UInt64 {
-    UInt64(bid_power10_table_128[i])
+    UInt64(bid_power10_table_128(i))
   }
   
   static func bid_midpoint64(_ i:Int) -> UInt64 { 5 * bid_ten2k64(i) }
@@ -8858,7 +8316,7 @@ extension Decimal32 {
   // 1 <= x <= 17; the fraction consists of the low Ex bits in C * kx
   // (these values are aligned with the low 64 bits of the fraction)
   static func bid_ten2mk64(_ i:Int) -> UInt64 {
-     UInt64((UInt128(1) << bid_powers[i]) / bid_power10_table_128[i+1])+1
+     UInt64((UInt128(1) << bid_powers[i]) / bid_power10_table_128(i+1))+1
   }
   
   // Values of 10^(-x) trancated to Ex bits beyond the binary point, and
@@ -8866,7 +8324,7 @@ extension Decimal32 {
   // 1 <= x <= 17; the fraction consists of the low Ex bits in C * kx
   // (these values are aligned with the low 64 bits of the fraction)
   static func bid_ten2mxtrunc64(_ i:Int) -> UInt64 {
-    UInt64((UInt128(1) << (64+bid_Ex64m64(i))) / bid_power10_table_128[i+1])
+    UInt64((UInt128(1) << (64+bid_Ex64m64(i))) / bid_power10_table_128(i+1))
   }
 
   // Kx from 10^(-x) ~= Kx * 2^(-Ex); Kx rounded up to 64 bits, 1 <= x <= 17
@@ -8877,16 +8335,8 @@ extension Decimal32 {
   static func bid_reciprocals10_64(_ i: Int) -> UInt64 {
     if i == 0 { return 1 }
     let twoPower = bid_short_recip_scale[i]+64
-    return UInt64(UInt128(1) << twoPower / bid_power10_table_128[i]) + 1
+    return UInt64(UInt128(1) << twoPower / bid_power10_table_128(i)) + 1
   }
-
-  
-  // bid_shiftright128[] contains the right shift count to obtain C2* from
-  // the top 128 bits of the 128x128-bit product C2 * Kx
-  static let bid_shiftright128: [UInt8] = [
-    0, 0, 0, 3, 6, 9, 13, 16, 19, 23, 26, 29, 33, 36, 39, 43, 46, 49, 53, 56,
-    59, 63, 66, 69, 73, 76, 79, 83, 86, 89, 92, 96, 99, 102
-  ]
   
   // Values of 1/2 in the right position to be compared with the fraction from
   // C * kx, 1 <= x <= 17; the fraction consists of the low Ex bits in C * kx
@@ -8901,124 +8351,6 @@ extension Decimal32 {
   static func bid_mask64(_ i:Int) -> UInt64 {
     (UInt64(1) << bid_shiftright128[i+3]) - 1
   }
-
-//  static let bid_nr_digits : [DEC_DIGITS] = [
-//    // only the first entry is used if it is not 0
-//    DEC_DIGITS(1, 0x0000000000000000, 0x000000000000000a, 1),    //   1-bit n < 10^1
-//    DEC_DIGITS(1, 0x0000000000000000, 0x000000000000000a, 1),    //   2-bit n < 10^1
-//    DEC_DIGITS(1, 0x0000000000000000, 0x000000000000000a, 1),    //   3-bit n < 10^1
-//    DEC_DIGITS(0, 0x0000000000000000, 0x000000000000000a, 1),    //   4-bit n ? 10^1
-//    DEC_DIGITS(2, 0x0000000000000000, 0x0000000000000064, 2),    //   5-bit n < 10^2
-//    DEC_DIGITS(2, 0x0000000000000000, 0x0000000000000064, 2),    //   6-bit n < 10^2
-//    DEC_DIGITS(0, 0x0000000000000000, 0x0000000000000064, 2),    //   7-bit n ? 10^2
-//    DEC_DIGITS(3, 0x0000000000000000, 0x00000000000003e8, 3),    //   8-bit n < 10^3
-//    DEC_DIGITS(3, 0x0000000000000000, 0x00000000000003e8, 3),    //   9-bit n < 10^3
-//    DEC_DIGITS(0, 0x0000000000000000, 0x00000000000003e8, 3),    //  10-bit n ? 10^3
-//    DEC_DIGITS(4, 0x0000000000000000, 0x0000000000002710, 4),    //  11-bit n < 10^4
-//    DEC_DIGITS(4, 0x0000000000000000, 0x0000000000002710, 4),    //  12-bit n < 10^4
-//    DEC_DIGITS(4, 0x0000000000000000, 0x0000000000002710, 4),    //  13-bit n < 10^4
-//    DEC_DIGITS(0, 0x0000000000000000, 0x0000000000002710, 4),    //  14-bit n ? 10^4
-//    DEC_DIGITS(5, 0x0000000000000000, 0x00000000000186a0, 5),    //  15-bit n < 10^5
-//    DEC_DIGITS(5, 0x0000000000000000, 0x00000000000186a0, 5),    //  16-bit n < 10^5
-//    DEC_DIGITS(0, 0x0000000000000000, 0x00000000000186a0, 5),    //  17-bit n ? 10^5
-//    DEC_DIGITS(6, 0x0000000000000000, 0x00000000000f4240, 6),    //  18-bit n < 10^6
-//    DEC_DIGITS(6, 0x0000000000000000, 0x00000000000f4240, 6),    //  19-bit n < 10^6
-//    DEC_DIGITS(0, 0x0000000000000000, 0x00000000000f4240, 6),    //  20-bit n ? 10^6
-//    DEC_DIGITS(7, 0x0000000000000000, 0x0000000000989680, 7),    //  21-bit n < 10^7
-//    DEC_DIGITS(7, 0x0000000000000000, 0x0000000000989680, 7),    //  22-bit n < 10^7
-//    DEC_DIGITS(7, 0x0000000000000000, 0x0000000000989680, 7),    //  23-bit n < 10^7
-//    DEC_DIGITS(0, 0x0000000000000000, 0x0000000000989680, 7),    //  24-bit n ? 10^7
-//    DEC_DIGITS(8, 0x0000000000000000, 0x0000000005f5e100, 8),    //  25-bit n < 10^8
-//    DEC_DIGITS(8, 0x0000000000000000, 0x0000000005f5e100, 8),    //  26-bit n < 10^8
-//    DEC_DIGITS(0, 0x0000000000000000, 0x0000000005f5e100, 8),    //  27-bit n ? 10^8
-//    DEC_DIGITS(9, 0x0000000000000000, 0x000000003b9aca00, 9),    //  28-bit n < 10^9
-//    DEC_DIGITS(9, 0x0000000000000000, 0x000000003b9aca00, 9),    //  29-bit n < 10^9
-//    DEC_DIGITS(0, 0x0000000000000000, 0x000000003b9aca00, 9),    //  30-bit n ? 10^9
-//    DEC_DIGITS(10, 0x0000000000000000, 0x00000002540be400, 10),    //  31-bit n < 10^10
-//    DEC_DIGITS(10, 0x0000000000000000, 0x00000002540be400, 10),    //  32-bit n < 10^10
-//    DEC_DIGITS(10, 0x0000000000000000, 0x00000002540be400, 10),    //  33-bit n < 10^10
-//    DEC_DIGITS(0, 0x0000000000000000, 0x00000002540be400, 10),    //  34-bit n ? 10^10
-//    DEC_DIGITS(11, 0x0000000000000000, 0x000000174876e800, 11),    //  35-bit n < 10^11
-//    DEC_DIGITS(11, 0x0000000000000000, 0x000000174876e800, 11),    //  36-bit n < 10^11
-//    DEC_DIGITS(0, 0x0000000000000000, 0x000000174876e800, 11),    //  37-bit n ? 10^11
-//    DEC_DIGITS(12, 0x0000000000000000, 0x000000e8d4a51000, 12),    //  38-bit n < 10^12
-//    DEC_DIGITS(12, 0x0000000000000000, 0x000000e8d4a51000, 12),    //  39-bit n < 10^12
-//    DEC_DIGITS(0, 0x0000000000000000, 0x000000e8d4a51000, 12),    //  40-bit n ? 10^12
-//    DEC_DIGITS(13, 0x0000000000000000, 0x000009184e72a000, 13),    //  41-bit n < 10^13
-//    DEC_DIGITS(13, 0x0000000000000000, 0x000009184e72a000, 13),    //  42-bit n < 10^13
-//    DEC_DIGITS(13, 0x0000000000000000, 0x000009184e72a000, 13),    //  43-bit n < 10^13
-//    DEC_DIGITS(0, 0x0000000000000000, 0x000009184e72a000, 13),    //  44-bit n ? 10^13
-//    DEC_DIGITS(14, 0x0000000000000000, 0x00005af3107a4000, 14),    //  45-bit n < 10^14
-//    DEC_DIGITS(14, 0x0000000000000000, 0x00005af3107a4000, 14),    //  46-bit n < 10^14
-//    DEC_DIGITS(0, 0x0000000000000000, 0x00005af3107a4000, 14),    //  47-bit n ? 10^14
-//    DEC_DIGITS(15, 0x0000000000000000, 0x00038d7ea4c68000, 15),    //  48-bit n < 10^15
-//    DEC_DIGITS(15, 0x0000000000000000, 0x00038d7ea4c68000, 15),    //  49-bit n < 10^15
-//    DEC_DIGITS(0, 0x0000000000000000, 0x00038d7ea4c68000, 15),    //  50-bit n ? 10^15
-//    DEC_DIGITS(16, 0x0000000000000000, 0x002386f26fc10000, 16),    //  51-bit n < 10^16
-//    DEC_DIGITS(16, 0x0000000000000000, 0x002386f26fc10000, 16),    //  52-bit n < 10^16
-//    DEC_DIGITS(16, 0x0000000000000000, 0x002386f26fc10000, 16),    //  53-bit n < 10^16
-//    DEC_DIGITS(0, 0x0000000000000000, 0x002386f26fc10000, 16),    //  54-bit n ? 10^16
-//    DEC_DIGITS(17, 0x0000000000000000, 0x016345785d8a0000, 17),    //  55-bit n < 10^17
-//    DEC_DIGITS(17, 0x0000000000000000, 0x016345785d8a0000, 17),    //  56-bit n < 10^17
-//    DEC_DIGITS(0, 0x0000000000000000, 0x016345785d8a0000, 17),    //  57-bit n ? 10^17
-//    DEC_DIGITS(18, 0x0000000000000000, 0x0de0b6b3a7640000, 18),    //  58-bit n < 10^18
-//    DEC_DIGITS(18, 0x0000000000000000, 0x0de0b6b3a7640000, 18),    //  59-bit n < 10^18
-//    DEC_DIGITS(0, 0x0000000000000000, 0x0de0b6b3a7640000, 18),    //  60-bit n ? 10^18
-//    DEC_DIGITS(19, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  61-bit n < 10^19
-//    DEC_DIGITS(19, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  62-bit n < 10^19
-//    DEC_DIGITS(19, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  63-bit n < 10^19
-//    DEC_DIGITS(0, 0x0000000000000000, 0x8ac7230489e80000, 19),    //  64-bit n ? 10^19
-//    DEC_DIGITS(20, 0x0000000000000005, 0x6bc75e2d63100000, 20),    //  65-bit n < 10^20
-//    DEC_DIGITS(20, 0x0000000000000005, 0x6bc75e2d63100000, 20),    //  66-bit n < 10^20
-//    DEC_DIGITS(0, 0x0000000000000005, 0x6bc75e2d63100000, 20),    //  67-bit n ? 10^20
-//    DEC_DIGITS(21, 0x0000000000000036, 0x35c9adc5dea00000, 21),    //  68-bit n < 10^21
-//    DEC_DIGITS(21, 0x0000000000000036, 0x35c9adc5dea00000, 21),    //  69-bit n < 10^21
-//    DEC_DIGITS(0, 0x0000000000000036, 0x35c9adc5dea00000, 21),    //  70-bit n ? 10^21
-//    DEC_DIGITS(22, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  71-bit n < 10^22
-//    DEC_DIGITS(22, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  72-bit n < 10^22
-//    DEC_DIGITS(22, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  73-bit n < 10^22
-//    DEC_DIGITS(0, 0x000000000000021e, 0x19e0c9bab2400000, 22),    //  74-bit n ? 10^22
-//    DEC_DIGITS(23, 0x000000000000152d, 0x02c7e14af6800000, 23),    //  75-bit n < 10^23
-//    DEC_DIGITS(23, 0x000000000000152d, 0x02c7e14af6800000, 23),    //  76-bit n < 10^23
-//    DEC_DIGITS(0, 0x000000000000152d, 0x02c7e14af6800000, 23),    //  77-bit n ? 10^23
-//    DEC_DIGITS(24, 0x000000000000d3c2, 0x1bcecceda1000000, 24),    //  78-bit n < 10^24
-//    DEC_DIGITS(24, 0x000000000000d3c2, 0x1bcecceda1000000, 24),    //  79-bit n < 10^24
-//    DEC_DIGITS(0, 0x000000000000d3c2, 0x1bcecceda1000000, 24),    //  80-bit n ? 10^24
-//    DEC_DIGITS(25, 0x0000000000084595, 0x161401484a000000, 25),    //  81-bit n < 10^25
-//    DEC_DIGITS(25, 0x0000000000084595, 0x161401484a000000, 25),    //  82-bit n < 10^25
-//    DEC_DIGITS(25, 0x0000000000084595, 0x161401484a000000, 25),    //  83-bit n < 10^25
-//    DEC_DIGITS(0, 0x0000000000084595, 0x161401484a000000, 25),    //  84-bit n ? 10^25
-//    DEC_DIGITS(26, 0x000000000052b7d2, 0xdcc80cd2e4000000, 26),    //  85-bit n < 10^26
-//    DEC_DIGITS(26, 0x000000000052b7d2, 0xdcc80cd2e4000000, 26),    //  86-bit n < 10^26
-//    DEC_DIGITS(0, 0x000000000052b7d2, 0xdcc80cd2e4000000, 26),    //  87-bit n ? 10^26
-//    DEC_DIGITS(27, 0x00000000033b2e3c, 0x9fd0803ce8000000, 27),    //  88-bit n < 10^27
-//    DEC_DIGITS(27, 0x00000000033b2e3c, 0x9fd0803ce8000000, 27),    //  89-bit n < 10^27
-//    DEC_DIGITS(0, 0x00000000033b2e3c, 0x9fd0803ce8000000, 27),    //  90-bit n ? 10^27
-//    DEC_DIGITS(28, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  91-bit n < 10^28
-//    DEC_DIGITS(28, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  92-bit n < 10^28
-//    DEC_DIGITS(28, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  93-bit n < 10^28
-//    DEC_DIGITS(0, 0x00000000204fce5e, 0x3e25026110000000, 28),    //  94-bit n ? 10^28
-//    DEC_DIGITS(29, 0x00000001431e0fae, 0x6d7217caa0000000, 29),    //  95-bit n < 10^29
-//    DEC_DIGITS(29, 0x00000001431e0fae, 0x6d7217caa0000000, 29),    //  96-bit n < 10^29
-//    DEC_DIGITS(0, 0x00000001431e0fae, 0x6d7217caa0000000, 29),    //  97-bit n ? 10^29
-//    DEC_DIGITS(30, 0x0000000c9f2c9cd0, 0x4674edea40000000, 30),    //  98-bit n < 10^30
-//    DEC_DIGITS(30, 0x0000000c9f2c9cd0, 0x4674edea40000000, 30),    //  99-bit n < 10^30
-//    DEC_DIGITS(0, 0x0000000c9f2c9cd0, 0x4674edea40000000, 30),    // 100-bit n ? 10^30
-//    DEC_DIGITS(31, 0x0000007e37be2022, 0xc0914b2680000000, 31),    // 101-bit n < 10^31
-//    DEC_DIGITS(31, 0x0000007e37be2022, 0xc0914b2680000000, 31),    // 102-bit n < 10^31
-//    DEC_DIGITS(0, 0x0000007e37be2022, 0xc0914b2680000000, 31),    // 103-bit n ? 10^31
-//    DEC_DIGITS(32, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 104-bit n < 10^32
-//    DEC_DIGITS(32, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 105-bit n < 10^32
-//    DEC_DIGITS(32, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 106-bit n < 10^32
-//    DEC_DIGITS(0, 0x000004ee2d6d415b, 0x85acef8100000000, 32),    // 107-bit n ? 10^32
-//    DEC_DIGITS(33, 0x0000314dc6448d93, 0x38c15b0a00000000, 33),    // 108-bit n < 10^33
-//    DEC_DIGITS(33, 0x0000314dc6448d93, 0x38c15b0a00000000, 33),    // 109-bit n < 10^33
-//    DEC_DIGITS(0, 0x0000314dc6448d93, 0x38c15b0a00000000, 33),    // 100-bit n ? 10^33
-//    DEC_DIGITS(34, 0x0001ed09bead87c0, 0x378d8e6400000000, 34),    // 111-bit n < 10^34
-//    DEC_DIGITS(34, 0x0001ed09bead87c0, 0x378d8e6400000000, 34),    // 112-bit n < 10^34
-//    DEC_DIGITS(0, 0x0001ed09bead87c0, 0x378d8e6400000000, 34)    // 113-bit n ? 10^34
-//    //{ 35, 0x0013426172c74d82, 0x2b878fe800000000, 35 }  // 114-bit n < 10^35
-//  ]
   
   static func bid_round_const_table(_ rnd:Int, _ i:Int) -> UInt64 {
     if i == 0 { return 0 }
@@ -9120,7 +8452,7 @@ extension Decimal32 {
     ptr_Cstar = Cstar;
   }
   
-  static func bid32_to_string (_ x: UInt32, _ showPlus: Bool = false) ->
+  static func bid32_to_string(_ x: UInt32, _ showPlus: Bool = false) ->
       String {
     // unpack arguments, check for NaN or Infinity
     let plus = showPlus ? "+" : ""
@@ -9148,49 +8480,15 @@ extension Decimal32 {
       return ps
     }
   }
-  
-  static func addDecimalPointAndExponent(_ ps:String, _ exponent:Int,
-                                         _ maxDigits:Int) -> String {
-    var digits = ps.count
-    var ps = ps
-    var exponent_x = exponent
-    if exponent_x == 0 {
-      ps.insert(".", at: ps.index(ps.startIndex, offsetBy: exponent_x+1))
-    } else if abs(exponent_x) > maxDigits {
-      ps.insert(".", at: ps.index(after: ps.startIndex))
-      ps += "e"
-      if exponent_x < 0 {
-        ps += "-"
-        exponent_x = -exponent_x
-      } else {
-        ps += "+"
-      }
-      ps += String(exponent_x)
-    } else if digits <= exponent_x {
-      // format the number without an exponent
-      while digits <= exponent_x {
-        // pad the number with zeros
-        ps += "0"; digits += 1
-      }
-    } else if exponent_x < 0 {
-      while exponent_x < -1 {
-        // insert leading zeros
-        ps = "0" + ps; exponent_x += 1
-      }
-      ps = "0." + ps
-    } else {
-      // insert the decimal point
-      ps.insert(".", at: ps.index(ps.startIndex, offsetBy: exponent_x+1))
-      if ps.hasSuffix(".") { ps.removeLast() }
-    }
-    return ps
-  }
-  
+
   static func bid32_from_string (_ ps: String, _ rnd_mode: Rounding,
                                  _ pfpsf: inout Status) -> UInt32 {
-    // eliminate leading whitespace
-    var ps = ps.trimmingCharacters(in: .whitespaces).lowercased()
+    // keep consistent character case for "infinity", "nan", etc.
+    var ps = ps.lowercased()
     var res: UInt32
+    
+    // remove leading whitespace characters
+    while ps.hasPrefix(" ") { ps.removeFirst() }
     
     // get first non-whitespace character
     var c = ps.isEmpty ? "\0" : ps.removeFirst()
@@ -9206,8 +8504,9 @@ extension Decimal32 {
         // case insensitive check for snan
         return SNAN_MASK
       } else {
-        // return qNaN
-        return NAN_MASK
+        // return qNaN & any coefficient
+        let coeff = UInt64(ps.dropFirst(2)) ?? 0 // drop "AN"
+        return bid32_nan(0, coeff << 44, 0)
       }
     }
     
