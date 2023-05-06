@@ -1164,27 +1164,36 @@ final class Decimal32Tests: XCTestCase {
       Decimal32.rounding = test.roundMode; Decimal32.state = []
       if prevID != test.id { testID = 1; prevID = test.id; print() } // reset for each type of test
       
+      func getNumber(_ s: String) -> Decimal32 {
+        if s.hasPrefix("0x") {
+          var s = s
+          s.removeFirst(2)
+          return Decimal32(bitPattern: Decimal32.Word(s, radix: 16) ?? 0)
+        }
+        return Decimal32(stringLiteral: s)
+      }
+      
       switch test.id {
         case "bid32_from_string":
-          let t1 = Decimal32(stringLiteral: test.istr)
+          let t1 = getNumber(test.istr)
           let dtest = Decimal32(raw:UInt32(test.res))
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]", test.res, t1.x)
           checkValues(test, UInt64(t1.x), Decimal32.state, error)
         case "bid32_to_binary64":
-          let t1 = Decimal32(stringLiteral: test.istr).double
+          let t1 = getNumber(test.istr).double
           let d1 = Double(bitPattern: test.res)
           let error = "\(d1) != \(t1)"
           checkValues(test, t1.bitPattern, Decimal32.state, error)
         case "bid32_to_int64_int":
-          let t1 = Decimal32(stringLiteral: test.istr)
+          let t1 = getNumber(test.istr)
           let error = "\(test.res) != \(t1.int)"
           checkValues(test, UInt64(bitPattern: Int64(t1.int)), Decimal32.state, error)
         case "bid32_to_uint64_int":
-          let t1 = Decimal32(stringLiteral: test.istr)
+          let t1 = getNumber(test.istr)
           let error = "\(test.res) != \(t1.uint)"
           checkValues(test, UInt64(t1.uint), Decimal32.state, error)
         case "bid32_negate":
-          var t1 = Decimal32(stringLiteral: test.istr); t1.negate()
+          var t1 = getNumber(test.istr); t1.negate()
           let dtest = Decimal32(raw:UInt32(test.res))
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]", test.res, t1.x)
           checkValues(test, UInt64(t1.x), Decimal32.state, error)
@@ -1196,19 +1205,19 @@ final class Decimal32Tests: XCTestCase {
 //          let error = String(format: "0x%08X%08X[\(d128)] != 0x%08X%08X[\(b128)]", test.reshi, test.reslo, b128.x.hi, b128.x.lo)
 //          checkValues(test, b128.x, Decimal32.state, error)
         case "bid32_to_bid64":
-          let t1 = Decimal32(stringLiteral: test.istr)
+          let t1 = getNumber(test.istr)
           let b64 = t1.decimal64
           let error = "\(test.res) != \(b64)"
           checkValues(test, b64, Decimal32.state, error)
         case "bid32_abs":
-          let t1 = Decimal32(stringLiteral: test.istr).magnitude
+          let t1 = getNumber(test.istr).magnitude
           let state = Decimal32.state
           let dtest = Decimal32(raw:UInt32(test.res))
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]", test.res, t1.x)
           checkValues(test, UInt64(t1.x), state, error)
         case "bid32_isCanonical", "bid32_isFinite", "bid32_isInf", "bid32_isNaN", "bid32_isNormal",
           "bid32_isSignaling", "bid32_isSigned", "bid32_isSubnormal", "bid32_isZero":
-          let t1 = Decimal32(stringLiteral: test.istr)
+          let t1 = getNumber(test.istr)
           var flag = 0
           if test.id.hasSuffix("isCanonical") {
             flag = t1.isCanonical ? 1 : 0
@@ -1231,8 +1240,8 @@ final class Decimal32Tests: XCTestCase {
           }
           checkValues(test, UInt64(flag), Decimal32.state, "\(test.res) != \(flag)")
         case "bid32_add", "bid32_div", "bid32_mul":
-          let t1 = Decimal32(stringLiteral: test.istr)
-          let t2 = Decimal32(stringLiteral: test.istr2)
+          let t1 = getNumber(test.istr)
+          let t2 = getNumber(test.istr2)
           let res: Decimal32
           if test.id.hasSuffix("add") {
             res = t1 + t2
@@ -1279,7 +1288,8 @@ final class Decimal32Tests: XCTestCase {
     XCTAssert(x.description == "345.5")
     
     let n = UInt32(0xA23003D0)
-    var a = Decimal32(dpd32: n); XCTAssert(a.description == "-7.50")
+    var a = Decimal32(bitPattern: n, bidEncoding: false)
+    XCTAssert(a.description == "-7.50")
     print(a, a.dpd32 == n ? "a = n" : "a != n"); XCTAssert(a.dpd32 == n)
     
     print("\(x) -> digits = \(x.significandDigitCount), " +
