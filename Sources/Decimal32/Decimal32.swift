@@ -1,9 +1,20 @@
-//
-//  Decimal32.swift
-//
-//
-//  Created by Mike Griebling on 2022-03-07.
-//
+/**
+Copyright © 2023 Computer Inspirations. All rights reserved.
+Portions are Copyright (c) 2014 - 2021 Apple Inc. and the
+Swift project authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 import UInt128
 
@@ -17,12 +28,12 @@ import UInt128
 /// decimal encoding format is supported too in the library, by means of
 /// conversion functions between the two encoding formats.
 
-public struct Decimal32 : CustomStringConvertible, ExpressibleByStringLiteral,
-                          ExpressibleByIntegerLiteral,
-                          ExpressibleByFloatLiteral, Codable, Hashable {
+public struct Decimal32 : Codable, Hashable {
   
-  // /set to true to monitor variable state (i.e., invalid operations, etc.)
+  /// set to true to monitor variable state (i.e., invalid operations, etc.)
   private static var enableStateOutput = false
+  
+  /// internal representation of the Decimal32 number
   public typealias Word = UInt32
   
   //////////////////////////////////////////////////////////////////////////
@@ -89,33 +100,12 @@ public struct Decimal32 : CustomStringConvertible, ExpressibleByStringLiteral,
     }
   }
   
-  /// Initialize from raw Binary Integer Decimal (BID)  by default or
-  /// Densely Packed Decimal (DPD) encoded 32-bit integers when
-  /// `bidEncoding` is `true`.
+  /// Creates a new instance from either a raw Binary Integer Decimal (BID),
+  /// by default or a Densely Packed Decimal (DPD) encoded 32-bit integer
+  /// when `bidEncoding` is `true`.
   public init(bitPattern bits: Word, bidEncoding: Bool = true) {
     if bidEncoding { x = bits }
     else { x = Self.dpd_to_bid32(bits) }
-  }
-  
-  /// Only for internal use when creating generic Decimal numbers. The chief
-  /// reason for this init is to allow suppert utilities to create Decimal
-  /// numbers without needing to know details of the Decimal number layout.
-  /// Note: No checks are performed on these parameters.
-  /// - Parameters:
-  ///   - isNegative: Set to `true` if the number is negative.
-  ///   - exponent: A signed and biased base 10 exponent for the number.
-  ///   - mantissa: An unsigned integer representing the mantissa of the
-  ///               number
-  ///   - round: If non-zero, perform underflow rounding
-  public init(isNegative:Bool, exponent:Int, mantissa:Int, round:Int = 0) {
-    let sign = isNegative ? Self.SIGN_MASK : 0
-    if round == 0 {
-      x = Self.bid32(sign, exponent, UInt32(mantissa), Self.rounding,
-                     &Self.state)
-    } else {
-      x = Self.get_BID32_UF(sign, exponent, UInt64(mantissa), round,
-                            Self.rounding, &Self.state)
-    }
   }
   
   public init(integerLiteral value: Int) {
@@ -123,21 +113,7 @@ public struct Decimal32 : CustomStringConvertible, ExpressibleByStringLiteral,
   }
   
   public init(_ value: Int = 0) { self.init(integerLiteral: value) }
-  public init<T:BinaryInteger>(_ value: T) { self.init(Int(value)) }
-  
-  public init?<T:BinaryInteger>(exactly source: T) {
-    self.init(Int(source))  // FIXME: - Proper init needed
-  }
-  
-  public init(floatLiteral value: Double) {
-    x = Self.double_to_bid32(value, Self.rounding, &Self.state)
-  }
-  
-  public init(stringLiteral value: String) {
-    let dec : Self = numberFromString(value) ?? Self.zero
-    x = dec.x
-  }
-  
+
   public init(sign: FloatingPointSign, exponentBitPattern: UInt32,
               significandDigits: [UInt8]) {
     let mantissa = significandDigits.reduce(into: 0) { $0 = $0 * 10 + Int($1) }
@@ -159,19 +135,97 @@ public struct Decimal32 : CustomStringConvertible, ExpressibleByStringLiteral,
     let sign = signOf.isSignMinus
     self = sign ? -magnitudeOf.magnitude : magnitudeOf.magnitude
   }
-  
-  //////////////////////////////////////////////////////////////////////////
-  // MARK: - Custom String Convertible compliance
-  public var description: String { string(from: self) }
-  
 }
 
-extension Decimal32 : AdditiveArithmetic, Comparable, SignedNumeric,
-                      Strideable, FloatingPoint {
+//////////////////////////////////////////////////////////////////////////
+// MARK: - Custom String Convertible compliance
+extension Decimal32 : CustomStringConvertible {
+  public var description: String { string(from: self) }
+}
+
+extension Decimal32 : CustomDebugStringConvertible {
+  public var debugDescription: String { description }
+}
+
+extension String {
+  public init(_ n: Decimal32) {
+    self = n.description
+  }
+}
+
+extension Decimal32: ExpressibleByFloatLiteral {
+  public init(floatLiteral value: Double) {
+    x = Self.double_to_bid32(value, Self.rounding, &Self.state)
+  }
+}
+
+extension Decimal32: ExpressibleByStringLiteral {
+  public init(stringLiteral value: String) {
+    let dec : Self = numberFromString(value) ?? Self.zero
+    x = dec.x
+  }
+}
+
+extension Decimal32 {
+  public init?<S: StringProtocol>(_ text:S) {
+    guard !text.isEmpty else { return nil }
+    self.init(stringLiteral: String(text))
+  }
+}
+
+extension Decimal32 : Equatable {
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    Self.equal(lhs, rhs, &Self.state)
+  }
+}
+
+extension Decimal32 : Comparable {
+  public static func < (lhs: Self, rhs: Self) -> Bool {
+    Self.lessThan(lhs, rhs, &Self.state)
+  }
+}
+
+extension Decimal32 : AdditiveArithmetic {
+  public static func + (lhs: Self, rhs: Self) -> Self {
+    Self(raw: Self.add(lhs.x, rhs.x, Self.rounding, &Self.state))
+  }
+  
+  public static func - (lhs: Self, rhs: Self) -> Self {
+    Self(raw: Self.sub(lhs.x, rhs.x, Self.rounding, &Self.state))
+  }
+}
+
+extension Decimal32 : SignedNumeric {
+  public typealias Magnitude = Decimal32
+  
+  public var magnitude: Self { Self(raw: x & ~Self.SIGN_MASK) }
+  
+  public mutating func negate() { self.x = x ^ Self.SIGN_MASK }
+  
+  public init(_ magnitude: Magnitude) {
+    self.init(bitPattern: magnitude.x)
+  }
+  
+  public init<T:BinaryInteger>(_ value: T) {
+    self.init(Int(value))
+  }
+  
+  public init?<T:BinaryInteger>(exactly source: T) {
+    self.init(Int(source))  // FIXME: - Proper init needed
+  }
+}
+
+extension Decimal32 : Strideable {
+  public func distance(to other: Self) -> Self { other - self }
+  public func advanced(by n: Self) -> Self { self + n }
+}
+
+extension Decimal32 : FloatingPoint {
   
   public mutating func round(_ rule: FloatingPointRoundingRule) {
     let dec64 = Self.bid32_to_bid64(x, &Self.state)
     let res = Self.bid64_round_integral_exact(dec64, rule, &Self.state)
+    if Self.state == .inexact { Self.state = .clearFlags }
     x = Self.bid64_to_bid32(res, rule, &Self.state)
   }
   
@@ -192,9 +246,6 @@ extension Decimal32 : AdditiveArithmetic, Comparable, SignedNumeric,
     x = Self.bid32_fma(lhs.x, rhs.x, self.x, Self.rounding, &Self.state)
   }
   
-  public func distance(to other: Self) -> Self { other - self }
-  public func advanced(by n: Self) -> Self { self + n }
-  
   //////////////////////////////////////////////////////////////////////////
   // MARK: - Basic arithmetic operations
   
@@ -204,46 +255,32 @@ extension Decimal32 : AdditiveArithmetic, Comparable, SignedNumeric,
     self < other || self == other
   }
   
-  public static func == (lhs: Self, rhs: Self) -> Bool {
-    Self.equal(lhs, rhs, &Self.state)
+  public static func * (lhs: Self, rhs: Self) -> Self {
+    Self(raw: Self.mul(lhs.x, rhs.x, Self.rounding, &Self.state))
   }
-  
-  public static func < (lhs: Self, rhs: Self) -> Bool {
-    Self.lessThan(lhs, rhs, &Self.state)
-  }
-  
-  public static func + (lhs: Self, rhs: Self) -> Self {
-    Self(raw: Self.add(lhs.x, rhs.x, Self.rounding, &Self.state))
-  }
-  
+
   public static func / (lhs: Self, rhs: Self) -> Self {
     Self(raw: Self.div(lhs.x, rhs.x, Self.rounding, &Self.state))
   }
   
-  public static func * (lhs: Self, rhs: Self) -> Self {
-    Self(raw: Self.mul(lhs.x, rhs.x, Self.rounding, &Self.state))
-  }
-  
   public static func /= (lhs: inout Self, rhs: Self)  { lhs = lhs / rhs }
   public static func *= (lhs: inout Self, rhs: Self)  { lhs = lhs * rhs }
-  public static func - (lhs: Self, rhs: Self) -> Self { lhs + (-rhs) }
-  
 }
+
+//////////////////////////////////////////////////////////////////////////
+// MARK: - Numeric State variables
 
 public extension Decimal32 {
   
-  //////////////////////////////////////////////////////////////////////////
-  // MARK: - Numeric State variables
-  
   var sign: FloatingPointSign { x & Self.SIGN_MASK != 0 ? .minus : .plus }
   
-  var magnitude: Self      { Self(raw: x & ~Self.SIGN_MASK) }
   var dpd32: Word          { Self.bid_to_dpd32(x) }
   var decimal64: UInt64    { Self.bid32_to_bid64(x, &Self.state) }
-  var decimal128: UInt128  { UInt128(Self.bid32_to_bid64(x, &Self.state))<<64 }
+  var decimal128: UInt128  { Self.bid32_to_bid128(x, &Self.state) }
   var int: Int             { Self.bid32ToInt(x, Self.rounding, &Self.state) }
   var uint: UInt           { Self.bid32ToUInt(x, Self.rounding, &Self.state) }
   var double: Double       { Self.bid32ToDouble(x, Self.rounding, &Self.state)}
+  var float: Float         { Float(double) }// FIXME: - Problem in bid32ToFloat
   var isZero: Bool         { _isZero }
   var isSignMinus: Bool    { sign == .minus }
   var isInfinite: Bool     { Self.isInfinite(x) && !isNaN }
@@ -259,9 +296,7 @@ public extension Decimal32 {
   var nextUp: Self         { Self(raw: Self.bid32_nextup(x, &Self.state)) }
   var significand: Self    { Self(raw: Self.frexp(x).res) }
   var exponent: Int        { Self.frexp(x).exp }
-  
-  mutating func negate()   { self.x = x ^ Self.SIGN_MASK }
-  
+
   func unpack() -> (negative: Bool, exp: Int, coeff: UInt32, valid: Bool) {
     return Self.unpack(bid32: x)
   }
@@ -342,10 +377,31 @@ public extension Decimal32 {
 }
 
 extension Decimal32 : DecimalFloatingPoint {
+
+  /// Only for internal use when creating generic Decimal numbers. The chief
+  /// reason for this init is to allow suppert utilities to create Decimal
+  /// numbers without needing to know details of the Decimal number layout.
+  /// Note: No checks are performed on these parameters.
+  /// - Parameters:
+  ///   - isNegative: Set to `true` if the number is negative.
+  ///   - exponent: A signed and biased base 10 exponent for the number.
+  ///   - mantissa: An unsigned integer representing the mantissa of the
+  ///               number
+  ///   - round: If non-zero, perform underflow rounding
+  public init(isNegative:Bool, exponent:Int, mantissa:UInt, round:Int = 0) {
+    let sign = isNegative ? Self.SIGN_MASK : 0
+    if round == 0 {
+      x = Self.bid32(sign, exponent, UInt32(mantissa), Self.rounding,
+                     &Self.state)
+    } else {
+      x = Self.get_BID32_UF(sign, exponent, UInt64(mantissa), round,
+                            Self.rounding, &Self.state)
+    }
+  }
   
   //////////////////////////////////////////////////////////////////////////
   // MARK: - DecimalFloatingPoint-required State variables
-  
+
   public static var exponentMaximum: Int          { MAX_EXPON }
   public static var exponentBias: Int             { EXPONENT_BIAS }
   public static var significandMaxDigitCount: Int { MAX_DIGITS }
@@ -418,6 +474,8 @@ extension Decimal32 {
   static let DEC64_EXPONENT_BIAS    = 398
   static let EXPONENT_SHIFT_SMALL64 = 53
   
+  static let DEC128_EXPONENT_BIAS   = 6176
+  
   static let BINARY_EXPONENT_BIAS  = 0x3ff
   static let BINARY_EXPONENT_MASK  = UInt64(COMB_MASK) << 32
   
@@ -468,7 +526,7 @@ extension Decimal32 {
         coeff += UInt32(bid_round_const_table(roundIndex, extra_digits))
         
         // get coeff*(2^M[extra_digits])/10^extra_digits
-        var Q : UInt128 = UInt128(w: [0, 0])
+        var Q = UInt128()
         __mul_64x64_to_128 (&Q, UInt64(coeff), bid_reciprocals10_64(extra_digits));
         
         // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-128
@@ -610,7 +668,7 @@ extension Decimal32 {
     (x & SIGN_MASK) == SIGN_MASK
   }
   
-  static public func unpack(bid32 x: Word) ->
+  static private func unpack(bid32 x: Word) ->
   (negative: Bool, exp: Int, coeff: UInt32, valid: Bool) {
     let negative = isNegative(x)
     var coeff: UInt32
@@ -668,18 +726,18 @@ extension Decimal32 {
         if !isNaN(x) {
           return (s, e, k, c, double_inf(s))
         }
-        if ((x & (UInt32(1)<<25)) != 0) { status.insert(.invalidOperation) }
+        if (x & (UInt32(1)<<25)) != 0 { status.insert(.invalidOperation) }
         let high = ((x & 0xFFFFF) > 999999) ? 0 : UInt64(x) << 44
         return (s, e, k, c, double_nan(s, high, 0))
       }
-      e = Int((x >> 21) & ((UInt32(1)<<8)-1)) - 101
+      e = Int((x >> 21) & ((UInt32(1)<<8)-1)) - EXPONENT_BIAS
       c = UInt64((UInt32(1)<<23) + (x & ((UInt32(1)<<21)-1)))
       if UInt(c) > MAX_NUMBER {
         return (s, e, k, c, double_zero(s))
       }
       k = 0
     } else {
-      e = Int((x >> 23) & ((UInt32(1)<<8)-1)) - 101
+      e = Int((x >> 23) & ((UInt32(1)<<8)-1)) - EXPONENT_BIAS
       c = UInt64(x) & (UInt64(1)<<23 - 1)
       if c == 0 { return (s, e, k, c, double_zero(s)) }
       k = clz(UInt32(c)) - 8
@@ -789,6 +847,30 @@ extension Decimal32 {
     
     res |= nanb
     return res
+  }
+  
+  /*
+   * Takes a BID32 as input and converts it to a BID128 and returns it.
+   */
+  static func bid32_to_bid128(_ x:UInt32, _ pfpsc: inout Status) -> UInt128 {
+    let (sign_x, exponent_x, coefficient_x, ok) = unpack(bid32: x)
+    if !ok {
+      if isInfinite(x){
+        if isSNaN(x) {
+          pfpsc.insert(.invalidOperation)
+        }
+        var res = UInt128()
+        let low = UInt64(coefficient_x & 0x000fffff)
+        __mul_64x128_low(&res, low, bid_power10_table_128(27))
+        let high = res.high | ((UInt64(coefficient_x) << 32) &
+                               0xfc00000000000000)
+        return UInt128(high: high, low: low)
+      }
+    }
+    let tmp = UInt64((exponent_x + DEC128_EXPONENT_BIAS - EXPONENT_BIAS) << 49)
+    let sgn = sign_x ? SIGN_MASK : 0
+    return UInt128(high: (UInt64(sgn) << 32) | tmp,
+                   low: UInt64(coefficient_x))
   }
   
   /*
@@ -928,10 +1010,9 @@ extension Decimal32 {
                  rmode, &pfpsf)
   }
   
-  /*****************************************************************************
+  /****************************************************************************
    *  BID64_round_integral_exact
-   ****************************************************************************/
-  
+   ***************************************************************************/
   static func bid64_round_integral_exact(_ x: UInt64, _ rmode: Rounding,
                                          _ pfpsf: inout Status) -> UInt64 {
     var res = UInt64(0xbaddbaddbaddbadd)
@@ -1499,7 +1580,8 @@ extension Decimal32 {
       }
     }
     
-    let sign_ab = sign_a != sign_b ? Int64(-1) : Int64()
+    var sign_ab = sign_a != sign_b ? Int64(SIGN_MASK)<<32 : 0
+    sign_ab = sign_ab >> 63
     let CB = UInt64(bitPattern: (Int64(coefficient_b) + sign_ab) ^ sign_ab)
     
     let SU = UInt64(coefficient_a) * bid_power10_table_128(diff_dec_expon).low
@@ -1562,6 +1644,13 @@ extension Decimal32 {
       }
     }
     return bid32(sign, exponent_b+extra_digits, Word(Q), rmode, &status)
+  }
+  
+  static func sub (_ x:UInt32, _ y:UInt32, _ rmode:Rounding,
+                   _ status:inout Status) -> UInt32 {
+    var y = y
+    if !isNaN(y) { y ^= SIGN_MASK }
+    return add(x, y, rmode, &status)
   }
   
   static func mul (_ x:UInt32, _ y:UInt32, _ rmode:Rounding,
@@ -3343,16 +3432,27 @@ extension Decimal32 {
     UInt128(w: [lo << c, (hi << c) + (lo>>(64-c))])
   }
   
+  // Shift 4-part 2^196 * x3 + 2^128 * x2 + 2^64 * x1 + x0
+  // right by "c" bits (must have c < 64)
+  static func srl256_short(_ x3: inout UInt64, _ x2: inout UInt64,
+                           _ x1: inout UInt64, _ x0: inout UInt64,
+                           _ c:Int) {
+      x0 = (x1 << (64 - c)) + (x0 >> c)
+      x1 = (x2 << (64 - c)) + (x1 >> c)
+      x2 = (x3 << (64 - c)) + (x2 >> c)
+      x3 = x3 >> c
+  }
+  
   // Compare "<" two 2-part unsigned integers
   @inlinable static func lt128(_ x_hi:UInt64, _ x_lo:UInt64,
                                _ y_hi:UInt64, _ y_lo:UInt64) -> Bool {
-    (((x_hi) < (y_hi)) || (((x_hi) == (y_hi)) && ((x_lo) < (y_lo))))
+    (x_hi < y_hi) || ((x_hi == y_hi) && (x_lo < y_lo))
   }
   
   // Likewise "<="
   @inlinable static func le128(_ x_hi:UInt64, _ x_lo:UInt64,
                                _ y_hi:UInt64, _ y_lo:UInt64) -> Bool {
-    (((x_hi) < (y_hi)) || (((x_hi) == (y_hi)) && ((x_lo) <= (y_lo))))
+    (x_hi < y_hi) || ((x_hi == y_hi) && (x_lo <= y_lo))
   }
   
   @inlinable static func __unsigned_compare_ge_128(_ A:UInt128,
@@ -3469,14 +3569,134 @@ extension Decimal32 {
     c_prov = c_prov & ((1 << 52) - 1);
     
     // Set the inexact and underflow flag as appropriate
-    
     if (z.w[4] != 0) || (z.w[3] != 0) {
       pfpsf.insert(.inexact)
     }
+    
     // Package up the result as a binary floating-point number
     return double(s, e_out, UInt64(c_prov))
   }
-
+  
+  static func binary32_ovf(_ s:Int) -> Float {
+    if ((Self.rounding==BID_ROUNDING_TO_ZERO) ||
+        (Self.rounding==((s != 0) ? BID_ROUNDING_UP : BID_ROUNDING_DOWN))) {
+      return s != 0 ? -Float.greatestFiniteMagnitude :
+                      Float.greatestFiniteMagnitude
+    } else {
+      return s != 0 ? -Float.infinity : Float.infinity
+    }
+  }
+  
+  static func bid32ToFloat (_ x: UInt32, _ rmode: Rounding,
+                            _ pfpsf: inout Status) -> Float {
+    var (s, e, coeff, high, value) = unpack(bid32:x, &pfpsf)
+    if let value = value { return Float(value) }
+    
+    // Correct to 2^112 <= c < 2^113 with corresponding exponent adding 113-24=89
+    // Thus a shift of 25 given that we've already upacked in c.high
+    let c = UInt128(high: high << 25, low: 0)
+    let k = coeff + 89
+    
+    // Check for "trivial" overflow, when 10^e * 1 > 2^{sci_emax+1}, just to
+    // keep tables smaller (it would be intercepted later otherwise).
+    //
+    // (Note that we may have normalized the coefficient, but we have a
+    //  corresponding exponent postcorrection to account for; this can
+    //  afford to be conservative anyway.)
+    //
+    // We actually check if e >= ceil((sci_emax + 1) * log_10(2))
+    // which in this case is e >= ceil(128 * log_10(2)) = 39
+    if e >= 39 {
+      pfpsf.formUnion([.overflow, .inexact])
+      return binary32_ovf(s)
+    }
+    // Also check for "trivial" underflow, when 10^e * 2^113 <= 2^emin * 1/4,
+    // so test e <= floor((emin - 115) * log_10(2))
+    // In this case just fix ourselves at that value for uniformity.
+    //
+    // This is important not only to keep the tables small but to maintain the
+    // testing of the round/sticky words as a correct rounding method
+    if e <= -80 {
+      e = -80
+    }
+    
+    // Look up the breakpoint and approximate exponent
+    let m_min = Tables.bid_breakpoints_binary32[e+80];
+    var e_out = Tables.bid_exponents_binary32[e+80] - k;
+    
+    // Choose provisional exponent and reciprocal multiplier based on breakpoint
+    var r = UInt256()
+    let rn: UInt128
+    if c.high <= m_min.high {
+      rn = Tables.bid_multipliers1_binary32[e+80]
+    } else {
+      rn = Tables.bid_multipliers2_binary32[e+80]
+      e_out = e_out + 1
+    }
+//    print("Index = \(e+80) -> " + String(rn, radix: 16))
+    r.w[0] = rn.low; r.w[1] = rn.high
+    
+    // Do the reciprocal multiplication
+    var z = UInt384()
+    __mul_64x256_to_320(&z, c.high, r)
+    z.w[5]=z.w[4]; z.w[4]=z.w[3]; z.w[3]=z.w[2]; z.w[2]=z.w[1]; z.w[1]=z.w[0]
+    z.w[0]=0
+    
+    // Check for exponent underflow and compensate by shifting the product
+    // Cut off the process at precision+2, since we can't really shift further
+    if e_out < 1 {
+      var d = 1 - e_out
+      if d > 26 {
+        d = 26
+      }
+      e_out = 1
+      var zw5 = z.w[5], zw4 = z.w[4], zw3 = z.w[3], zw2 = z.w[2]
+      srl256_short(&zw5, &zw4, &zw3, &zw2, d)
+      z.w[5] = zw5; z.w[4] = zw4; z.w[3] = zw3; z.w[2] = zw2
+    }
+    var c_prov = z.w[5]
+    
+    // Round using round-sticky words
+    // If we spill into the next binade, correct
+    // Flag underflow where it may be needed even for |result| = SNN
+    let ind = roundboundIndex(rmode, s != 0, Int(c_prov))
+    if lt128(bid_roundbound_128[ind].high,
+             bid_roundbound_128[ind].low, z.w[4], z.w[3]) {
+      c_prov = c_prov + 1
+      if c_prov == (1 << 24) {
+        c_prov = 1 << 23
+        e_out = e_out + 1
+      }
+    }
+    
+    // Check for overflow
+    if e_out >= 255 {
+      pfpsf.insert(.overflow)
+      return binary32_ovf(s)
+    }
+    
+    // Modify exponent for a tiny result, otherwise lop the implicit bi
+    if c_prov < (1 << 23) {
+      e_out = 0
+    } else {
+      c_prov = c_prov & ((1 << 23) - 1)
+    }
+    
+    // Set the inexact and underflow flag as appropriate (tiny after rounding)
+    if (z.w[4] != 0) || (z.w[3] != 0) {
+      pfpsf.insert(.inexact)
+      if e_out == 0 {
+        pfpsf.insert(.underflow)
+      }
+    }
+    
+    // Package up the result as a binary floating-point number
+    return binary32(s, e_out, c_prov)
+  }
+  
+  static func binary32(_ s: Int, _ e:Int, _ c:UInt64) -> Float {
+    Float(bitPattern: (UInt32(s) << 31) + (UInt32(e) << 23) + UInt32(c))
+  }
   
   /****************************************************************************
    *  BID32_to_uint64_int
@@ -3642,7 +3862,10 @@ extension Decimal32 {
     
     // check for NaN or Infinity and unpack `x`
     let (x_negative, x_exp, C1, valid) = unpack(bid32: x)
-    if !valid { pfpsc.insert(.invalidOperation); return Int.min }
+    if !valid {
+      if C1 == 0 { return 0 }
+      pfpsc.insert(.invalidOperation); return Int.min
+    }
     
     // check for zeros (possibly from non-canonical values)
     if C1 == 0 {

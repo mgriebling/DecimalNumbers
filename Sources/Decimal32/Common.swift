@@ -1,9 +1,20 @@
-//
-//  Common.swift
-//  
-//
-//  Created by Mike Griebling on 05.05.2023.
-//
+/**
+Copyright © 2023 Computer Inspirations. All rights reserved.
+Portions are Copyright (c) 2014 - 2021 Apple Inc. and the
+Swift project authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 ///
 /// Groups together algorithms that can be used by all Decimalxx variants
@@ -303,7 +314,7 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
       T.state.insert(.inexact)
     }
     return T(isNegative: isNegative, exponent: add_expon + T.exponentBias,
-             mantissa: coefficient_x, round: 0)
+             mantissa: UInt(coefficient_x), round: 0)
   }
   
   if c != "e" {
@@ -350,7 +361,7 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
     }
   }
   return T(isNegative: isNegative, exponent: expon_x,
-           mantissa: coefficient_x, round: rounded)
+           mantissa: UInt(coefficient_x), round: rounded)
 }
 
 /// Returns x^exp where x = *num*.
