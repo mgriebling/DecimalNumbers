@@ -42,12 +42,22 @@ public struct Decimal32 {
   
   var x: IntegerDecimal32
   
-  func add(_ y: Decimal32) -> Decimal32 {
-    if self.x.isInfinite { return self }
-    if y.x.isInfinite { return y }
-    let signx = self.x.sign
-    let signy = y.x.sign
+  func add(_ y: Self) -> Self {
+    let (signX, exponentX, mantissaX, validX) = self.x.unpack()
+    let (signY, exponentY, mantissaY, validY) = y.x.unpack()
+    if validX && validY {
+
+    }
+    
+    // Deal with illegal numbers
+    if !validX { return self }
+    if !validY { return y }
+
     return self
+  }
+  
+  func test() {
+    
   }
   
 }

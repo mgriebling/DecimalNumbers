@@ -133,13 +133,29 @@ extension IntegerDecimalField {
   mutating func set(exponent: Int, mantissa: Mantissa) {
     if mantissa > highMantissaBit {
       // small mantissa
-      setBits(exponentSMBits, bits: exponent+exponentBias)
+      setBits(exponentSMBits, bits: exponent + exponentBias)
       setBits(smallMantissaBits, bits: Int(mantissa) - highMantissaBit)
     } else {
       // large mantissa
-      setBits(exponentLMBits, bits: exponent+exponentBias)
+      setBits(exponentLMBits, bits: exponent + exponentBias)
       setBits(largeMantissaBits, bits: Int(mantissa))
     }
+  }
+  
+  /// Return `self's` pieces all at once
+  func unpack() ->
+    (sign: FloatingPointSign, exponent: Int, mantissa: Mantissa, valid: Bool) {
+      let exponent: Int, mantissa: Mantissa
+      if isSmallMantissa {
+        // small mantissa
+        exponent = getBits(exponentSMBits) - exponentBias
+        mantissa = Mantissa(getBits(smallMantissaBits) + highMantissaBit)
+      } else {
+        // large mantissa
+        exponent = getBits(exponentLMBits) - exponentBias
+        mantissa = Mantissa(getBits(largeMantissaBits))
+      }
+      return (self.sign, exponent, mantissa, self.isValid)
   }
   
   /// Handy routines for testing different aspects of the number
