@@ -18,6 +18,250 @@ limitations under the License.
 
 ///
 /// Groups together algorithms that can be used by all Decimalxx variants
+///
+
+// MARK: - Generic Integer Decimal Field Type
+
+protocol IntegerDecimalField {
+  
+  associatedtype RawDataFields : UnsignedInteger & FixedWidthInteger
+  associatedtype Mantissa : UnsignedInteger
+  
+  var data: RawDataFields { get set }
+  
+  //////////////////////////////////////////////////////////////////
+  /// Initializers
+  
+  /// Initialize with a raw data word
+  init(_ word: RawDataFields)
+  
+  /// Initialize with sign, exponent, and mantissa
+  init(sign: FloatingPointSign, exponent: Int, mantissa: Mantissa)
+  
+  //////////////////////////////////////////////////////////////////
+  /// Essential data to extract or update from the fields
+  
+  /// Sign of the number
+  var sign: FloatingPointSign { get set }
+  
+  /// Unbiased signed exponent of the number
+  var exponent: Int { get }
+  
+  /// Unsigned mantissa integer
+  var mantissa: Mantissa { get }
+  
+  /// Setting requires both the mantissa and exponent so that a
+  /// decision can be made on whether the mantissa is small or large.
+  mutating func set(exponent: Int, mantissa: Mantissa)
+  
+  //////////////////////////////////////////////////////////////////
+  /// Decimal number definitions
+  var signBit: ClosedRange<Int> { get }
+  var specialBits: ClosedRange<Int> { get }
+  
+  var exponentBias: Int    { get }
+  var maximumExponent: Int { get } // unbiased & normal
+  var minimumExponent: Int { get } // unbiased & normal
+  var numberOfDigits:  Int { get }
+  
+  var largestNumber: Mantissa { get }
+  
+  // For large mantissa
+  var exponentLMBits: ClosedRange<Int> { get }
+  var largeMantissaBits: ClosedRange<Int> { get }
+  
+  // For small mantissa
+  var exponentSMBits: ClosedRange<Int> { get }
+  var smallMantissaBits: ClosedRange<Int> { get }
+}
+
+///
+/// Free functionality when complying with IntegerDecimalField
+extension IntegerDecimalField {
+  
+  var highMantissaBit: Int { 1 << (smallMantissaBits.upperBound+3) }
+  
+  /// These bit fields can be predetermined just from the size of
+  /// the number type `RawDataFields` `bitWidth`
+  var maxBit: Int { RawDataFields.bitWidth - 1 }
+  
+  var signBit:     ClosedRange<Int> { maxBit ... maxBit }
+  var specialBits: ClosedRange<Int> { maxBit-2 ... maxBit-1 }
+  
+  func getBits(_ range: ClosedRange<Int>) -> Int {
+    guard data.bitWidth > range.upperBound else { return 0 }
+    let mask = (RawDataFields(1) << (range.upperBound - range.lowerBound)) - 1
+    let sdata = (data >> range.lowerBound) & mask
+    return Int(sdata)
+  }
+  
+  mutating func setBits(_ range: ClosedRange<Int>, bits: Int) {
+    guard data.bitWidth > range.upperBound else { return }
+    let width = range.upperBound - range.lowerBound
+    let mask = (RawDataFields(1) << width) - 1
+    let mbits = RawDataFields(bits) & mask    // limit `bits` size
+    let smask = ~(mask << range.lowerBound)   // inverted mask
+    data = (data & smask) | (mbits << range.lowerBound)
+  }
+  
+  var sign: FloatingPointSign {
+    get {
+      let s = getBits(signBit)
+      return s == 0 ? .plus : .minus
+    }
+    set {
+      setBits(signBit, bits: newValue == .minus ? 1 : 0)
+    }
+  }
+  
+  var exponent: Int {
+    if isSmallMantissa {
+      return getBits(exponentSMBits) - exponentBias
+    } else {
+      return getBits(exponentLMBits) - exponentBias
+    }
+  }
+  
+  var mantissa: Mantissa {
+    if isSmallMantissa {
+      return Mantissa(getBits(smallMantissaBits) + highMantissaBit)
+    } else {
+      return Mantissa(getBits(largeMantissaBits))
+    }
+  }
+  
+  mutating func set(exponent: Int, mantissa: Mantissa) {
+    if mantissa > highMantissaBit {
+      // small mantissa
+      setBits(exponentSMBits, bits: exponent+exponentBias)
+      setBits(smallMantissaBits, bits: Int(mantissa) - highMantissaBit)
+    } else {
+      // large mantissa
+      setBits(exponentLMBits, bits: exponent+exponentBias)
+      setBits(largeMantissaBits, bits: Int(mantissa))
+    }
+  }
+  
+  /// Handy routines for testing different aspects of the number
+  
+  var isSmallMantissa: Bool {
+    let range = specialBits.lowerBound...specialBits.upperBound
+    return isSpecial && getBits(range) != 0b11
+  }
+  
+  var isSpecial: Bool {
+    getBits(specialBits) == 0b11
+  }
+  
+  var isInfinite: Bool {
+    let range = signBit.lowerBound-5...signBit.lowerBound-1
+    return getBits(range) == 0x1_1110
+  }
+  
+  var isNaN: Bool {
+    let range = signBit.lowerBound-6...signBit.lowerBound-1
+    return getBits(range) == 0x1_1111_0
+  }
+  
+  var isSNaN: Bool {
+    let range = signBit.lowerBound-6...signBit.lowerBound-1
+    return getBits(range) == 0x1_1111_1
+  }
+  
+  var isValid: Bool {
+    let range = signBit.lowerBound-4...signBit.lowerBound-1
+    return getBits(range) != 0x1_111
+  }
+  
+  var isZero: Bool {
+    guard isValid else { return false }
+    return mantissa == 0 || mantissa > largestNumber
+  }
+  
+}
+
+// MARK: - Extended UInt Definitions
+// Use these for now
+struct UInt512 { var w = [UInt64](repeating: 0, count: 8) }
+struct UInt384 { var w = [UInt64](repeating: 0, count: 6) }
+struct UInt256 { var w = [UInt64](repeating: 0, count: 4) }
+struct UInt192 { var w = [UInt64](repeating: 0, count: 3) }
+
+// MARK: - Status and Rounding Type Definitions
+
+public typealias Rounding = FloatingPointRoundingRule
+let BID_ROUNDING_UP = Rounding.up
+let BID_ROUNDING_DOWN = Rounding.down
+let BID_ROUNDING_TO_ZERO = Rounding.towardZero
+let BID_ROUNDING_TO_NEAREST = Rounding.toNearestOrEven
+let BID_ROUNDING_TIES_AWAY = Rounding.toNearestOrAwayFromZero
+
+public struct Status: OptionSet, CustomStringConvertible {
+    public let rawValue: Int32
+    
+    /* IEEE extended flags only */
+    private static let DEC_Conversion_syntax    = 0x00000001
+    private static let DEC_Division_by_zero     = 0x00000002
+    private static let DEC_Division_impossible  = 0x00000004
+    private static let DEC_Division_undefined   = 0x00000008
+    private static let DEC_Insufficient_storage = 0x00000010 /* [when malloc fails]  */
+    private static let DEC_Inexact              = 0x00000020
+    private static let DEC_Invalid_context      = 0x00000040
+    private static let DEC_Invalid_operation    = 0x00000080
+    private static let DEC_Lost_digits          = 0x00000100
+    private static let DEC_Overflow             = 0x00000200
+    private static let DEC_Clamped              = 0x00000400
+    private static let DEC_Rounded              = 0x00000800
+    private static let DEC_Subnormal            = 0x00001000
+    private static let DEC_Underflow            = 0x00002000
+    
+    public static let conversionSyntax    = Status(rawValue: Int32(DEC_Conversion_syntax))
+    public static let divisionByZero      = Status(rawValue: Int32(DEC_Division_by_zero))
+    public static let divisionImpossible  = Status(rawValue: Int32(DEC_Division_impossible))
+    public static let divisionUndefined   = Status(rawValue: Int32(DEC_Division_undefined))
+    public static let insufficientStorage = Status(rawValue: Int32(DEC_Insufficient_storage))
+    public static let inexact             = Status(rawValue: Int32(DEC_Inexact))
+    public static let invalidContext      = Status(rawValue: Int32(DEC_Invalid_context))
+    public static let lostDigits          = Status(rawValue: Int32(DEC_Lost_digits))
+    public static let invalidOperation    = Status(rawValue: Int32(DEC_Invalid_operation))
+    public static let overflow            = Status(rawValue: Int32(DEC_Overflow))
+    public static let clamped             = Status(rawValue: Int32(DEC_Clamped))
+    public static let rounded             = Status(rawValue: Int32(DEC_Rounded))
+    public static let subnormal           = Status(rawValue: Int32(DEC_Subnormal))
+    public static let underflow           = Status(rawValue: Int32(DEC_Underflow))
+    public static let clearFlags          = Status([])
+    
+    public static let errorFlags = Status(rawValue: Int32(DEC_Division_by_zero | DEC_Overflow |
+        DEC_Underflow | DEC_Conversion_syntax | DEC_Division_impossible |
+        DEC_Division_undefined | DEC_Insufficient_storage | DEC_Invalid_context | DEC_Invalid_operation))
+    public static let informationFlags = Status(rawValue: Int32(DEC_Clamped | DEC_Rounded |
+        DEC_Inexact | DEC_Lost_digits))
+    
+    public init(rawValue: Int32) { self.rawValue = rawValue }
+    
+    public var hasError: Bool { !Status.errorFlags.intersection(self).isEmpty }
+    public var hasInfo: Bool { !Status.informationFlags.intersection(self).isEmpty }
+    
+    public var description: String {
+        var str = ""
+        if self.contains(.conversionSyntax)    { str += "Conversion syntax, "}
+        if self.contains(.divisionByZero)      { str += "Division by zero, " }
+        if self.contains(.divisionImpossible)  { str += "Division impossible, "}
+        if self.contains(.divisionUndefined)   { str += "Division undefined, "}
+        if self.contains(.insufficientStorage) { str += "Insufficient storage, " }
+        if self.contains(.inexact)             { str += "Inexact number, " }
+        if self.contains(.invalidContext)      { str += "Invalid context, " }
+        if self.contains(.invalidOperation)    { str += "Invalid operation, " }
+        if self.contains(.lostDigits)          { str += "Lost digits, " }
+        if self.contains(.overflow)            { str += "Overflow, " }
+        if self.contains(.clamped)             { str += "Clamped, " }
+        if self.contains(.rounded)             { str += "Rounded, " }
+        if self.contains(.subnormal)           { str += "Subnormal, " }
+        if self.contains(.underflow)           { str += "Underflow, " }
+        if str.hasSuffix(", ") { str.removeLast(2) }
+        return str
+    }
+}
 
 // MARK: - Common Utility Functions
 
@@ -314,7 +558,7 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
       T.state.insert(.inexact)
     }
     return T(isNegative: isNegative, exponent: add_expon + T.exponentBias,
-             mantissa: UInt(coefficient_x), round: 0)
+             mantissa: coefficient_x, round: 0)
   }
   
   if c != "e" {
@@ -360,8 +604,8 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
       coefficient_x-=1
     }
   }
-  return T(isNegative: isNegative, exponent: expon_x,
-           mantissa: UInt(coefficient_x), round: rounded)
+  return T(isNegative: isNegative, exponent: expon_x, mantissa: coefficient_x,
+           round: rounded)
 }
 
 /// Returns x^exp where x = *num*.

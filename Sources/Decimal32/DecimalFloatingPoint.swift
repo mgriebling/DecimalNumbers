@@ -63,7 +63,7 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   ///   - mantissa: An unsigned integer representing the mantissa of the
   ///               number
   ///   - round: If non-zero, perform underflow rounding
-  init(isNegative:Bool, exponent:Int, mantissa:UInt, round:Int)
+  init(isNegative:Bool, exponent:Int, mantissa:Int, round:Int)
   
   /// Initialize from raw Binary Integer Decimal (BID) or
   /// Densely Packed Decimal (DPD) encoded 32-bit integers.
