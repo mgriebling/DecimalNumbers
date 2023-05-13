@@ -34,7 +34,7 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   /// A type that represents the raw unsigned integer encoding
   associatedtype BitPattern : UnsignedInteger
   
-  /// Creates a new instance from the specified sign and bit patterns.
+  /// Creates a new instance from the specified sign and significant digits.
   ///
   /// The values passed as `exponentBitPattern` is interpreted in the
   /// binary interchange format defined by the [IEEE 754 specification][spec].
@@ -54,6 +54,26 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   init(sign: FloatingPointSign, exponentBitPattern: Self.RawExponent,
        significandDigits: [UInt8])
   
+  /// Creates a new instance from the specified sign and bit patterns.
+  ///
+  /// The values passed as `exponentBitPattern` is interpreted in the
+  /// binary interchange format defined by the [IEEE 754 specification][spec].
+  ///
+  /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
+  ///
+  /// The `significandDigits` are the single-digit-per-element, big-endian
+  /// decimal digits of the number.  For example, the number [3, 1, 4,]
+  /// represents a significand of `314`.
+  ///
+  /// - Parameters:
+  ///   - sign: The sign of the new value.
+  ///   - exponentBitPattern: The bit pattern to use for the exponent field of
+  ///     the new value.
+  ///   - significandBitPattern: The binary-coded decimal digits, one per UInt8
+  ///     instance of the new value.
+  init(sign: FloatingPointSign, exponentBitPattern: Self.RawExponent,
+       significantBitPattern: Self.BitPattern)
+  
   /// Only for internal use when creating generic Decimal numbers. The chief
   /// reason for this init is to allow suppert utilities to create Decimal
   /// numbers without needing to know details of the Decimal number layout.
@@ -63,7 +83,7 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   ///   - mantissa: An unsigned integer representing the mantissa of the
   ///               number
   ///   - round: If non-zero, perform underflow rounding
-  init(isNegative:Bool, exponent:Int, mantissa:Int, round:Int)
+  // init(isNegative:Bool, exponent:Int, mantissa:Int, round:Int)
   
   /// Initialize from raw Binary Integer Decimal (BID) or
   /// Densely Packed Decimal (DPD) encoded 32-bit integers.
@@ -76,7 +96,7 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   /// with more trailing zeros in its significand bit pattern.
   ///
   /// - Parameter value: A floating-point value to be converted.
-  init<Source>(_ value: Source) where Source : DecimalFloatingPoint
+  init<Source:DecimalFloatingPoint>(_ value: Source)
   
   /// Creates a new instance from the given value, if it can be represented
   /// exactly.
@@ -86,7 +106,7 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   /// represented exactly if its payload cannot be encoded exactly.
   ///
   /// - Parameter value: A floating-point value to be converted.
-  init?<Source>(exactly value: Source) where Source : DecimalFloatingPoint
+  init?<Source:DecimalFloatingPoint>(exactly value: Source)
   
   /// The maximum value of the `exponent` for normal, finite values
   /// with the bias removed.
@@ -165,14 +185,14 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   /// BID. Converters to both formats are also available.
   var isBIDFormat: Bool { get }
   
-  // FIXME: - Discussion on how to do rounding and state tracking
-  /// Class-wide setting for how numbers will be rounded in calculations.
-  static var rounding: Rounding { get set }
-  
-  /// Class-wide setting for the resultant state from a series of
-  /// calculations.  The `state` can be cleared with
-  /// `Self.state = Status.clearFlags`.
-  static var state: Status { get set }
+//  // FIXME: - Discussion on how to do rounding and state tracking
+//  /// Class-wide setting for how numbers will be rounded in calculations.
+//  static var rounding: Rounding { get set }
+//  
+//  /// Class-wide setting for the resultant state from a series of
+//  /// calculations.  The `state` can be cleared with
+//  /// `Self.state = Status.clearFlags`.
+//  static var state: Status { get set }
   
   /// The number of bits required to represent the value's significand.
   ///
@@ -190,11 +210,11 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   ///   decimal, and `x.significandDigitCount` is 7.
   var significandDigitCount: Int { get }
   
-  /// Creates a Nan Decimal Number with a number `n` payload.
-  static func nan(with n: Int) -> Self
+//  /// Creates a Nan Decimal Number with a number `n` payload.
+//  static func nan(with n: Int) -> Self
   
   /// Returns the components of the Decimal number
-  func unpack() -> (negative: Bool, exp: Int, coeff: UInt32, valid: Bool)
+  func unpack() -> (sign:FloatingPointSign, exp:Int, coeff:BitPattern, valid:Bool)
 }
 
 extension DecimalFloatingPoint {

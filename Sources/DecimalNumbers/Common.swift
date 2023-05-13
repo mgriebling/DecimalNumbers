@@ -16,13 +16,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+import UInt128
+
+extension UInt128 {
+  
+  public init(w: [UInt64]) {
+    let high = UInt128.High(w[1])
+    let low  = UInt128.Low(w[0])
+    self.init(high: high, low: low)
+  }
+  
+}
+
 ///
 /// Groups together algorithms that can be used by all Decimalxx variants
 ///
 
-// MARK: - Generic Integer Decimal Field Type
+// MARK: - Generic Integer Decimal Type
 
-protocol IntegerDecimalField {
+public protocol IntegerDecimal : Codable, Hashable {
   
   associatedtype RawDataFields : UnsignedInteger & FixedWidthInteger
   associatedtype Mantissa : UnsignedInteger
@@ -55,38 +67,46 @@ protocol IntegerDecimalField {
   mutating func set(exponent: Int, mantissa: Mantissa)
   
   //////////////////////////////////////////////////////////////////
+  /// Special number definitions
+  static var infinite: Self { get }
+  static var snan: Self { get }
+  static var zero: Self { get }
+  
+  static func nan(_ payload: Int) -> Self
+  
+  //////////////////////////////////////////////////////////////////
   /// Decimal number definitions
-  var signBit: ClosedRange<Int> { get }
-  var specialBits: ClosedRange<Int> { get }
+  static var signBit: ClosedRange<Int> { get }
+  static var specialBits: ClosedRange<Int> { get }
   
-  var exponentBias: Int    { get }
-  var maximumExponent: Int { get } // unbiased & normal
-  var minimumExponent: Int { get } // unbiased & normal
-  var numberOfDigits:  Int { get }
+  static var exponentBias: Int    { get }
+  static var maximumExponent: Int { get } // unbiased & normal
+  static var minimumExponent: Int { get } // unbiased & normal
+  static var numberOfDigits:  Int { get }
   
-  var largestNumber: Mantissa { get }
+  static var largestNumber: Mantissa { get }
   
   // For large mantissa
-  var exponentLMBits: ClosedRange<Int> { get }
-  var largeMantissaBits: ClosedRange<Int> { get }
+  static var exponentLMBits: ClosedRange<Int> { get }
+  static var largeMantissaBits: ClosedRange<Int> { get }
   
   // For small mantissa
-  var exponentSMBits: ClosedRange<Int> { get }
-  var smallMantissaBits: ClosedRange<Int> { get }
+  static var exponentSMBits: ClosedRange<Int> { get }
+  static var smallMantissaBits: ClosedRange<Int> { get }
 }
 
 ///
 /// Free functionality when complying with IntegerDecimalField
-extension IntegerDecimalField {
+extension IntegerDecimal {
   
-  var highMantissaBit: Int { 1 << (smallMantissaBits.upperBound+3) }
+  static var highMantissaBit: Int { 1 << (smallMantissaBits.upperBound+3) }
   
   /// These bit fields can be predetermined just from the size of
   /// the number type `RawDataFields` `bitWidth`
-  var maxBit: Int { RawDataFields.bitWidth - 1 }
+  static var maxBit: Int { RawDataFields.bitWidth - 1 }
   
-  var signBit:     ClosedRange<Int> { maxBit ... maxBit }
-  var specialBits: ClosedRange<Int> { maxBit-2 ... maxBit-1 }
+  static var signBit:     ClosedRange<Int> { maxBit ... maxBit }
+  static var specialBits: ClosedRange<Int> { maxBit-2 ... maxBit-1 }
   
   func getBits(_ range: ClosedRange<Int>) -> Int {
     guard data.bitWidth > range.upperBound else { return 0 }
@@ -106,39 +126,40 @@ extension IntegerDecimalField {
   
   var sign: FloatingPointSign {
     get {
-      let s = getBits(signBit)
+      let s = getBits(Self.signBit)
       return s == 0 ? .plus : .minus
     }
     set {
-      setBits(signBit, bits: newValue == .minus ? 1 : 0)
+      setBits(Self.signBit, bits: newValue == .minus ? 1 : 0)
     }
   }
   
   var exponent: Int {
     if isSmallMantissa {
-      return getBits(exponentSMBits) - exponentBias
+      return getBits(Self.exponentSMBits) - Self.exponentBias
     } else {
-      return getBits(exponentLMBits) - exponentBias
+      return getBits(Self.exponentLMBits) - Self.exponentBias
     }
   }
   
   var mantissa: Mantissa {
     if isSmallMantissa {
-      return Mantissa(getBits(smallMantissaBits) + highMantissaBit)
+      return Mantissa(getBits(Self.smallMantissaBits) + Self.highMantissaBit)
     } else {
-      return Mantissa(getBits(largeMantissaBits))
+      return Mantissa(getBits(Self.largeMantissaBits))
     }
   }
   
   mutating func set(exponent: Int, mantissa: Mantissa) {
-    if mantissa > highMantissaBit {
+    if mantissa > Self.highMantissaBit {
       // small mantissa
-      setBits(exponentSMBits, bits: exponent + exponentBias)
-      setBits(smallMantissaBits, bits: Int(mantissa) - highMantissaBit)
+      setBits(Self.exponentSMBits, bits: exponent + Self.exponentBias)
+      setBits(Self.smallMantissaBits, bits: Int(mantissa) -
+              Self.highMantissaBit)
     } else {
       // large mantissa
-      setBits(exponentLMBits, bits: exponent + exponentBias)
-      setBits(largeMantissaBits, bits: Int(mantissa))
+      setBits(Self.exponentLMBits, bits: exponent + Self.exponentBias)
+      setBits(Self.largeMantissaBits, bits: Int(mantissa))
     }
   }
   
@@ -148,53 +169,126 @@ extension IntegerDecimalField {
       let exponent: Int, mantissa: Mantissa
       if isSmallMantissa {
         // small mantissa
-        exponent = getBits(exponentSMBits) - exponentBias
-        mantissa = Mantissa(getBits(smallMantissaBits) + highMantissaBit)
+        exponent = getBits(Self.exponentSMBits) - Self.exponentBias
+        mantissa = Mantissa(getBits(Self.smallMantissaBits) +
+                            Self.highMantissaBit)
       } else {
         // large mantissa
-        exponent = getBits(exponentLMBits) - exponentBias
-        mantissa = Mantissa(getBits(largeMantissaBits))
+        exponent = getBits(Self.exponentLMBits) - Self.exponentBias
+        mantissa = Mantissa(getBits(Self.largeMantissaBits))
       }
       return (self.sign, exponent, mantissa, self.isValid)
   }
   
-  /// Handy routines for testing different aspects of the number
+  func nanQuiet() -> Mantissa {
+    let quietMask = ~(Mantissa(1) << (Self.signBit.lowerBound-6))
+    return Mantissa(data) & quietMask
+  }
+  
+  //////////////////////////////////////////////////////////////////
+  /// Special number definitions
+  static var infinite: Self {
+    Self(sign:.plus, exponent:0xF<<4 - Self.exponentBias, mantissa:0)
+  }
+  
+  static var snan: Self {
+    Self(sign: .plus, exponent: 0x1F<<3 - Self.exponentBias, mantissa: 0)
+  }
+  
+  static var zero: Self {
+    Self(sign: .plus, exponent: 0, mantissa: 0)
+  }
+  
+  static func nan(_ payload: Int) -> Self {
+    let man = payload > 999_999 ? 0 : Mantissa(payload)
+    return Self(sign: .plus, exponent: 0x1F<<3, mantissa: man)
+  }
+  
+  // MARK: - Handy routines for testing different aspects of the number
   
   var isSmallMantissa: Bool {
-    let range = specialBits.lowerBound...specialBits.upperBound
+    let range = Self.specialBits.lowerBound...Self.specialBits.upperBound
     return isSpecial && getBits(range) != 0b11
   }
   
   var isSpecial: Bool {
-    getBits(specialBits) == 0b11
+    getBits(Self.specialBits) == 0b11
   }
   
   var isInfinite: Bool {
-    let range = signBit.lowerBound-5...signBit.lowerBound-1
-    return getBits(range) == 0x1_1110
+    let range = Self.signBit.lowerBound-5...Self.signBit.lowerBound-1
+    return getBits(range) == 0b1_1110
   }
   
   var isNaN: Bool {
-    let range = signBit.lowerBound-6...signBit.lowerBound-1
-    return getBits(range) == 0x1_1111_0
+    let range = Self.signBit.lowerBound-6...Self.signBit.lowerBound-1
+    return getBits(range) == 0b1_1111_0
+  }
+  
+  var isNaNInf: Bool {
+    let range = Self.signBit.lowerBound-6...Self.signBit.lowerBound-1
+    return (getBits(range) & 0b1_1111_0) == 0b1_1110_0
   }
   
   var isSNaN: Bool {
-    let range = signBit.lowerBound-6...signBit.lowerBound-1
-    return getBits(range) == 0x1_1111_1
+    let range = Self.signBit.lowerBound-6...Self.signBit.lowerBound-1
+    return getBits(range) == 0b1_1111_1
   }
   
   var isValid: Bool {
-    let range = signBit.lowerBound-4...signBit.lowerBound-1
-    return getBits(range) != 0x1_111
+    let range = Self.signBit.lowerBound-4...Self.signBit.lowerBound-1
+    return getBits(range) != 0b1_111
   }
   
   var isZero: Bool {
     guard isValid else { return false }
-    return mantissa == 0 || mantissa > largestNumber
+    return mantissa == 0 || mantissa > Self.largestNumber
   }
   
+  // MARK: - Table-derived functions
+  
+  /// Returns the number of decimal digits in 2^i.
+  static func bid_estimate_decimal_digits(_ i: Int) -> Int {
+    let n = UInt128(1) << i
+    return digitsIn(n)
+  }
+  
+  static func digitsIn<T:BinaryInteger>(_ sig_x: T) -> Int {
+    // find power of 10 just greater than sig_x
+    var tenPower = T(10), digits = 1
+    while sig_x >= tenPower { tenPower *= 10; digits += 1 }
+    return digits
+  }
+  
+  static func bid_power10_table_128(_ i: Int) -> UInt128 {
+    power(UInt128(10), to: i)
+  }
+  
+  static func bid_round_const_table(_ rnd:Int, _ i:Int) -> UInt64 {
+    if i == 0 { return 0 }
+    switch rnd {
+      case 0, 4: return 5 * bid_ten2k64(i-1)
+      case 2: return bid_ten2k64(i-1)-1
+      default: return 0 // covers rnd = 1, 3
+    }
+  }
+  
+  // bid_ten2k64[i] = 10^i, 0 <= i <= 19
+  static func bid_ten2k64(_ i:Int) -> UInt64 {
+    UInt64(bid_power10_table_128(i))
+  }
+  
+  static func bid_reciprocals10_64(_ i: Int) -> UInt64 {
+    if i == 0 { return 1 }
+    let twoPower = bid_short_recip_scale[i]+64
+    return UInt64(UInt128(1) << twoPower / bid_power10_table_128(i)) + 1
+  }
 }
+
+// Need to place this somewhere else eventually
+let bid_short_recip_scale: [Int8] = [
+  1, 1, 5, 7, 11, 12, 17, 21, 24, 27, 31, 34, 37, 41, 44, 47, 51, 54
+]
 
 // MARK: - Extended UInt Definitions
 // Use these for now
@@ -353,21 +447,20 @@ internal func roundboundIndex(_ round:Rounding, _ negative:Bool=false,
 // MARK: - Generic String Conversion functions
 
 /// Converts a decimal floating point number `x` into a string
-internal func string<T:DecimalFloatingPoint>(from x: T) -> String {
+internal func string<T:IntegerDecimal>(from x: T) -> String {
   // unpack arguments, check for NaN or Infinity
-  let (negative, exp, coeff, valid) = x.unpack()
-  let s = negative ? "-" : ""
+  let (sign, exp, coeff, valid) = x.unpack()
+  let s = sign == .minus ? "-" : ""
   if valid {
     // x is not special
     let ps = String(coeff)
     let exponent_x = Int(exp) - T.exponentBias + (ps.count - 1)
-    return s + addDecimalPointAndExponent(ps, exponent_x,
-                                           T.significandMaxDigitCount)
+    return s + addDecimalPointAndExponent(ps, exponent_x, T.numberOfDigits)
   } else {
     // x is Inf. or NaN or 0
     var ps = s
     if x.isNaN {
-      if x.isSignalingNaN { ps.append("S") }
+      if x.isSNaN { ps.append("S") }
       ps.append("NaN")
       return ps
     }
@@ -383,57 +476,60 @@ internal func string<T:DecimalFloatingPoint>(from x: T) -> String {
 /// Converts a decimal number string of the form:
 /// `[+|-] digit {digit} [. digit {digit}] [e [+|-] digit {digit} ]`
 /// to a Decimal<n> number
-internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
+internal func numberFromString<T:IntegerDecimal>(_ s: String,
+                                                 round: Rounding) -> T? {
   // keep consistent character case for "infinity", "nan", etc.
   var ps = s.lowercased()
   
-  // remove leading whitespace characters
-  while ps.hasPrefix(" ") { ps.removeFirst() }
+//  // remove leading whitespace characters
+//  while ps.hasPrefix(" ") { ps.removeFirst() }
   
   // get first non-whitespace character
   var c = ps.isEmpty ? "\0" : ps.removeFirst()
   
   // detect special cases (INF or NaN)
-  if c == "\0" || (c != "." && c != "-" && c != "+" && (c < "0" || c > "9")){
+  if c == "\0" || (c != "." && c != "-" && c != "+" && (c < "0" || c > "9")) {
     // Infinity?
     if c == "i" && (ps.hasPrefix("nfinity") || ps.hasPrefix("nf")) {
-      return T.infinity
+      return T.infinite
     }
     // return sNaN
     if c == "s" && ps.hasPrefix("nan") {
       // case insensitive check for snan
-      return T.signalingNaN
+      return T.snan
     } else {
       // return qNaN & any coefficient
       let coeff = Int(ps.dropFirst(2)) ?? 0 // drop "AN"
-      return T.nan(with: coeff)
+      return T.nan(coeff)
     }
   }
   
   // detect +INF or -INF
   if ps.hasPrefix("infinity") || ps.hasPrefix("inf") {
     if c == "+" {
-      return T.infinity
+      return T.infinite
     } else if c == "-" {
-      return -T.infinity
+      var x = T.infinite; x.sign = .minus
+      return x
     } else {
-      return T.nan
+      return T.nan(0)
     }
   }
   
   // if +sNaN, +SNaN, -sNaN, or -SNaN
   if ps.hasPrefix("snan") {
     if c == "-" {
-      return -T.signalingNaN
+      var x = T.snan; x.sign = .minus
+      return x
     } else {
-      return T.signalingNaN
+      return T.snan
     }
   }
   
   // determine sign
-  var isNegative = false
+  var sign = FloatingPointSign.plus
   if c == "-" {
-    isNegative = true
+    sign = .minus
   }
   
   // get next character if leading +/- sign
@@ -444,7 +540,8 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
   // if c isn"t a decimal point or a decimal digit, return NaN
   if c != "." && (c < "0" || c > "9") {
     // return NaN
-    return isNegative ? -T.nan : T.nan
+    var x = T.nan(0); x.sign = sign
+    return x
   }
   
   var rdx_pt_enc = false
@@ -480,14 +577,16 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
             if right_radix_leading_zeros < 0 {
               right_radix_leading_zeros = 0
             }
-            let bits = T.BitPattern(right_radix_leading_zeros) << 23
-            return isNegative ? -T(bitPattern: bits, bidEncoding: true) :
-            T(bitPattern: bits, bidEncoding: true)
+            let bits = T.Mantissa(right_radix_leading_zeros)
+            return T(sign: sign, exponent: 0, mantissa: bits)
+//            return sign == .minus ? -T(bitPattern: bits, bidEncoding: true)
+//                                  : T(bitPattern: bits, bidEncoding: true)
           }
           c = ps.isEmpty ? "\0" : ps.removeFirst()
         } else {
           // if 2 radix points, return NaN
-          return isNegative ? -T.nan : T.nan
+          var x = T.nan(0); x.sign = sign
+          return x
         }
       } else if ps.isEmpty {
         right_radix_leading_zeros = T.exponentBias -
@@ -495,9 +594,10 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
         if right_radix_leading_zeros < 0 {
           right_radix_leading_zeros = 0
         }
-        let bits = T.BitPattern(right_radix_leading_zeros) << 23
-        return isNegative ? -T(bitPattern: bits, bidEncoding: true) :
-        T(bitPattern: bits, bidEncoding: true)
+        let bits = T.Mantissa(right_radix_leading_zeros)
+        return T(sign: sign, exponent: 0, mantissa: bits)
+//        return sign == .minus ? -T(bitPattern: bits, bidEncoding: true)
+//                              : T(bitPattern: bits, bidEncoding: true)
       }
     }
   }
@@ -512,7 +612,8 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
     if c == "." {
       if rdx_pt_enc {
         // return NaN
-        return isNegative ? -T.nan : T.nan
+        var x = T.nan(0); x.sign = sign
+        return x
       }
       rdx_pt_enc = true
       c = ps.isEmpty ? "\0" : ps.removeFirst()
@@ -526,7 +627,7 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
       coefficient_x += c.wholeNumberValue ?? 0
     } else if ndigits == 8 {
       // coefficient rounding
-      switch T.rounding {
+      switch round {
         case BID_ROUNDING_TO_NEAREST:
           midpoint = (c == "5" && (coefficient_x & 1 == 0)) ? 1 : 0;
           // if coefficient is even and c is 5, prepare to round up if
@@ -538,19 +639,19 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
             rounded_up = 1
           }
         case BID_ROUNDING_DOWN:
-          if isNegative { coefficient_x+=1; rounded_up=1 }
+          if sign == .minus { coefficient_x+=1; rounded_up=1 }
         case BID_ROUNDING_UP:
-          if !isNegative { coefficient_x+=1; rounded_up=1 }
+          if sign != .minus { coefficient_x+=1; rounded_up=1 }
         case BID_ROUNDING_TIES_AWAY:
           if c >= "5" { coefficient_x+=1; rounded_up=1 }
         default: break
       }
       if coefficient_x == 10000000 {
         coefficient_x = 1000000
-        add_expon = 1;
+        add_expon = 1
       }
       if c > "0" {
-        rounded = 1;
+        rounded = 1
       }
       add_expon += 1;
     } else { // ndigits > 8
@@ -570,16 +671,20 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
   add_expon -= dec_expon_scale + Int(right_radix_leading_zeros)
   
   if c == "\0" {
-    if rounded != 0 {
-      T.state.insert(.inexact)
-    }
-    return T(isNegative: isNegative, exponent: add_expon + T.exponentBias,
-             mantissa: coefficient_x, round: 0)
+//    if rounded != 0 {
+//      T.state.insert(.inexact)
+//    }
+    return T(sign: sign, exponent: add_expon,
+             mantissa: T.Mantissa(coefficient_x))
+//    return T(sign: sign,
+//             exponentBitPattern: T.RawExponent(add_expon + T.exponentBias),
+//             significantBitPattern: T.BitPattern(coefficient_x))
   }
   
   if c != "e" {
     // return NaN
-    return isNegative ? -T.nan : T.nan
+    var x = T.nan(0); x.sign = sign
+    return x
   }
   c = ps.isEmpty ? "\0" : ps.removeFirst()
   let sgn_expon = (c == "-") ? 1 : 0
@@ -589,7 +694,8 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
   }
   if c == "\0" || c < "0" || c > "9" {
     // return NaN
-    return isNegative ? -T.nan : T.nan
+    var x = T.nan(0); x.sign = sign
+    return x
   }
   
   while (c >= "0") && (c <= "9") {
@@ -602,12 +708,13 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
   
   if c != "\0" {
     // return NaN
-    return isNegative ? -T.nan : T.nan
+    var x = T.nan(0); x.sign = sign
+    return x
   }
   
-  if rounded != 0 {
-    T.state.insert(.inexact)
-  }
+//  if rounded != 0 {
+//    T.state.insert(.inexact)
+//  }
   
   if sgn_expon != 0 {
     expon_x = -expon_x
@@ -620,8 +727,7 @@ internal func numberFromString<T:DecimalFloatingPoint>(_ s: String) -> T? {
       coefficient_x-=1
     }
   }
-  return T(isNegative: isNegative, exponent: expon_x, mantissa: coefficient_x,
-           round: rounded)
+  return T(sign:sign, exponent:expon_x, mantissa:T.Mantissa(coefficient_x)) // round: rounded)
 }
 
 /// Returns x^exp where x = *num*.

@@ -125,19 +125,19 @@ public struct Decimal32Old : Codable, Hashable {
 
 //////////////////////////////////////////////////////////////////////////
 // MARK: - Custom String Convertible compliance
-extension Decimal32Old : CustomStringConvertible {
-  public var description: String { string(from: self) }
-}
+//extension Decimal32Old : CustomStringConvertible {
+//  public var description: String { string(from: self) }
+//}
 
-extension Decimal32Old : CustomDebugStringConvertible {
-  public var debugDescription: String { description }
-}
-
-extension String {
-  public init(_ n: Decimal32Old) {
-    self = n.description
-  }
-}
+//extension Decimal32Old : CustomDebugStringConvertible {
+//  public var debugDescription: String { description }
+//}
+//
+//extension String {
+//  public init(_ n: Decimal32Old) {
+//    self = n.description
+//  }
+//}
 
 extension Decimal32Old: ExpressibleByFloatLiteral {
   public init(floatLiteral value: Double) {
@@ -206,7 +206,7 @@ extension Decimal32Old : Strideable {
   public func advanced(by n: Self) -> Self { self + n }
 }
 
-extension Decimal32Old : FloatingPoint {
+extension Decimal32Old { // }: FloatingPoint {
   
   public mutating func round(_ rule: FloatingPointRoundingRule) {
     let dec64 = Self.bid32_to_bid64(x, &Self.state)
@@ -362,7 +362,7 @@ public extension Decimal32Old {
   }
 }
 
-extension Decimal32Old : DecimalFloatingPoint {
+extension Decimal32Old { //} : DecimalFloatingPoint {
 
   /// Only for internal use when creating generic Decimal numbers. The chief
   /// reason for this init is to allow suppert utilities to create Decimal
