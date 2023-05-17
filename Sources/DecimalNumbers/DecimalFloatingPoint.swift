@@ -1,7 +1,6 @@
 /**
 Copyright © 2023 Computer Inspirations. All rights reserved.
-Portions are Copyright (c) 2014 - 2021 Apple Inc. and the
-Swift project authors
+Portions are Copyright (c) 2014 - 2018 Apple Inc. and the Swift project authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,69 +24,42 @@ limitations under the License.
 /// available.
 ///
 /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
-public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
-                                        FloatingPoint {
+public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
+  
+  /// A type that represents the encoded significand of a value.
+  associatedtype RawSignificand: UnsignedInteger
   
   /// A type that represents the encoded exponent of a value.
   associatedtype RawExponent : UnsignedInteger
   
-  /// A type that represents the raw unsigned integer encoding
-  associatedtype BitPattern : UnsignedInteger
-  
-  /// Creates a new instance from the specified sign and significant digits.
-  ///
-  /// The values passed as `exponentBitPattern` is interpreted in the
-  /// binary interchange format defined by the [IEEE 754 specification][spec].
-  ///
-  /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
-  ///
-  /// The `significandDigits` are the single-digit-per-element, big-endian
-  /// decimal digits of the number.  For example, the number [3, 1, 4,]
-  /// represents a significand of `314`.
-  ///
-  /// - Parameters:
-  ///   - sign: The sign of the new value.
-  ///   - exponentBitPattern: The bit pattern to use for the exponent field of
-  ///     the new value.
-  ///   - significandDigits: The binary-coded decimal digits, one per UInt8
-  ///     instance of the new value.
-  init(sign: FloatingPointSign, exponentBitPattern: Self.RawExponent,
-       significandDigits: [UInt8])
-  
   /// Creates a new instance from the specified sign and bit patterns.
   ///
   /// The values passed as `exponentBitPattern` is interpreted in the
-  /// binary interchange format defined by the [IEEE 754 specification][spec].
+  /// decimal interchange format defined by the [IEEE 754 specification][spec].
   ///
   /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
   ///
-  /// The `significandDigits` are the single-digit-per-element, big-endian
-  /// decimal digits of the number.  For example, the number [3, 1, 4,]
-  /// represents a significand of `314`.
+  /// The `significandBitPattern` are the big-endian, integer decimal digits
+  /// of the number.  For example, the integer number `314` represents a
+  /// significand of `314`.
   ///
   /// - Parameters:
   ///   - sign: The sign of the new value.
   ///   - exponentBitPattern: The bit pattern to use for the exponent field of
   ///     the new value.
-  ///   - significandBitPattern: The binary-coded decimal digits, one per UInt8
-  ///     instance of the new value.
-  init(sign: FloatingPointSign, exponentBitPattern: Self.RawExponent,
-       significantBitPattern: Self.BitPattern)
-  
-  /// Only for internal use when creating generic Decimal numbers. The chief
-  /// reason for this init is to allow suppert utilities to create Decimal
-  /// numbers without needing to know details of the Decimal number layout.
-  /// - Parameters:
-  ///   - isNegative: Set to `true` if the number is negative.
-  ///   - exponent: A signed unbiased base 10 exponent for the number.
-  ///   - mantissa: An unsigned integer representing the mantissa of the
-  ///               number
-  ///   - round: If non-zero, perform underflow rounding
-  // init(isNegative:Bool, exponent:Int, mantissa:Int, round:Int)
+  ///   - significandBitPattern: Bit pattern to use for the mantissa field of
+  ///     the new value.
+  init(sign: FloatingPointSign, exponentBitPattern: RawExponent,
+       significandBitPattern: RawSignificand)
   
   /// Initialize from raw Binary Integer Decimal (BID) or
-  /// Densely Packed Decimal (DPD) encoded 32-bit integers.
-  init(bitPattern bits: BitPattern, bidEncoding: Bool)
+  /// Densely Packed Decimal (DPD) encoded integers.
+  /// - Parameters:
+  ///   - bits: The bit pattern to use for the new value.
+  ///   - bidEncoding: When `true`, the `bits` are assumed to have a BID
+  ///     encoding; otherwise, a DPD encoding is assumed, which is translated
+  ///     to BID format during initialization.
+  init(bitPattern bits: RawSignificand, bidEncoding: Bool)
   
   /// Creates a new instance from the given value, rounded to the closest
   /// possible representation.
@@ -108,52 +80,49 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   /// - Parameter value: A floating-point value to be converted.
   init?<Source:DecimalFloatingPoint>(exactly value: Source)
   
-  /// The maximum value of the `exponent` for normal, finite values
-  /// with the bias removed.
+  /// The number of bits used to represent the type's exponent.
   ///
-  /// The least normal exponent for values of the type `F` is
-  /// `-exponentMaximum+1`, and the largest finite exponent is
-  /// `exponentMaximum`. An all-zeros exponent is reserved for subnormals
-  /// and zeros, and an all-ones exponent is reserved for infinity and NaN.
+  /// A binary floating-point type's `exponentBitCount` imposes a limit on the
+  /// range of the exponent for normal, finite values. The *exponent bias* of
+  /// a type `F` can be calculated as the following, where `**` is
+  /// exponentiation:
   ///
-  /// For example, the `Decimal128` type has an `exponentMaximum` of `12287`
-  /// and an exponent bias of `6176`.  The unbiased `exponent` is given by
+  ///     let bias = 10 ** (F.exponentBitCount - 1) - 1
   ///
-  ///```
-  ///  exponent = exponentBitPattern - exponentBias +
-  ///             (significandMaxDigitCount-1)
+  /// The least normal exponent for values of the type `F` is `1 - bias`, and
+  /// the largest finite exponent is `bias`. An all-zeros exponent is reserved
+  /// for subnormals and zeros, and an all-ones exponent is reserved for
+  /// infinity and NaN.
   ///
-  ///  let bias = Decimal128.exponentBias
-  ///  // bias == 6176
-  ///  print(Decimal128.greatestFiniteMagnitude.exponent)
-  ///  // Prints "6145"
-  ///  print(Decimal128.leastNormalMagnitude.exponent)
-  ///  // Prints "-6142"
-  ///```
-  static var exponentMaximum: Int { get }
+  /// For example, the `Decimal32` type has an `exponentBitCount` of 8, giving
+  /// an exponent bias of `127` by the calculation above.
+  ///
+  ///     let bias = 2 ** (Float.exponentBitCount - 1) - 1
+  ///     // bias == 127
+  ///     print(Float.greatestFiniteMagnitude.exponent)
+  ///     // Prints "127"
+  ///     print(Float.leastNormalMagnitude.exponent)
+  ///     // Prints "-126"
+  static var exponentBitCount: Int { get }
   
-  /// The exponent bias is an offset applied to the `exponent` when encoding
-  /// to the Decimaln format.
-  static var exponentBias: Int { get }
-  
-  /// The maximum number of significand decimal digits.
+  /// The available number of significand digits.
   ///
-  /// For fixed-width floating-point types, this is the maximum possible number
+  /// For fixed-width decimal floating-point types, this is the actual number
   /// of significand digits.
   ///
-  /// For extensible floating-point types, `significandMaxDigitCount` should
-  /// be the maximum allowed significand digits. If there is no upper limit,
-  /// then `significandMaxDigitCount` should be `Int.max`.
-  static var significandMaxDigitCount: Int { get }
+  /// For extensible decimal floating-point types, `significandDigitCount`
+  /// should be the maximum allowed significand width (both fractional and
+  /// integral) digits of the significand. If there is no upper limit, then
+  /// `significandDigitCount` should be `Int.max`.
+  static var significandDigitCount: Int { get }
   
   /// The raw encoding of the value's exponent field.
   ///
   /// This value is unadjusted by the type's exponent bias.
   var exponentBitPattern: Self.RawExponent { get }
   
-  /// The digits comprising the significand field with most significant digit
-  /// first.
-  var significandDigits: [UInt8] { get }
+  /// The raw encoding of the value's significand field.
+  var significandBitPattern: RawSignificand { get }
   
   /// The floating-point value with the same sign and exponent as this value,
   /// but with a significand of 1.0.
@@ -183,16 +152,11 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   ///
   /// The initializer `init(bitPattern:bidEncoding)` works from both DPD and
   /// BID. Converters to both formats are also available.
-  var isBIDFormat: Bool { get }
+  static var isBIDFormat: Bool { get }
   
-//  // FIXME: - Discussion on how to do rounding and state tracking
-//  /// Class-wide setting for how numbers will be rounded in calculations.
-//  static var rounding: Rounding { get set }
-//  
-//  /// Class-wide setting for the resultant state from a series of
-//  /// calculations.  The `state` can be cleared with
-//  /// `Self.state = Status.clearFlags`.
-//  static var state: Status { get set }
+  // FIXME: - Discussion on how to do rounding and state tracking
+  /// Class-wide setting for how numbers will be rounded in calculations.
+  static var rounding: FloatingPointRoundingRule { get set }
   
   /// The number of bits required to represent the value's significand.
   ///
@@ -202,19 +166,14 @@ public protocol DecimalFloatingPoint : ExpressibleByFloatLiteral,
   /// `significandDigitCount` is always -1 or from one to the
   /// `significandMaxDigitCount`. For example:
   ///
-  /// - For any representable power of ten, `significandDigitCount` is one, because
-  ///   `significand` is `1`.
+  /// - For any representable power of ten, `significandDigitCount` is one,
+  ///   because significand` is `1`.
   /// - If `x` is 10, `x.significand` is `10` in decimal, so
   ///   `x.significandDigitCount` is 2.
   /// - If `x` is Decimal32.pi, `x.significand` is `3.141593` in
   ///   decimal, and `x.significandDigitCount` is 7.
   var significandDigitCount: Int { get }
   
-//  /// Creates a Nan Decimal Number with a number `n` payload.
-//  static func nan(with n: Int) -> Self
-  
-  /// Returns the components of the Decimal number
-  func unpack() -> (sign:FloatingPointSign, exp:Int, coeff:BitPattern, valid:Bool)
 }
 
 extension DecimalFloatingPoint {
@@ -230,6 +189,10 @@ extension DecimalFloatingPoint {
   /// binary floating-point types) or 10 (for decimal floating-point types)
   /// are extraordinarily rare in practice.
   @inlinable public static var radix: Int { 10 }
+  
+  ///////////////////////////////////////////////////////////////////////////
+  // MARK: - DecimalFloatingPoint properties and attributes
+  @inlinable public static var isBIDFormat: Bool { true }
   
   /// Creates a new floating-point value using the sign of one value and the
   /// magnitude of another.
@@ -254,7 +217,7 @@ extension DecimalFloatingPoint {
     self.init(
       sign: signOf.sign,
       exponentBitPattern: magnitudeOf.exponentBitPattern,
-      significandDigits: magnitudeOf.significandDigits
+      significandBitPattern: magnitudeOf.significandBitPattern
     )
   }
   
@@ -268,10 +231,7 @@ extension DecimalFloatingPoint {
       if source.isInfinite { return (isMinus ? -.infinity : .infinity, true) }
       
       // IEEE 754 requires that any NaN payload be propagated, if possible.
-      let digitsAllowed = Self.significandMaxDigitCount
-      let digitsAvailable = source.significandDigits.count
-      let payload = Array(source.significandDigits.dropLast(max(0,
-                                              digitsAvailable-digitsAllowed)))
+      let payload = RawSignificand(source.significandBitPattern)
       
       // Although .signalingNaN.exponentBitPattern == .nan.exponentBitPattern,
       // we do not *need* to rely on this relation, and therefore we do not.
@@ -279,11 +239,11 @@ extension DecimalFloatingPoint {
       ? Self(
         sign: source.sign,
         exponentBitPattern: Self.signalingNaN.exponentBitPattern,
-        significandDigits: payload)
+        significandBitPattern: payload)
       : Self(
         sign: source.sign,
         exponentBitPattern: Self.nan.exponentBitPattern,
-        significandDigits: payload)
+        significandBitPattern: payload)
       // We define exactness by equality after roundtripping; since NaN is
       // never equal to itself, it can never be converted exactly.
       return (value, false)
@@ -292,7 +252,7 @@ extension DecimalFloatingPoint {
     let exponent = source.exponent
     var exemplar = Self.leastNormalMagnitude
     let exponentBitPattern: Self.RawExponent
-    let significandDigits = source.significandDigits
+    let significand = source.significandBitPattern
     
     if exponent < exemplar.exponent {
       // The floating-point result is either zero or subnormal.
@@ -331,9 +291,9 @@ extension DecimalFloatingPoint {
     let value = Self(
       sign: source.sign,
       exponentBitPattern: exponentBitPattern,
-      significandDigits: significandDigits)
+      significandBitPattern: RawSignificand(significand))
     
-    if source.significandDigitCount <= Self.significandMaxDigitCount {
+    if source.significandDigitCount <= Self.significandDigitCount {
       return (value, true)
     }
     
@@ -362,8 +322,8 @@ extension DecimalFloatingPoint {
   public init?<Source:DecimalFloatingPoint>(exactly value: Source) {
     if value.isNaN { return nil }
     
-    if (Source.exponentMaximum > Self.exponentMaximum ||
-        Source.significandMaxDigitCount > Self.significandMaxDigitCount) &&
+    if (Source.exponentBitCount > Self.exponentBitCount ||
+        Source.significandDigitCount > Self.significandDigitCount) &&
         value.isFinite && !value.isZero {
       let exponent = value.exponent
       if exponent < Self.leastNormalMagnitude.exponent {
@@ -429,18 +389,18 @@ extension DecimalFloatingPoint {
     if exponentBitPattern < other.exponentBitPattern { return sign == .plus }
     
     // Signs and exponents match, look at significands.
-    if significandDigits.count > other.significandDigits.count {
+    if significandDigitCount > other.significandDigitCount {
       return sign == .minus
     }
-    if significandDigits.count < other.significandDigits.count {
+    if significandDigitCount < other.significandDigitCount {
       return sign == .plus
     }
     
     // Same sized significands -- compare them
-    if significandDigits.lexicographicallyPrecedes(other.significandDigits) {
+    if significandBitPattern > other.significandBitPattern {
       return sign == .minus
     }
-    if other.significandDigits.lexicographicallyPrecedes(significandDigits) {
+    if other.significandBitPattern > significandBitPattern {
       return sign == .plus
     }
     //  Sign, exponent, and significand all match.
@@ -449,7 +409,7 @@ extension DecimalFloatingPoint {
   
 }
 
-extension DecimalFloatingPoint {
+extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
   
   static func _decimalLogarithm<Source:BinaryInteger>(_ x:Source) ->
                                             (exp:Int, digits:[UInt8]) {
@@ -495,9 +455,9 @@ extension DecimalFloatingPoint {
     let value = Self(
       sign: Source.isSigned && source < 0 ? .minus : .plus,
       exponentBitPattern: exponentBias,
-      significandDigits: expMag.digits
+      significandBitPattern: expMag.digits as! Self.RawSignificand
     )
-    return (value, expMag.exp <= Self.significandMaxDigitCount)
+    return (value, expMag.exp <= Self.significandDigitCount)
   }
   
   /// Creates a new value, rounded to the closest possible representation.
@@ -564,10 +524,8 @@ extension DecimalFloatingPoint {
     //  is an acceptable short-term fix.
     precondition(delta.isFinite,
                  "There is no uniform distribution on an infinite range")
-    let max = delta.significandDigits.reduce(into: 0) {
-      // delta maximum as integer
-      $0 = $0 * 10 + UInt($1)
-    }
+    let max = delta.significandBitPattern
+      
     // get a random integer up to the maximum
     let r = generator.next(upperBound: max)
     
@@ -653,10 +611,8 @@ extension DecimalFloatingPoint {
     //  is an acceptable short-term fix.
     precondition(delta.isFinite,
                  "There is no uniform distribution on an infinite range")
-    let max = delta.significandDigits.reduce(into: 0) {
-      // delta maximum as integer
-      $0 = $0 * 10 + UInt($1)
-    }
+    let max = delta.significandBitPattern
+
     // get a random integer up to the maximum
     let r = generator.next(upperBound: max)
     

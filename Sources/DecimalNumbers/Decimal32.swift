@@ -1,51 +1,75 @@
-//
-//  Decimal.swift
-//  
-//
-//  Created by Mike Griebling on 12.05.2023.
-//
+/**
+Copyright © 2023 Computer Inspirations. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 import UInt128
 
-/// Define the data fields for the Decimal32 storage type
-struct IntegerDecimal32 : IntegerDecimal {
-  typealias RawDataFields = UInt32
-  typealias Mantissa = UInt
+/// Definition of the data storage for the Decimal32 floating-point data type.
+/// the `IntegerDecimal` protocol defines many supporting operations
+/// including packing and unpacking of the Decimal32 sign, exponent, and
+/// mantissa fields.  By specifying some key bit positions, it is possible
+/// to completely define many of the Decimal32 operations.  The `data` word
+/// holds all 32 bits of the Decimal32 data type.
+public struct IntegerDecimal32 : IntegerDecimal {
+  public typealias RawDataFields = UInt32
+  public typealias Mantissa = UInt
   
-  var data: RawDataFields = 0
+  public var data: RawDataFields = 0
   
-  init(_ word: RawDataFields) {
+  public init(_ word: RawDataFields) {
     self.data = word
   }
   
-  init(sign:FloatingPointSign = .plus, exponent:Int = 0, mantissa:Mantissa) {
+  public init(sign:FloatingPointSign = .plus, exponent:Int = 0,
+              mantissa:Mantissa) {
     self.sign = sign
     self.set(exponent: exponent, mantissa: mantissa)
   }
   
   // Define the fields and required parameters
-  static var exponentBias:    Int { 101 }
-  static var maximumExponent: Int {  96 } // unbiased & normal
-  static var minimumExponent: Int { -95 } // unbiased & normal
-  static var numberOfDigits:  Int {   7 }
+  public static var exponentBias:    Int {  101 }
+  public static var maximumExponent: Int {   90 } // unbiased
+  public static var minimumExponent: Int { -101 } // unbiased
+  public static var numberOfDigits:  Int {    7 }
+  public static var exponentBits:    Int {    8 }
   
-  static var largestNumber: Mantissa { 9_999_999 }
+  public static var largestNumber: Mantissa { 9_999_999 }
   
   // Two mantissa sizes must be supported
-  static var exponentLMBits:    ClosedRange<Int> { 23...30 }
-  static var largeMantissaBits: ClosedRange<Int> { 0...22 }
+  public static var exponentLMBits:    ClosedRange<Int> { 23...30 }
+  public static var largeMantissaBits: ClosedRange<Int> {  0...22 }
   
-  static var exponentSMBits:    ClosedRange<Int> { 21...28 }
-  static var smallMantissaBits: ClosedRange<Int> { 0...20 }
+  public static var exponentSMBits:    ClosedRange<Int> { 21...28 }
+  public static var smallMantissaBits: ClosedRange<Int> {  0...20 }
 }
 
-/// Implementation of the Decimal32 data type
+/// Implementation of the 32-bit Decimal32 floating-point operations from
+/// IEEE STD 754-2000 for Floating-Point Arithmetic.
+///
+/// The IEEE Standard 754-2008 for Floating-Point Arithmetic supports two
+/// encoding formats: the decimal encoding format, and the binary encoding
+/// format. The Intel(R) Decimal Floating-Point Math Library supports primarily
+/// the binary encoding format for decimal floating-point values, but the
+/// decimal encoding format is supported too in the library, by means of
+/// conversion functions between the two encoding formats.
 public struct Decimal32 : Codable, Hashable {
   
-  typealias ID = IntegerDecimal32
+  public typealias ID = IntegerDecimal32
   var bid: ID
   
-  init(bid: ID) {
+  public init(bid: ID) {
     self.bid = bid
   }
   
@@ -205,28 +229,120 @@ public struct Decimal32 : Codable, Hashable {
 }
 
 extension Decimal32 : AdditiveArithmetic {
-  
   public static func - (lhs: Decimal32, rhs: Decimal32) -> Decimal32 {
-    lhs
+    var addIn = rhs
+    addIn.negate()
+    return lhs + addIn
+  }
+  
+  public mutating func negate() {
+    bid.sign = bid.sign == .minus ? FloatingPointSign.plus : .minus
   }
   
   public static func + (lhs: Decimal32, rhs: Decimal32) -> Decimal32 {
-    lhs // FIXME: - +
+    lhs.add(rhs, rounding: .toNearestOrEven)
   }
   
-  public static var zero: Decimal32 {
-    Decimal32(bid: ID(mantissa: 0))
-  }
-  
+  public static var zero: Decimal32 { Self(bid: ID.zero) }
+}
+
+extension Decimal32 : Equatable {
   public static func == (lhs: Decimal32, rhs: Decimal32) -> Bool {
-    false // FIXME: - ==
+    guard !lhs.isNaN && !rhs.isNaN else { return false }
+    
+    // all data bits equsl case
+    if lhs.bid.data == rhs.bid.data { return true }
+    
+    // infinity cases
+    if lhs.isInfinite && rhs.isInfinite { return lhs.sign == rhs.sign }
+    if lhs.isInfinite || rhs.isInfinite { return false }
+    
+    // zero cases
+    let xisZero = lhs.isZero, yisZero = rhs.isZero
+    if xisZero && yisZero { return true }
+    if (xisZero && !yisZero) || (!xisZero && yisZero) { return false }
+    
+    // normal numbers
+    var (xsign, xexp, xman, _) = lhs.bid.unpack()
+    var (ysign, yexp, yman, _) = rhs.bid.unpack()
+    
+    // opposite signs
+    if xsign != ysign { return false }
+    
+    // redundant representations
+    if xexp > yexp {
+      swap(&xexp, &yexp)
+      swap(&xman, &yman)
+    }
+    if yexp - xexp > ID.numberOfDigits-1 { return false }
+    for _ in 0..<(yexp - xexp) {
+      // recalculate y's significand upwards
+      yman *= 10
+      if yman > ID.largestNumber { return false }
+    }
+    return xman == yman
   }
 }
 
-//extension Decimal32 : Strideable {
-//  public func distance(to other: Self) -> Self { other - self }
-//  public func advanced(by n: Self) -> Self { self + n }
-//}
+extension Decimal32 : Comparable {
+  public static func < (lhs: Decimal32, rhs: Decimal32) -> Bool {
+    guard !lhs.isNaN && !rhs.isNaN else { return false }
+    
+    // all data bits equsl case
+    if lhs.bid.data == rhs.bid.data { return false }
+    
+    // infinity cases
+    if lhs.isInfinite {
+      if lhs.sign == .minus {
+        // lhs is -inf, which is less than y unless y is -inf
+        return !rhs.isInfinite || rhs.sign == .plus
+      } else {
+        // lhs is +inf, which can never be less than y
+        return false
+      }
+    } else if rhs.isInfinite {
+      // lhs is finite so:
+      //   if rhs is +inf, lhs<rhs
+      //   if rhs is -inf, lhs>rhs
+      return rhs.sign == .plus
+    }
+    
+    // normal numbers
+    let (xsign, xexp, xman, _) = lhs.bid.unpack()
+    let (ysign, yexp, yman, _) = rhs.bid.unpack()
+    
+    // zero cases
+    let xisZero = lhs.isZero, yisZero = rhs.isZero
+    if xisZero && yisZero { return false }
+    else if xisZero { return ysign == .plus }  // x < y if y > 0
+    else if yisZero { return xsign == .minus } // x < y if y < 0
+    
+    // opposite signs
+    if xsign != ysign { return ysign == .plus } // x < y if y > 0
+    
+    // check if both mantissa and exponents and bigger or smaller
+    if xman > yman && xexp >= yexp { return xsign == .minus }
+    if xman < yman && xexp <= yexp { return xsign == .plus }
+    
+    // if xexp is `numberOfDigits`-1 greater than yexp, no need to continue
+    if xexp - yexp > ID.numberOfDigits-1 { return xsign == .plus }
+    
+    // need to compensate the mantissa
+    var manPrime: ID.Mantissa
+    if xexp > yexp {
+      manPrime = xman * power(ID.Mantissa(10), to: xexp - yexp) // bid_mult_factor(xexp - yexp)
+      if manPrime == yman { return false }
+      return (manPrime < yman) != (xsign == .minus)
+    }
+    
+    // adjust y mantissa upwards
+    manPrime = yman * power(ID.Mantissa(10), to: yexp - xexp)
+    if manPrime == xman { return false }
+    
+    // if positive, return whichever abs number is smaller
+    return (xman < manPrime) != (xsign == .minus)
+  }
+}
 
 extension Decimal32 : CustomStringConvertible {
   public var description: String {
@@ -260,81 +376,95 @@ extension Decimal32 : Strideable {
 
 extension Decimal32 : FloatingPoint {
   
+  public init<T:BinaryInteger>(_ value: T) {
+    // FIXME: - Fix this init()
+    self.init(integerLiteral: Int(value))
+  }
+  
+  public init(_ value: Int) { self.init(integerLiteral: value) }
+  
+  public init?<T:BinaryInteger>(exactly source: T) {
+    self.init(source)
+  }
+  
+  ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for FloatingPoint
+  
   public init(sign: FloatingPointSign, exponent: Int, significand: Decimal32) {
     let x = significand.bid.unpack()
     bid = ID(sign: sign, exponent: exponent, mantissa: x.mantissa)
   }
-  
-  public init(signOf: Decimal32, magnitudeOf: Decimal32) {
-    self.init(bid: ID(0))
-    let (_, exponent, mantissa, _) = significand.bid.unpack()
-    bid = ID(sign: signOf.sign, exponent: exponent, mantissa: mantissa)
-  }
-  
-  
-  public init<Source:BinaryInteger>(_ value: Source) {
-    self.init(bid: ID(0)) // FIXME: - Binary Integer
-  }
-  
-  public init?<T:BinaryInteger>(exactly source: T) {
-    self.init(bid: ID(0)) // FIXME: - Binary Integer
-  }
-  
-  public var exponent: Int { bid.exponent }
-  
+    
   public mutating func round(_ rule: FloatingPointRoundingRule) {
     // FIXME: - Round
   }
-
   
-  // MARK: - FloatingPont class properties and attributes
+  ///////////////////////////////////////////////////////////////////////////
+  // MARK: - DecimalFloatingPoint properties and attributes
   
-  public static var radix: Int { 10 }
+  public static var exponentBitCount: Int         { ID.exponentBits }
+  public static var exponentBias: Int             { ID.exponentBias }
+  public static var significandDigitCount: Int    { ID.numberOfDigits }
   
-  public static var nan: Decimal32 { Decimal32(0) } // FIXME: -
+  public static var rounding = FloatingPointRoundingRule.toNearestOrEven
   
-  public static var signalingNaN: Decimal32 { Decimal32(0) } // FIXME: -
+  @inlinable public static var nan: Self          { Self(bid:ID.nan(.plus,0)) }
+  @inlinable public static var signalingNaN: Self { Self(bid:ID.snan) }
+  @inlinable public static var infinity: Self     { Self(bid:ID.infinite()) }
   
-  public static var infinity: Decimal32 { Decimal32(0) } // FIXME: -
-  
-  public static var greatestFiniteMagnitude: Decimal32 { Decimal32(0) } // FIXME: -
-  public static var leastNormalMagnitude: Decimal32 {
-    Decimal32(0) // FIXME: -
+  @inlinable
+  public static var greatestFiniteMagnitude: Self {
+    Self(bid: ID(exponent: ID.maximumExponent, mantissa: ID.largestNumber))
   }
   
-  public static var leastNonzeroMagnitude: Decimal32 {
-    Decimal32(0) // FIXME: -
+  @inlinable
+  public static var leastNormalMagnitude: Self {
+    Self(bid: ID(exponent: ID.minimumExponent, mantissa: ID.largestNumber))
   }
   
-  public static var pi: Decimal32 { Decimal32(0) } // FIXME: -
+  @inlinable
+  public static var leastNonzeroMagnitude: Self {
+    Self(bid: ID(exponent: ID.minimumExponent, mantissa: 1))
+  }
+  
+  @inlinable
+  public static var pi: Self { Self(bid: ID(exponent: -6, mantissa: 3141593)) }
     
-  
+  ///////////////////////////////////////////////////////////////////////////
   // MARK: - Instance properties and attributes
   
-  public var ulp: Decimal32 {
-    Decimal32(0) // FIXME: -
-  }
-    
+  public var ulp: Self               { nextUp - self }
   public var sign: FloatingPointSign { bid.sign }
+  public var exponent: Int           { bid.exponent + ID.numberOfDigits - 1 }
+  public var isNormal: Bool          { bid.isNormal }
+  public var isSubnormal: Bool       { bid.isSubnormal }
+  public var isFinite: Bool          { !bid.isInfinite }
+  public var isZero: Bool            { bid.isZero }
+  public var isInfinite: Bool        { bid.isInfinite }
+  public var isNaN: Bool             { bid.isNaN }
+  public var isSignalingNaN: Bool    { bid.isSNaN }
+  public var isCanonical: Bool       { bid.isCanonical }
   
-  public var significand: Decimal32 {
-    Decimal32(0) // FIXME: -
+  public var significand: Self {
+    let (_, _, man, valid) = bid.unpack()
+    if !valid { return self }
+    return Self(bid: ID(mantissa: man))
   }
+  
+  ///////////////////////////////////////////////////////////////////////////
+  // MARK: - Floating-point basic operations
   
   public static func * (lhs: Decimal32, rhs: Decimal32) -> Decimal32 {
-    lhs
+    lhs // FIXME: -
   }
   
-  public static func *= (lhs: inout Decimal32, rhs: Decimal32) { lhs = lhs * rhs }
+  public static func *= (lhs: inout Self, rhs: Self) { lhs = lhs * rhs }
   
-  public static func / (lhs: Decimal32, rhs: Decimal32) -> Decimal32 {
-    lhs
+  public static func / (lhs: Self, rhs: Self) -> Self {
+    lhs // FIXME: -
   }
   
-  public static func /= (lhs: inout Decimal32, rhs: Decimal32) {
-    lhs = lhs / rhs
-  }
+  public static func /= (lhs: inout Self, rhs: Self) { lhs = lhs / rhs }
   
   public mutating func formRemainder(dividingBy other: Decimal32) {
     // FIXME: -
@@ -348,50 +478,19 @@ extension Decimal32 : FloatingPoint {
     // FIXME: -
   }
   
-  public mutating func addProduct(_ lhs: Decimal32, _ rhs: Decimal32) {
+  public mutating func addProduct(_ lhs: Self, _ rhs: Self) {
     self += lhs * rhs // FIXME: -
   }
   
-  public var nextUp: Decimal32 {
+  public var nextUp: Self {
     Decimal32(0) // FIXME: -
   }
   
-  public func isEqual(to other: Decimal32) -> Bool {
-    false // FIXME: -
-  }
-  
-  public func isLess(than other: Decimal32) -> Bool {
-    false // FIXME: -
-  }
+  public func isEqual(to other: Decimal32) -> Bool  { self == other }
+  public func isLess(than other: Decimal32) -> Bool { self < other }
   
   public func isLessThanOrEqualTo(_ other: Decimal32) -> Bool {
-    false // FIXME: -
-  }
-  
-  public func isTotallyOrdered(belowOrEqualTo other: Decimal32) -> Bool {
-    false // FIXME: -
-  }
-  
-  public var isNormal: Bool {
-    false // FIXME: -
-  }
-  
-  public var isFinite: Bool {
-    false // FIXME: -
-  }
-  
-  public var isZero: Bool { bid.isZero }
-  
-  public var isSubnormal: Bool {
-    false // FIXME: -
-  }
-  
-  public var isInfinite: Bool { bid.isInfinite }
-  public var isNaN: Bool { bid.isNaN }
-  public var isSignalingNaN: Bool { bid.isSNaN }
-  
-  public var isCanonical: Bool {
-    false // FIXME: -
+    isEqual(to: other) || isLess(than: other)
   }
   
   public var magnitude: Decimal32 {
@@ -402,50 +501,51 @@ extension Decimal32 : FloatingPoint {
 
 extension Decimal32 : DecimalFloatingPoint {
 
+  public typealias RawExponent = UInt
+  public typealias RawSignificand = UInt32
+
+  ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for DecimalFloatingPoint
-  public init(bitPattern bits: UInt, bidEncoding: Bool) {
-    self.bid = ID(UInt32(bits)) // FIXME: -
+  public init(bitPattern bits: RawSignificand, bidEncoding: Bool) {
+    if bidEncoding {
+      bid = ID(ID.RawDataFields(bits))
+    } else {
+      // convert from dpd to bid
+      bid = ID(dpd: ID.RawDataFields(bits))
+    }
   }
   
-  public init(sign: FloatingPointSign, exponentBitPattern: UInt,
-              significandDigits: [UInt8]) {
-    self = Decimal32(0) // FIXME: -
+  public init(sign: FloatingPointSign, exponentBitPattern: RawExponent,
+              significandBitPattern significantBitPattern: RawSignificand) {
+    bid = ID(sign: sign, exponent: Int(exponentBitPattern) - ID.exponentBias,
+             mantissa: ID.Mantissa(significantBitPattern))
   }
   
-  public init(sign: FloatingPointSign, exponentBitPattern: Self.RawExponent,
-       significantBitPattern: Self.BitPattern) {
-    self = Decimal32(0) // FIXME: -
-  }
-  
-  // MARK: - DecimalFloatingPoint properties and attributes
-  
-  public static var exponentMaximum: Int { ID.maximumExponent }
-  public static var exponentBias: Int { ID.exponentBias }
-  public static var significandMaxDigitCount: Int { ID.numberOfDigits }
-  
+  ///////////////////////////////////////////////////////////////////////////
   // MARK: - Instance properties and attributes
   
-  public var bitPattern: UInt32 { bid.data }
+  public var significandBitPattern: UInt32 { bid.data }
+  public var exponentBitPattern: UInt   { UInt(bid.exponent+ID.exponentBias) }
+  public var dpd: UInt32                   { bid.dpd }
   
-  public var exponentBitPattern: UInt {
-    0 // FIXME: -
+  public var significandDigitCount: Int {
+    guard bid.isValid else { return 0 }
+    return ID.digitsIn(bid.mantissa)
   }
   
   public var significandDigits: [UInt8] {
-    [] // FIXME: -
+    guard bid.isValid else { return [] }
+    return Array(String(bid.mantissa)).map { UInt8($0.wholeNumberValue!) }
   }
   
-  public var significandDigitCount: Int {
-    0 // FIXME: -
+  public var decade: Self {
+    let (_, exp, _, valid) = bid.unpack()
+    if !valid { return self } // For infinity, Nan, sNaN
+    return Self(bid: ID(exponent: exp, mantissa: 1))
   }
   
-  public var decade: Decimal32 {
-    Decimal32(0) // FIXME: -
-  }
-  
-  public var isBIDFormat: Bool { true }
-  
-  public func unpack() -> (sign: FloatingPointSign, exp: Int, coeff: UInt, valid: Bool) {
+  public func unpack() -> (sign: FloatingPointSign, exp: Int, coeff: UInt,
+                           valid: Bool) {
     let x = bid.unpack()
     return (x.sign, x.exponent, x.mantissa, x.valid)
   }

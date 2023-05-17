@@ -1,7 +1,5 @@
 /**
 Copyright © 2023 Computer Inspirations. All rights reserved.
-Portions are Copyright (c) 2014 - 2021 Apple Inc. and the
-Swift project authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,13 +17,11 @@ limitations under the License.
 import UInt128
 
 extension UInt128 {
-  
   public init(w: [UInt64]) {
     let high = UInt128.High(w[1])
     let low  = UInt128.Low(w[0])
     self.init(high: high, low: low)
   }
-  
 }
 
 ///
@@ -51,6 +47,12 @@ public protocol IntegerDecimal : Codable, Hashable {
   init(sign: FloatingPointSign, exponent: Int, mantissa: Mantissa)
   
   //////////////////////////////////////////////////////////////////
+  /// Conversions from/to densely packed decimal numbers
+  init(dpd: RawDataFields)
+  
+  var dpd: RawDataFields { get }
+  
+  //////////////////////////////////////////////////////////////////
   /// Essential data to extract or update from the fields
   
   /// Sign of the number
@@ -68,11 +70,11 @@ public protocol IntegerDecimal : Codable, Hashable {
   
   //////////////////////////////////////////////////////////////////
   /// Special number definitions
-  static var infinite: Self { get }
   static var snan: Self { get }
   static var zero: Self { get }
   
-  static func nan(_ payload: Int) -> Self
+  static func nan(_ sign: FloatingPointSign, _ payload: Int) -> Self
+  static func infinite(_ s: FloatingPointSign) -> Self
   
   //////////////////////////////////////////////////////////////////
   /// Decimal number definitions
@@ -97,7 +99,7 @@ public protocol IntegerDecimal : Codable, Hashable {
 
 ///
 /// Free functionality when complying with IntegerDecimalField
-extension IntegerDecimal {
+public extension IntegerDecimal {
   
   static var highMantissaBit: Int { 1 << (smallMantissaBits.upperBound+3) }
   
@@ -105,44 +107,48 @@ extension IntegerDecimal {
   /// the number type `RawDataFields` `bitWidth`
   static var maxBit: Int { RawDataFields.bitWidth - 1 }
   
-  static var signBit:     ClosedRange<Int> { maxBit ... maxBit }
+  static var signBit:     ClosedRange<Int> { maxBit   ... maxBit }
   static var specialBits: ClosedRange<Int> { maxBit-2 ... maxBit-1 }
+  static var nanBitRange: ClosedRange<Int> { maxBit-6 ... maxBit-1 }
   
-  func getBits(_ range: ClosedRange<Int>) -> Int {
+  /// bit field definitions for DPD numbers
+  static var lowMan: Int   { smallMantissaBits.upperBound }
+  static var upperExp1: Int { exponentSMBits.upperBound }
+  static var upperExp2: Int { exponentLMBits.upperBound }
+  
+  static var expLower: ClosedRange<Int> { lowMan...maxBit-6 }
+  static var manLower: ClosedRange<Int> { 0...lowMan-1 }
+  static var expUpper: ClosedRange<Int> { lowMan+1...lowMan+6 }
+  
+  /// Bit patterns that designate special numbers
+  static var nanPattern: Int      { 0b1_1111_0 }
+  static var snanPattern: Int     { 0b1_1111_1 }
+  static var infinitePattern: Int { 0b1_1110 }
+  static var specialPattern: Int  { 0b11 }
+  
+  static var trailingPattern: Int { 0x3ff }
+  
+  @inlinable func getBits(_ range: ClosedRange<Int>) -> Int {
     guard data.bitWidth > range.upperBound else { return 0 }
-    let mask = (RawDataFields(1) << (range.upperBound - range.lowerBound)) - 1
-    let sdata = (data >> range.lowerBound) & mask
-    return Int(sdata)
+    return Self.gBits(range, from: data)
   }
   
-  mutating func setBits(_ range: ClosedRange<Int>, bits: Int) {
+  @inlinable mutating func setBits(_ range: ClosedRange<Int>, bits: Int) {
     guard data.bitWidth > range.upperBound else { return }
-    let width = range.upperBound - range.lowerBound
-    let mask = (RawDataFields(1) << width) - 1
-    let mbits = RawDataFields(bits) & mask    // limit `bits` size
-    let smask = ~(mask << range.lowerBound)   // inverted mask
-    data = (data & smask) | (mbits << range.lowerBound)
+    Self.sBits(range, bits: bits, in: &self.data)
   }
   
-  var sign: FloatingPointSign {
-    get {
-      let s = getBits(Self.signBit)
-      return s == 0 ? .plus : .minus
-    }
-    set {
-      setBits(Self.signBit, bits: newValue == .minus ? 1 : 0)
-    }
+  @inlinable var sign: FloatingPointSign {
+    get { getBits(Self.signBit) == 0 ? .plus : .minus }
+    set { setBits(Self.signBit, bits: newValue == .minus ? 1 : 0) }
   }
   
-  var exponent: Int {
-    if isSmallMantissa {
-      return getBits(Self.exponentSMBits) - Self.exponentBias
-    } else {
-      return getBits(Self.exponentLMBits) - Self.exponentBias
-    }
+  @inlinable var exponent: Int {
+    let range = isSmallMantissa ? Self.exponentSMBits : Self.exponentLMBits
+    return getBits(range) - Self.exponentBias
   }
   
-  var mantissa: Mantissa {
+  @inlinable var mantissa: Mantissa {
     if isSmallMantissa {
       return Mantissa(getBits(Self.smallMantissaBits) + Self.highMantissaBit)
     } else {
@@ -151,15 +157,15 @@ extension IntegerDecimal {
   }
   
   mutating func set(exponent: Int, mantissa: Mantissa) {
-    if mantissa > Self.highMantissaBit {
-      // small mantissa
-      setBits(Self.exponentSMBits, bits: exponent + Self.exponentBias)
-      setBits(Self.smallMantissaBits, bits: Int(mantissa) -
-              Self.highMantissaBit)
-    } else {
+    if mantissa < Self.highMantissaBit {
       // large mantissa
       setBits(Self.exponentLMBits, bits: exponent + Self.exponentBias)
       setBits(Self.largeMantissaBits, bits: Int(mantissa))
+    } else {
+      // small mantissa
+      setBits(Self.exponentSMBits, bits: exponent + Self.exponentBias)
+      setBits(Self.smallMantissaBits, bits:Int(mantissa)-Self.highMantissaBit)
+      setBits(Self.specialBits, bits: Self.specialPattern) // special encoding
     }
   }
   
@@ -180,71 +186,327 @@ extension IntegerDecimal {
       return (self.sign, exponent, mantissa, self.isValid)
   }
   
-  func nanQuiet() -> Mantissa {
-    let quietMask = ~(Mantissa(1) << (Self.signBit.lowerBound-6))
+  /// Return `dpd` pieces all at once
+  static func unpack(dpd: RawDataFields) ->
+    (sign: FloatingPointSign, exponent: Int, high: Int, trailing: Mantissa) {
+      
+      func getBits(_ range: ClosedRange<Int>) -> Int { gBits(range, from:dpd) }
+      func getBit(_ bit:Int) -> Int { ((1 << bit) & dpd) == 0 ? 0 : 1 }
+      
+      let sgn = getBit(signBit.lowerBound)==1 ? FloatingPointSign.minus : .plus
+      var exponent, high: Int, trailing: Mantissa
+      let expRange2: ClosedRange<Int>
+      
+      if getBits(Self.specialBits) == 0b11 {
+        // small mantissa
+        expRange2 = (upperExp1-1)...upperExp1
+        high = getBit(lowMan) + 8
+      } else {
+        // large mantissa
+        expRange2 = (upperExp2-1)...upperExp2
+        high = getBits(lowMan...lowMan+2)
+      }
+      exponent = (getBits(expLower) + getBits(expRange2) << 6) - exponentBias
+      trailing = Mantissa(getBits(0...lowMan-1))
+      return (sgn, exponent, high, trailing)
+  }
+  
+  @inlinable func nanQuiet() -> Mantissa {
+    let quietMask = ~(Mantissa(1) << Self.nanBitRange.lowerBound)
     return Mantissa(data) & quietMask
   }
   
-  //////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////
   /// Special number definitions
-  static var infinite: Self {
-    Self(sign:.plus, exponent:0xF<<4 - Self.exponentBias, mantissa:0)
+  @inlinable static func infinite(_ s: FloatingPointSign = .plus) -> Self {
+    Self(sign: .plus, exponent: infinitePattern<<3 - exponentBias, mantissa: 0)
   }
   
-  static var snan: Self {
-    Self(sign: .plus, exponent: 0x1F<<3 - Self.exponentBias, mantissa: 0)
+  @inlinable static var snan: Self {
+    Self(sign: .plus, exponent: snanPattern<<2 - exponentBias, mantissa: 0)
   }
   
-  static var zero: Self {
+  @inlinable static var zero: Self {
     Self(sign: .plus, exponent: 0, mantissa: 0)
   }
   
-  static func nan(_ payload: Int) -> Self {
-    let man = payload > 999_999 ? 0 : Mantissa(payload)
-    return Self(sign: .plus, exponent: 0x1F<<3, mantissa: man)
+  @inlinable
+  static func nan(_ sign: FloatingPointSign, _ payload: Int) -> Self {
+    let man = payload > largestNumber/10 ? 0 : Mantissa(payload)
+    return Self(sign:sign, exponent:nanPattern<<2 - exponentBias, mantissa:man)
   }
   
+  ///////////////////////////////////////////////////////////////////////
   // MARK: - Handy routines for testing different aspects of the number
+  @inlinable var nanBits: Int { getBits(Self.nanBitRange) }
   
-  var isSmallMantissa: Bool {
-    let range = Self.specialBits.lowerBound...Self.specialBits.upperBound
-    return isSpecial && getBits(range) != 0b11
+  static func sBits<T:FixedWidthInteger>(_ range: ClosedRange<Int>,
+                                         bits: Int, in n: inout T) {
+    let width = range.upperBound - range.lowerBound + 1
+    let mask = (T(1) << width) - 1
+    let mbits = T(bits) & mask    // limit `bits` size
+    let smask = ~(mask << range.lowerBound)   // inverted mask
+    n = (n & smask) | (mbits << range.lowerBound)
   }
   
-  var isSpecial: Bool {
-    getBits(Self.specialBits) == 0b11
+  static func sBit<T:FixedWidthInteger>(_ bit:Int, bits:Int, in n:inout T) {
+    let sbit = T(1) << bit
+    n = bits.isMultiple(of: 2) ? n & ~sbit : n | sbit
+  }
+  
+  static func gBits<T:FixedWidthInteger>(_ range: ClosedRange<Int>,
+                                         from data: T) -> Int {
+    let width = range.upperBound - range.lowerBound + 1
+    return Int((data >> range.lowerBound) & ((T(1) << width) - 1))
+  }
+  
+  var isSmallMantissa: Bool { isSpecial }
+  var isSpecial: Bool       { getBits(Self.specialBits)==Self.specialPattern }
+  var isNaN: Bool           { nanBits & Self.nanPattern == Self.nanPattern }
+  var isSNaN: Bool          { nanBits & Self.snanPattern == Self.snanPattern }
+  
+  var isNaNInf: Bool {
+    nanBits & Self.nanPattern == Self.infinitePattern<<1
   }
   
   var isInfinite: Bool {
     let range = Self.signBit.lowerBound-5...Self.signBit.lowerBound-1
-    return getBits(range) == 0b1_1110
-  }
-  
-  var isNaN: Bool {
-    let range = Self.signBit.lowerBound-6...Self.signBit.lowerBound-1
-    return getBits(range) == 0b1_1111_0
-  }
-  
-  var isNaNInf: Bool {
-    let range = Self.signBit.lowerBound-6...Self.signBit.lowerBound-1
-    return (getBits(range) & 0b1_1111_0) == 0b1_1110_0
-  }
-  
-  var isSNaN: Bool {
-    let range = Self.signBit.lowerBound-6...Self.signBit.lowerBound-1
-    return getBits(range) == 0b1_1111_1
+    return getBits(range) & Self.infinitePattern == Self.infinitePattern
   }
   
   var isValid: Bool {
-    let range = Self.signBit.lowerBound-4...Self.signBit.lowerBound-1
-    return getBits(range) != 0b1_111
+    if isNaN { return false }
+    if isSpecial {
+      if isInfinite { return false }
+      if mantissa > Self.largestNumber || mantissa == 0 { return false }
+    } else {
+      if mantissa == 0 { return false }
+    }
+    return true
+  }
+  
+  var isCanonical: Bool {
+    if isNaN {
+      if (self.data & 0x01fc << (Self.maxBit - 16)) != 0 {
+        // FIXME: - what is this? Decimal32 had mask of 0x01f0
+        return false
+      } else if mantissa > Self.largestNumber/10 {
+        return false
+      } else {
+        return true
+      }
+    } else if isInfinite {
+      return mantissa == 0
+    } else if isSpecial {
+      return mantissa <= Self.largestNumber
+    } else {
+      return true
+    }
+  }
+  
+  private func checkNormalScale(_ exp: Int, _ mant: Mantissa) -> Bool {
+    // if exponent is less than -95, the number may be subnormal
+    if exp < Self.minimumExponent+Self.numberOfDigits-1 {
+      let tenPower = power(UInt64(10), to: exp+Self.exponentBias)
+      let mantPrime = UInt64(mant) * tenPower
+      return mantPrime > Self.largestNumber/10 // normal test
+    }
+    return true // normal
+  }
+  
+  var isNormal: Bool {
+    let (_, exp, mant, valid) = self.unpack()
+    if !valid { return false }
+    return checkNormalScale(exp, mant)
+  }
+  
+  var isSubnormal: Bool {
+    let (_, exp, mant, valid) = self.unpack()
+    if !valid { return false }
+    return !checkNormalScale(exp, mant)
   }
   
   var isZero: Bool {
-    guard isValid else { return false }
-    return mantissa == 0 || mantissa > Self.largestNumber
+    if isInfinite { return false }
+    if isSpecial {
+      return mantissa > Self.largestNumber
+    } else {
+      return mantissa == 0
+    }
   }
   
+  ///////////////////////////////////////////////////////////////////////
+  // MARK: - Convert to/from BID/DPD numbers
+  
+  /// Create a new BID number from the `dpd` DPD number.
+  init(dpd: RawDataFields) {
+    
+    func getNan() -> Int { Self.gBits(Self.nanBitRange, from: dpd) }
+    
+    // Convert the dpd number to a bid number
+    self.init(0)
+    var (sign, exp, high, trailing) = Self.unpack(dpd: dpd)
+    
+    if getNan() & Self.nanPattern == Self.infinitePattern {
+      self = Self.infinite(sign); return
+    } else if getNan() & Self.nanPattern == Self.nanPattern {
+      self = Self.nan(sign, Int(trailing)); exp = 0; return
+    }
+    
+    let mask = Self.trailingPattern
+    let loops = ((Self.numberOfDigits - 1) / 3) - 1
+    let shift = mask.bitWidth - mask.leadingZeroBitCount
+    var mant = Mantissa(high)
+    for i in stride(from: shift*loops, through: 0, by: -shift) {
+      mant *= 1000
+      mant += Mantissa(Self.intFrom(dpd: Int(trailing >> i) & mask))
+    }
+    
+//    let d1 = Self.intFrom(dpd: (Int(trailing) >> shift) & mask) * 1000
+//    let d2 = Self.intFrom(dpd: Int(trailing) & mask)
+//    let mant = Mantissa(d2 + d1 + high * 1_000_000)
+    self.init(sign: sign, exponent: exp, mantissa: mant)
+  }
+  
+  /// Convert `self` to a DPD number.
+  var dpd: RawDataFields {
+    var res : RawDataFields = 0
+    
+    func setBits(_ range: ClosedRange<Int>, bits: Int) {
+      Self.sBits(range, bits: bits, in: &res)
+    }
+    
+    var (sign, exp, mantissa, _) = unpack()
+    var trailing = mantissa & 0xfffff
+    if self.isNaNInf {
+      return Self.infinite(sign).data
+    } else if self.isNaN {
+      if trailing > Self.largestNumber/10 {
+        trailing = 0
+      }
+      return Self.nan(sign, Int(trailing)).data
+    }
+    
+    // FIXME: - b0 - b2 need to be defined for arbitrary length DPDs
+    let b0 = Int(mantissa / 1_000_000)
+    let b1 = Int(mantissa / 1000) % 1000
+    let b2 = Int(mantissa) % 1000
+    let dmant = (Self.intToDPD(b1) << 10) | Self.intToDPD(b2)
+    let signBit = Self.signBit.lowerBound
+    let expLower = Self.smallMantissaBits.upperBound...signBit-6
+    let manLower = 0...Self.smallMantissaBits.upperBound-1
+    
+    exp = exp + Self.exponentBias
+    if b0 >= 8 {
+      let expUpper = signBit-4...signBit-3
+      let manUpper = signBit-5...signBit-5
+      setBits(Self.specialBits, bits: Self.specialPattern)
+      setBits(expUpper, bits: exp >> 6) // upper exponent bits
+      setBits(manUpper, bits: b0 & 1)   // upper mantisa bits
+    } else {
+      let expUpper = signBit-2...signBit-1
+      let manUpper = signBit-5...signBit-3
+      setBits(expUpper, bits: exp >> 6) // upper exponent bits
+      setBits(manUpper, bits: b0)       // upper mantisa bits
+    }
+    setBits(Self.signBit, bits: sign == .minus ? 1 : 0)
+    setBits(expLower, bits: exp)
+    setBits(manLower, bits: dmant)
+    return res
+  }
+  
+  /// Algorithm to decode a 10-bit portion of a densely-packed decimal
+  /// number into a corresponding integer. The strategy here is the break
+  /// the decoding process into a number of smaller code spaces used to
+  /// calculate the corresponding integral number.
+  static func intFrom(dpd: Int) -> Int {
+    precondition(dpd >= 0 && dpd < 1024, "Illegal dpd decoding input")
+    
+    func getBits(_ range: ClosedRange<Int>) -> Int { gBits(range, from: dpd) }
+    func getBit(_ bit:Int) -> Int { (1 << bit) & dpd == 0 ? 0 : 1 }
+    
+    // decode the 10-bit dpd number
+    let select = (getBit(3), getBits(1...2), getBits(5...6))
+    let bit0 = getBit(0), bit4 = getBit(4), bit7 = getBit(7)
+    switch select {
+      // this case covers about 50% of the numbers
+      case (0, _, _):
+        return getBits(7...9)*100 + getBits(4...6)*10 + getBits(0...2)
+        
+      // following 3 cases cover 37.5% of the numbers
+      case (1, 0b00, _):
+        return getBits(7...9)*100 + getBits(4...6)*10 + bit0 + 8
+      case (1, 0b01, _):
+        return getBits(7...9)*100 + (bit4 + 8)*10 + getBits(5...6)<<1 + bit0
+      case (1, 0b10, _):
+        return (bit7 + 8)*100 + getBits(4...6)*10 + getBits(8...9)<<1 + bit0
+        
+      // next 3 cases cover another 9.375% of the numbers
+      case (1, 0b11, 0b00):
+        return (bit7 + 8)*100 + (bit4 + 8)*10 + getBits(8...9)<<1 + bit0
+      case (1, 0b11, 0b01):
+        return (bit7 + 8)*100 + (getBits(8...9)<<1 + bit4)*10 + bit0 + 8
+      case (1, 0b11, 0b10):
+        return getBits(7...9)*100 + (bit4 + 8)*10 + bit0 + 8
+        
+        // final case covers remaining 3.125% of the numbers
+      default:
+        return (bit7 + 8)*100 + (bit4 + 8)*10 + bit0 + 8
+    }
+  }
+  
+  /// Algorithm to encode a 12-bit bcd integer (3 digits) into a
+  /// densely-packed decimal. This is the inverse of the `intFrom(dpd:)`.
+  static func intToDPD(_ n: Int) -> Int {
+    precondition(n >= 0 && n < 1000)
+    
+    let hundreds = (n / 100) % 10
+    let tens = (n / 10) % 10
+    let ones = n % 10
+    var res = 0
+    
+    func setBits(_ range: ClosedRange<Int>, bits: Int) {
+      sBits(range, bits: bits, in: &res)
+    }
+    
+    func setBit(_ bit: Int, bits: Int) { sBit(bit, bits: bits, in: &res) }
+    
+    func setBits4to6() { setBits(4...6, bits: tens) }
+    func setBits7to9() { setBits(7...9, bits: hundreds) }
+    
+    func setBit0() { setBit(0, bits: ones) }
+    func setBit4() { setBit(4, bits: tens) }
+    func setBit7() { setBit(7, bits: hundreds) }
+  
+    switch (hundreds>7, tens>7, ones>7) {
+      case (false, false, false):
+        setBits7to9(); setBits4to6(); setBits(0...2, bits: ones)
+      case (false, false, true):
+        res = 0b1000  // base encoding
+        setBits7to9(); setBits4to6(); setBit0()
+      case (false, true, false):
+        res = 0b1010  // base encoding
+        setBits7to9(); setBit4(); setBits(5...6, bits: ones>>1); setBit0()
+      case (true, false, false):
+        res = 0b1100  // base encoding
+        setBits4to6(); setBits(8...9, bits: ones>>1); setBit7(); setBit0()
+      case (true, true, false):
+        res = 0b1110  // base encoding
+        setBit7(); setBit4(); setBits(8...9, bits: ones>>1); setBit0()
+      case (true, false, true):
+        res = 0b010_1110  // base encoding
+        setBit7(); setBits(8...9, bits: tens>>1); setBit4(); setBit0()
+      case (false, true, true):
+        res = 0b100_1110  // base encoding
+        setBits7to9(); setBit4(); setBit0()
+      default:
+        res = 0b110_1110 // base encoding
+        setBit7(); setBit4(); setBit0()
+    }
+    return res
+  }
+  
+  ///////////////////////////////////////////////////////////////////////
   // MARK: - Table-derived functions
   
   /// Returns the number of decimal digits in 2^i.
@@ -341,33 +603,38 @@ public struct Status: OptionSet, CustomStringConvertible {
     public static let underflow           = Status(rawValue: Int32(DEC_Underflow))
     public static let clearFlags          = Status([])
     
-    public static let errorFlags = Status(rawValue: Int32(DEC_Division_by_zero | DEC_Overflow |
+    public static let errorFlags =
+      Status(rawValue: Int32(DEC_Division_by_zero | DEC_Overflow |
         DEC_Underflow | DEC_Conversion_syntax | DEC_Division_impossible |
-        DEC_Division_undefined | DEC_Insufficient_storage | DEC_Invalid_context | DEC_Invalid_operation))
-    public static let informationFlags = Status(rawValue: Int32(DEC_Clamped | DEC_Rounded |
+        DEC_Division_undefined | DEC_Insufficient_storage |
+        DEC_Invalid_context | DEC_Invalid_operation))
+    public static let informationFlags =
+      Status(rawValue: Int32(DEC_Clamped | DEC_Rounded |
         DEC_Inexact | DEC_Lost_digits))
     
     public init(rawValue: Int32) { self.rawValue = rawValue }
     
-    public var hasError: Bool { !Status.errorFlags.intersection(self).isEmpty }
-    public var hasInfo: Bool { !Status.informationFlags.intersection(self).isEmpty }
+    public var hasError: Bool { !Status.errorFlags.intersection(self).isEmpty}
+    public var hasInfo: Bool {
+      !Status.informationFlags.intersection(self).isEmpty
+    }
     
     public var description: String {
         var str = ""
-        if self.contains(.conversionSyntax)    { str += "Conversion syntax, "}
-        if self.contains(.divisionByZero)      { str += "Division by zero, " }
-        if self.contains(.divisionImpossible)  { str += "Division impossible, "}
-        if self.contains(.divisionUndefined)   { str += "Division undefined, "}
-        if self.contains(.insufficientStorage) { str += "Insufficient storage, " }
-        if self.contains(.inexact)             { str += "Inexact number, " }
-        if self.contains(.invalidContext)      { str += "Invalid context, " }
-        if self.contains(.invalidOperation)    { str += "Invalid operation, " }
-        if self.contains(.lostDigits)          { str += "Lost digits, " }
-        if self.contains(.overflow)            { str += "Overflow, " }
-        if self.contains(.clamped)             { str += "Clamped, " }
-        if self.contains(.rounded)             { str += "Rounded, " }
-        if self.contains(.subnormal)           { str += "Subnormal, " }
-        if self.contains(.underflow)           { str += "Underflow, " }
+        if self.contains(.conversionSyntax)   { str += "Conversion syntax, "}
+        if self.contains(.divisionByZero)     { str += "Division by zero, " }
+        if self.contains(.divisionImpossible) { str += "Division impossible, "}
+        if self.contains(.divisionUndefined)  { str += "Division undefined, "}
+        if self.contains(.insufficientStorage){str += "Insufficient storage, "}
+        if self.contains(.inexact)            { str += "Inexact number, " }
+        if self.contains(.invalidContext)     { str += "Invalid context, " }
+        if self.contains(.invalidOperation)   { str += "Invalid operation, " }
+        if self.contains(.lostDigits)         { str += "Lost digits, " }
+        if self.contains(.overflow)           { str += "Overflow, " }
+        if self.contains(.clamped)            { str += "Clamped, " }
+        if self.contains(.rounded)            { str += "Rounded, " }
+        if self.contains(.subnormal)          { str += "Subnormal, " }
+        if self.contains(.underflow)          { str += "Underflow, " }
         if str.hasSuffix(", ") { str.removeLast(2) }
         return str
     }
@@ -454,7 +721,7 @@ internal func string<T:IntegerDecimal>(from x: T) -> String {
   if valid {
     // x is not special
     let ps = String(coeff)
-    let exponent_x = Int(exp) - T.exponentBias + (ps.count - 1)
+    let exponent_x = Int(exp) + (ps.count - 1)
     return s + addDecimalPointAndExponent(ps, exponent_x, T.numberOfDigits)
   } else {
     // x is Inf. or NaN or 0
@@ -491,7 +758,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   if c == "\0" || (c != "." && c != "-" && c != "+" && (c < "0" || c > "9")) {
     // Infinity?
     if c == "i" && (ps.hasPrefix("nfinity") || ps.hasPrefix("nf")) {
-      return T.infinite
+      return T.infinite(.plus)
     }
     // return sNaN
     if c == "s" && ps.hasPrefix("nan") {
@@ -500,19 +767,18 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
     } else {
       // return qNaN & any coefficient
       let coeff = Int(ps.dropFirst(2)) ?? 0 // drop "AN"
-      return T.nan(coeff)
+      return T.nan(.plus, coeff)
     }
   }
   
   // detect +INF or -INF
   if ps.hasPrefix("infinity") || ps.hasPrefix("inf") {
     if c == "+" {
-      return T.infinite
+      return T.infinite()
     } else if c == "-" {
-      var x = T.infinite; x.sign = .minus
-      return x
+      return T.infinite(.minus)
     } else {
-      return T.nan(0)
+      return T.nan(.plus, 0)
     }
   }
   
@@ -540,8 +806,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   // if c isn"t a decimal point or a decimal digit, return NaN
   if c != "." && (c < "0" || c > "9") {
     // return NaN
-    var x = T.nan(0); x.sign = sign
-    return x
+    return T.nan(sign, 0)
   }
   
   var rdx_pt_enc = false
@@ -585,8 +850,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
           c = ps.isEmpty ? "\0" : ps.removeFirst()
         } else {
           // if 2 radix points, return NaN
-          var x = T.nan(0); x.sign = sign
-          return x
+          return T.nan(sign, 0)
         }
       } else if ps.isEmpty {
         right_radix_leading_zeros = T.exponentBias -
@@ -607,13 +871,12 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   var midpoint = 0
   var rounded_up = 0
   var add_expon = 0
-  var rounded = 0
+//Decimal32.exponentBias  var rounded = 0
   while (c >= "0" && c <= "9") || c == "." {
     if c == "." {
       if rdx_pt_enc {
         // return NaN
-        var x = T.nan(0); x.sign = sign
-        return x
+        return T.nan(sign, 0)
       }
       rdx_pt_enc = true
       c = ps.isEmpty ? "\0" : ps.removeFirst()
@@ -650,10 +913,10 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
         coefficient_x = 1000000
         add_expon = 1
       }
-      if c > "0" {
-        rounded = 1
-      }
-      add_expon += 1;
+//      if c > "0" {
+//        rounded = 1
+//      }
+      add_expon += 1
     } else { // ndigits > 8
       add_expon+=1
       if midpoint != 0 && c > "0" {
@@ -661,9 +924,9 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
         midpoint = 0;
         rounded_up = 1;
       }
-      if c > "0" {
-        rounded = 1;
-      }
+//      if c > "0" {
+//        rounded = 1;
+//      }
     }
     c = ps.isEmpty ? "\0" : ps.removeFirst()
   }
@@ -683,8 +946,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   
   if c != "e" {
     // return NaN
-    var x = T.nan(0); x.sign = sign
-    return x
+    return T.nan(sign, 0)
   }
   c = ps.isEmpty ? "\0" : ps.removeFirst()
   let sgn_expon = (c == "-") ? 1 : 0
@@ -694,8 +956,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   }
   if c == "\0" || c < "0" || c > "9" {
     // return NaN
-    var x = T.nan(0); x.sign = sign
-    return x
+    return T.nan(sign, 0)
   }
   
   while (c >= "0") && (c <= "9") {
@@ -708,8 +969,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   
   if c != "\0" {
     // return NaN
-    var x = T.nan(0); x.sign = sign
-    return x
+    return T.nan(sign, 0)
   }
   
 //  if rounded != 0 {
