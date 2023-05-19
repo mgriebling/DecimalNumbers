@@ -80,29 +80,15 @@ public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
   /// - Parameter value: A floating-point value to be converted.
   init?<Source:DecimalFloatingPoint>(exactly value: Source)
   
+  /// A decimal floating-point type's `exponentBias` imposes a limit on the
+  /// range of the exponent for normal, finite values. The unbiased exponent of
+  /// a type `F` can be obtained with this attribute. The unbiased exponent
+  /// can be calculated as:
+  ///         `exponent = exponentBitPattern - exponentBias`
+  ///
+  static var exponentBias: Int { get }
+  
   /// The number of bits used to represent the type's exponent.
-  ///
-  /// A binary floating-point type's `exponentBitCount` imposes a limit on the
-  /// range of the exponent for normal, finite values. The *exponent bias* of
-  /// a type `F` can be calculated as the following, where `**` is
-  /// exponentiation:
-  ///
-  ///     let bias = 10 ** (F.exponentBitCount - 1) - 1
-  ///
-  /// The least normal exponent for values of the type `F` is `1 - bias`, and
-  /// the largest finite exponent is `bias`. An all-zeros exponent is reserved
-  /// for subnormals and zeros, and an all-ones exponent is reserved for
-  /// infinity and NaN.
-  ///
-  /// For example, the `Decimal32` type has an `exponentBitCount` of 8, giving
-  /// an exponent bias of `127` by the calculation above.
-  ///
-  ///     let bias = 2 ** (Float.exponentBitCount - 1) - 1
-  ///     // bias == 127
-  ///     print(Float.greatestFiniteMagnitude.exponent)
-  ///     // Prints "127"
-  ///     print(Float.leastNormalMagnitude.exponent)
-  ///     // Prints "-126"
   static var exponentBitCount: Int { get }
   
   /// The available number of significand digits.
@@ -158,7 +144,7 @@ public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
   /// Class-wide setting for how numbers will be rounded in calculations.
   static var rounding: FloatingPointRoundingRule { get set }
   
-  /// The number of bits required to represent the value's significand.
+  /// The number of digits required to represent the value's significand.
   ///
   /// If this value is a finite nonzero number, `significandDigitCount` is the
   /// number of decimal digits required to represent the value of

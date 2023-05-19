@@ -31,7 +31,8 @@ public struct IntegerDecimal64 : IntegerDecimal {
     self.data = word
   }
   
-  public init(sign: FloatingPointSign, exponent: Int, mantissa: Mantissa) {
+  public init(sign:FloatingPointSign = .plus, exponent:Int = 0,
+              mantissa:Mantissa) {
     self.sign = sign
     self.set(exponent: exponent, mantissa: mantissa)
   }
@@ -64,12 +65,88 @@ public struct IntegerDecimal64 : IntegerDecimal {
 /// conversion functions between the two encoding formats.
 public struct Decimal64 {
   
-  var x: IntegerDecimal64
+  public typealias ID = IntegerDecimal64
+  var bid: ID
   
-  func add(_ y: Decimal64) -> Decimal64 {
-    if self.x.isInfinite { return self }
-    if y.x.isInfinite { return y }
+  public init(bid: ID) {
+    self.bid = bid
+  }
+  
+  public init?(_ s: String) {
+    if let n:ID = numberFromString(s, round: .toNearestOrEven) {
+      bid = n
+    }
+    return nil
+  }
+  
+  func add(_ y: Self, rounding: FloatingPointRoundingRule) -> Self {
     return self
   }
   
+  ///////////////////////////////////////////////////////////////////////////
+  // MARK: - DecimalFloatingPoint properties and attributes
+  
+  public static var exponentBitCount: Int         { ID.exponentBits }
+  public static var exponentBias: Int             { ID.exponentBias }
+  public static var significandDigitCount: Int    { ID.numberOfDigits }
+  
+  public static var rounding = FloatingPointRoundingRule.toNearestOrEven
+  
+  @inlinable public static var nan: Self          { Self(bid:ID.nan(.plus,0)) }
+  @inlinable public static var signalingNaN: Self { Self(bid:ID.snan) }
+  @inlinable public static var infinity: Self     { Self(bid:ID.infinite()) }
+  
+  @inlinable public static var greatestFiniteMagnitude: Self {
+    Self(bid: ID(exponent: ID.maximumExponent, mantissa: ID.largestNumber))
+  }
+  
+  @inlinable public static var leastNormalMagnitude: Self {
+    Self(bid: ID(exponent: ID.minimumExponent, mantissa: ID.largestNumber))
+  }
+  
+  @inlinable public static var leastNonzeroMagnitude: Self {
+    Self(bid: ID(exponent: ID.minimumExponent, mantissa: 1))
+  }
+  
+  @inlinable public static var pi: Self {
+    let p : ID.Mantissa = 3_141_592_653_589_793
+    return Self(bid: ID(exponent: -ID.numberOfDigits+1, mantissa: p))
+  }
+  
+}
+
+extension Decimal64 : AdditiveArithmetic {
+  public static func - (lhs: Self, rhs: Self) -> Self {
+    var addIn = rhs
+    addIn.negate()
+    return lhs + addIn
+  }
+  
+  public mutating func negate() {
+    bid.sign = bid.sign == .minus ? FloatingPointSign.plus : .minus
+  }
+  
+  public static func + (lhs: Self, rhs: Self) -> Self {
+    lhs.add(rhs, rounding: .toNearestOrEven)
+  }
+  
+  public static var zero: Self { Self(bid: ID.zero(.plus)) }
+}
+
+extension Decimal64 : Equatable {
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    ID.equals(lhs: lhs.bid, rhs: rhs.bid)
+  }
+}
+
+extension Decimal64 : Comparable {
+  public static func < (lhs: Self, rhs: Self) -> Bool {
+    ID.lessThan(lhs: lhs.bid, rhs: rhs.bid)
+  }
+}
+
+extension Decimal64 : CustomStringConvertible {
+  public var description: String {
+    string(from: bid)
+  }
 }

@@ -1592,7 +1592,7 @@ struct Tables {
   // breakpoints: test values to decide between two possible exponents
   // multipliers1/multipliers2: corresponding reciprocal multipliers
   // coefflimits: used in exactness checks
-  //
+  // 
   static let bid_breakpoints_binary32 : [UInt128] = [
       UInt128(w: [17291492046443221751, 474778387287989]),
       UInt128(w: [17522542451896487724, 379822709830391]),
@@ -2917,9 +2917,10 @@ struct Tables {
     UInt128(w: [2750767489022258176, 25907488423335759])
   ]
   
-  
+  /// 662 breakpoints for BID32 exponent
+  /// 1 AB32 8946 F80E aA54497CEDA668DE0
   static let bid_breakpoints_bid32 : [UInt128] = [
-    UInt128(w: [0, 0]),
+     UInt128(w: [0, 0]),
     UInt128(w: [0, 0]),
     UInt128(w: [0, 0]),
     UInt128(w: [0, 0]),

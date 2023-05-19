@@ -18,11 +18,11 @@ import UInt128
 
 extension UInt128  {
   @available(macOS 13.3, iOS 16.4, macCatalyst 16.4, tvOS 16.4, watchOS 9.4, *)
-  init(bigInt: StaticBigInt) {
+  public init(bigInt: StaticBigInt) {
     precondition(bigInt.signum() >= 0, "UInt128 literal cannot be negative")
     precondition(bigInt.bitWidth <= Self.bitWidth,
                  "\(bigInt.bitWidth)-bit literal too large for UInt128")
-    precondition(UInt.bitWidth == 64, "Expecting 64-bit UInt")
+    precondition(Low.bitWidth == 64, "Expecting 64-bit UInt")
     self.init(high: High(bigInt[1]), low: Low(bigInt[0]))
   }
 }
@@ -42,8 +42,9 @@ public struct IntegerDecimal128 : IntegerDecimal {
   public init(_ word: RawDataFields) {
     self.data = word
   }
-    
-  public init(sign: FloatingPointSign, exponent: Int, mantissa: Mantissa) {
+  
+  public init(sign:FloatingPointSign = .plus, exponent:Int = 0,
+              mantissa:Mantissa) {
     self.sign = sign
     self.set(exponent: exponent, mantissa: mantissa)
   }
@@ -85,12 +86,94 @@ public struct IntegerDecimal128 : IntegerDecimal {
 /// conversion functions between the two encoding formats.
 public struct Decimal128 {
   
-  var x: IntegerDecimal128
+  public typealias ID = IntegerDecimal128
+  var bid: ID
   
-  func add(_ y: Self) -> Self {
-    if self.x.isInfinite { return self }
-    if y.x.isInfinite { return y }
+  public init(bid: ID) {
+    self.bid = bid
+  }
+  
+  public init?(_ s: String) {
+    if let n:ID = numberFromString(s, round: .toNearestOrEven) {
+      bid = n
+    }
+    return nil
+  }
+  
+  func add(_ y: Self, rounding: FloatingPointRoundingRule) -> Self {
     return self
   }
   
+  ///////////////////////////////////////////////////////////////////////////
+  // MARK: - DecimalFloatingPoint properties and attributes
+  
+  public static var exponentBitCount: Int         { ID.exponentBits }
+  public static var exponentBias: Int             { ID.exponentBias }
+  public static var significandDigitCount: Int    { ID.numberOfDigits }
+  
+  public static var rounding = FloatingPointRoundingRule.toNearestOrEven
+  
+  @inlinable public static var nan: Self          { Self(bid:ID.nan(.plus,0)) }
+  @inlinable public static var signalingNaN: Self { Self(bid:ID.snan) }
+  @inlinable public static var infinity: Self     { Self(bid:ID.infinite()) }
+  
+  @inlinable public static var greatestFiniteMagnitude: Self {
+    Self(bid: ID(exponent: ID.maximumExponent, mantissa: ID.largestNumber))
+  }
+  
+  @inlinable public static var leastNormalMagnitude: Self {
+    Self(bid: ID(exponent: ID.minimumExponent, mantissa: ID.largestNumber))
+  }
+  
+  @inlinable public static var leastNonzeroMagnitude: Self {
+    Self(bid: ID(exponent: ID.minimumExponent, mantissa: 1))
+  }
+  
+  @inlinable public static var pi: Self {
+    let p: ID.Mantissa
+    if #available(macOS 13.3, iOS 16.4, macCatalyst 16.4, tvOS 16.4,
+                  watchOS 9.4, *) {
+      p = ID.Mantissa(bigInt: 3_141_592_653_589_793_238_462_643_383_279_503)
+    } else {
+      // Fallback on earlier versions - same number in hexadecimal
+      p = ID.Mantissa(high: 0x9AE4_7957_96A7, low: 0xBABE_5564_E6F3_9F8F)
+    }
+    return Self(bid: ID(exponent: -ID.numberOfDigits+1, mantissa: p))
+  }
+}
+
+extension Decimal128 : AdditiveArithmetic {
+  public static func - (lhs: Self, rhs: Self) -> Self {
+    var addIn = rhs
+    addIn.negate()
+    return lhs + addIn
+  }
+  
+  public mutating func negate() {
+    bid.sign = bid.sign == .minus ? FloatingPointSign.plus : .minus
+  }
+  
+  public static func + (lhs: Self, rhs: Self) -> Self {
+    lhs.add(rhs, rounding: .toNearestOrEven)
+  }
+  
+  public static var zero: Self { Self(bid: ID.zero(.plus)) }
+}
+
+extension Decimal128 : Equatable {
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    ID.equals(lhs: lhs.bid, rhs: rhs.bid)
+  }
+}
+
+extension Decimal128 : Comparable {
+  public static func < (lhs: Self, rhs: Self) -> Bool {
+    ID.lessThan(lhs: lhs.bid, rhs: rhs.bid)
+  }
+}
+
+extension Decimal128 : CustomStringConvertible {
+  public var description: String {
+    string(from: bid)
+  }
 }

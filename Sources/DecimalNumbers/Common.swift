@@ -33,7 +33,7 @@ extension UInt128 {
 public protocol IntegerDecimal : Codable, Hashable {
   
   associatedtype RawDataFields : UnsignedInteger & FixedWidthInteger
-  associatedtype Mantissa : UnsignedInteger
+  associatedtype Mantissa : UnsignedInteger & FixedWidthInteger
   
   var data: RawDataFields { get set }
   
@@ -43,7 +43,7 @@ public protocol IntegerDecimal : Codable, Hashable {
   /// Initialize with a raw data word
   init(_ word: RawDataFields)
   
-  /// Initialize with sign, exponent, and mantissa
+  /// Initialize with sign, biased exponent, and unsigned mantissa
   init(sign: FloatingPointSign, exponent: Int, mantissa: Mantissa)
   
   //////////////////////////////////////////////////////////////////
@@ -71,10 +71,11 @@ public protocol IntegerDecimal : Codable, Hashable {
   //////////////////////////////////////////////////////////////////
   /// Special number definitions
   static var snan: Self { get }
-  static var zero: Self { get }
   
+  static func zero(_ sign: FloatingPointSign) -> Self
   static func nan(_ sign: FloatingPointSign, _ payload: Int) -> Self
-  static func infinite(_ s: FloatingPointSign) -> Self
+  static func infinite(_ sign: FloatingPointSign) -> Self
+  static func max(_ sign: FloatingPointSign) -> Self
   
   //////////////////////////////////////////////////////////////////
   /// Decimal number definitions
@@ -145,7 +146,7 @@ public extension IntegerDecimal {
   
   @inlinable var exponent: Int {
     let range = isSmallMantissa ? Self.exponentSMBits : Self.exponentLMBits
-    return getBits(range) - Self.exponentBias
+    return getBits(range)
   }
   
   @inlinable var mantissa: Mantissa {
@@ -156,59 +157,62 @@ public extension IntegerDecimal {
     }
   }
   
+  /// Note: exponent is assumed to be biased
   mutating func set(exponent: Int, mantissa: Mantissa) {
+    precondition(exponent >= 0 && exponent <= Self.maximumExponent,
+                 "Invalid biased exponent")
     if mantissa < Self.highMantissaBit {
       // large mantissa
-      setBits(Self.exponentLMBits, bits: exponent + Self.exponentBias)
+      setBits(Self.exponentLMBits, bits: exponent)
       setBits(Self.largeMantissaBits, bits: Int(mantissa))
     } else {
       // small mantissa
-      setBits(Self.exponentSMBits, bits: exponent + Self.exponentBias)
+      setBits(Self.exponentSMBits, bits: exponent)
       setBits(Self.smallMantissaBits, bits:Int(mantissa)-Self.highMantissaBit)
       setBits(Self.specialBits, bits: Self.specialPattern) // special encoding
     }
   }
   
-  /// Return `self's` pieces all at once
+  /// Return `self's` pieces all at once with unbiased exponent
   func unpack() ->
-    (sign: FloatingPointSign, exponent: Int, mantissa: Mantissa, valid: Bool) {
-      let exponent: Int, mantissa: Mantissa
-      if isSmallMantissa {
-        // small mantissa
-        exponent = getBits(Self.exponentSMBits) - Self.exponentBias
-        mantissa = Mantissa(getBits(Self.smallMantissaBits) +
-                            Self.highMantissaBit)
-      } else {
-        // large mantissa
-        exponent = getBits(Self.exponentLMBits) - Self.exponentBias
-        mantissa = Mantissa(getBits(Self.largeMantissaBits))
-      }
-      return (self.sign, exponent, mantissa, self.isValid)
+  (sign: FloatingPointSign, exponent: Int, mantissa: Mantissa, valid: Bool) {
+    let exponent: Int, mantissa: Mantissa
+    if isSmallMantissa {
+      // small mantissa
+      exponent = getBits(Self.exponentSMBits)
+      mantissa = Mantissa(getBits(Self.smallMantissaBits) +
+                          Self.highMantissaBit)
+    } else {
+      // large mantissa
+      exponent = getBits(Self.exponentLMBits)
+      mantissa = Mantissa(getBits(Self.largeMantissaBits))
+    }
+    return (self.sign, exponent, mantissa, self.isValid)
   }
   
   /// Return `dpd` pieces all at once
   static func unpack(dpd: RawDataFields) ->
-    (sign: FloatingPointSign, exponent: Int, high: Int, trailing: Mantissa) {
-      
-      func getBits(_ range: ClosedRange<Int>) -> Int { gBits(range, from:dpd) }
-      func getBit(_ bit:Int) -> Int { ((1 << bit) & dpd) == 0 ? 0 : 1 }
-      
-      let sgn = getBit(signBit.lowerBound)==1 ? FloatingPointSign.minus : .plus
-      var exponent, high: Int, trailing: Mantissa
-      let expRange2: ClosedRange<Int>
-      
-      if getBits(Self.specialBits) == 0b11 {
-        // small mantissa
-        expRange2 = (upperExp1-1)...upperExp1
-        high = getBit(lowMan) + 8
-      } else {
-        // large mantissa
-        expRange2 = (upperExp2-1)...upperExp2
-        high = getBits(lowMan...lowMan+2)
-      }
-      exponent = (getBits(expLower) + getBits(expRange2) << 6) - exponentBias
-      trailing = Mantissa(getBits(0...lowMan-1))
-      return (sgn, exponent, high, trailing)
+  (sign: FloatingPointSign, exponent: Int, high: Int, trailing: Mantissa) {
+    
+    func getBits(_ range: ClosedRange<Int>) -> Int { gBits(range, from:dpd) }
+    func getBit(_ bit:Int) -> Int { ((1 << bit) & dpd) == 0 ? 0 : 1 }
+    
+    let sgn = getBit(signBit.lowerBound)==1 ? FloatingPointSign.minus : .plus
+    var exponent, high: Int, trailing: Mantissa
+    let expRange2: ClosedRange<Int>
+    
+    if getBits(Self.specialBits) == 0b11 {
+      // small mantissa
+      expRange2 = (upperExp1-1)...upperExp1
+      high = getBit(lowMan) + 8
+    } else {
+      // large mantissa
+      expRange2 = (upperExp2-1)...upperExp2
+      high = getBits(lowMan...lowMan+2)
+    }
+    exponent = (getBits(expLower) + getBits(expRange2) << 6)
+    trailing = Mantissa(getBits(0...lowMan-1))
+    return (sgn, exponent, high, trailing)
   }
   
   @inlinable func nanQuiet() -> Mantissa {
@@ -219,21 +223,34 @@ public extension IntegerDecimal {
   ///////////////////////////////////////////////////////////////////////
   /// Special number definitions
   @inlinable static func infinite(_ s: FloatingPointSign = .plus) -> Self {
-    Self(sign: .plus, exponent: infinitePattern<<3 - exponentBias, mantissa: 0)
+    Self(sign: s, exponent: infinitePattern<<3 - exponentBias, mantissa: 0)
+  }
+  
+  @inlinable static func max(_ s: FloatingPointSign = .plus) -> Self {
+    Self(sign:s, exponent:maximumExponent-exponentBias, mantissa:largestNumber)
+  }
+  
+  static func overflow(_ sign: FloatingPointSign,
+                       rnd_mode: FloatingPointRoundingRule) -> Self {
+    if rnd_mode == .towardZero || rnd_mode == (sign != .plus ? .up : .down) {
+      return max(sign)
+    } else {
+      return infinite(sign)
+    }
   }
   
   @inlinable static var snan: Self {
-    Self(sign: .plus, exponent: snanPattern<<2 - exponentBias, mantissa: 0)
+    Self(sign: .plus, exponent: snanPattern<<2-exponentBias, mantissa: 0)
   }
   
-  @inlinable static var zero: Self {
-    Self(sign: .plus, exponent: 0, mantissa: 0)
+  @inlinable static func zero(_ sign: FloatingPointSign) -> Self {
+    Self(sign: sign, exponent: 0, mantissa: 0)
   }
   
   @inlinable
   static func nan(_ sign: FloatingPointSign, _ payload: Int) -> Self {
     let man = payload > largestNumber/10 ? 0 : Mantissa(payload)
-    return Self(sign:sign, exponent:nanPattern<<2 - exponentBias, mantissa:man)
+    return Self(sign:sign, exponent:nanPattern<<2-exponentBias, mantissa:man)
   }
   
   ///////////////////////////////////////////////////////////////////////
@@ -306,8 +323,9 @@ public extension IntegerDecimal {
   
   private func checkNormalScale(_ exp: Int, _ mant: Mantissa) -> Bool {
     // if exponent is less than -95, the number may be subnormal
+    let exp = exp + Self.exponentBias
     if exp < Self.minimumExponent+Self.numberOfDigits-1 {
-      let tenPower = power(UInt64(10), to: exp+Self.exponentBias)
+      let tenPower = power(UInt64(10), to: exp)
       let mantPrime = UInt64(mant) * tenPower
       return mantPrime > Self.largestNumber/10 // normal test
     }
@@ -344,28 +362,29 @@ public extension IntegerDecimal {
     func getNan() -> Int { Self.gBits(Self.nanBitRange, from: dpd) }
     
     // Convert the dpd number to a bid number
-    self.init(0)
     var (sign, exp, high, trailing) = Self.unpack(dpd: dpd)
+    var nan = false
     
     if getNan() & Self.nanPattern == Self.infinitePattern {
       self = Self.infinite(sign); return
     } else if getNan() & Self.nanPattern == Self.nanPattern {
-      self = Self.nan(sign, Int(trailing)); exp = 0; return
+      nan = true; exp = 0
     }
     
     let mask = Self.trailingPattern
-    let loops = ((Self.numberOfDigits - 1) / 3) - 1
+    let mils = ((Self.numberOfDigits - 1) / 3) - 1
     let shift = mask.bitWidth - mask.leadingZeroBitCount
     var mant = Mantissa(high)
-    for i in stride(from: shift*loops, through: 0, by: -shift) {
+    for i in stride(from: shift*mils, through: 0, by: -shift) {
       mant *= 1000
       mant += Mantissa(Self.intFrom(dpd: Int(trailing >> i) & mask))
     }
     
-//    let d1 = Self.intFrom(dpd: (Int(trailing) >> shift) & mask) * 1000
-//    let d2 = Self.intFrom(dpd: Int(trailing) & mask)
-//    let mant = Mantissa(d2 + d1 + high * 1_000_000)
-    self.init(sign: sign, exponent: exp, mantissa: mant)
+    //    let d1 = Self.intFrom(dpd: (Int(trailing) >> shift) & mask) * 1000
+    //    let d2 = Self.intFrom(dpd: Int(trailing) & mask)
+    //    let mant = Mantissa(d2 + d1 + high * 1_000_000)
+    if nan { self = Self.nan(sign, Int(mant)) }
+    else { self.init(sign: sign, exponent: exp, mantissa: mant) }
   }
   
   /// Convert `self` to a DPD number.
@@ -415,15 +434,709 @@ public extension IntegerDecimal {
     return res
   }
   
+  ///////////////////////////////////////////////////////////////////////
+  // MARK: - Double/BID conversions
+  
+  static func bid(from x:Double, _ rnd_mode:Rounding) -> Self {
+    // Unpack the input
+    let expMask = 1<<11 - 1
+    var s = x.sign, e = (Int(x.bitPattern >> 52)) & expMask, t = 0
+    var c = UInt128(high: 0, low: x.significandBitPattern)
+    
+    if e == 0 {
+      if x.isZero { return zero(s) }
+      
+      // denormalizd number
+      let l = c.leadingZeroBitCount - (64 - 53)
+      c <<= 1
+      e = -(l + 1074)
+    } else if e == expMask {
+      if x.isInfinite { return infinite(s) }
+      if x.isNaN { return nan(s, Int(c._lowWord)) }
+    } else {
+      c |= 1 << 52 // set upper bit
+      e -= 1075
+      t = c.trailingZeroBitCount
+    }
+    
+    // Now -1126<=e<=971 (971 for max normal, -1074 for min normal,
+    // -1126 for min denormal)
+    
+    // Treat like a quad input for uniformity, so (2^{113-53} * c * r) >> 320,
+    // where 320 is the truncation value for the reciprocal multiples, exactly
+    // five 64-bit words. So we shift 113-53=60 places
+    //
+    // Remember to compensate for the fact that exponents are integer for quad
+    c = c << 60  //sll128_short(c.hi, c.lo, 60)
+    t += (113 - 53)
+    e -= (113 - 53) // Now e belongs [-1186;911].
+    
+    // Check for "trivial" overflow, when 2^e * 2^112 > 10^emax * 10^d.
+    // We actually check if e >= ceil((emax + d) * log_2(10) - 112)
+    // This could be intercepted later, but it's convenient to keep tables
+    // smaller
+    if e >= 211 {
+      // state.formUnion([.overflow, .inexact])
+      return overflow(s, rnd_mode: rnd_mode)
+    }
+    // Now filter out all the exact cases where we need to specially force
+    // the exponent to 0. We can let through inexact cases and those where the
+    // main path will do the right thing anyway, e.g. integers outside coeff range.
+    //
+    // First check that e <= 0, because if e > 0, the input must be >= 2^113,
+    // which is too large for the coefficient of any target decimal format.
+    // We write a = -(e + t)
+    //
+    // (1) If e + t >= 0 <=> a <= 0 the input is an integer; treat it specially
+    //     iff it fits in the coefficient range. Shift c' = c >> -e, and
+    //     compare with the coefficient range; if it's in range then c' is
+    //     our coefficient, exponent is 0. Otherwise we pass through.
+    //
+    // (2) If a > 0 then we have a non-integer input. The special case would
+    //     arise as c' / 2^a where c' = c >> t, i.e. 10^-a * (5^a c'). Now
+    //     if a > 48 we can immediately forget this, since 5^49 > 10^34.
+    //     Otherwise we determine whether we're in range by a table based on
+    //     a, and if so get the multiplier also from a table based on a.
+    if e <= 0 {
+      let a = -(e + t)
+      var cint = c
+      if a <= 0 {
+        cint = cint >> -e // srl128(cint.hi, cint.low, -e)
+        if cint < largestNumber+1 {  //((cint.components.high == 0) && (cint.components.low < ID.largestNumber+1)) { // MAX_NUMBERP1)) {
+          return Self(sign: s, exponent: 0, mantissa: Mantissa(cint._lowWord))  // return_bid32(s, EXPONENT_BIAS, Int(cint.low))
+        }
+      } else if a <= 48 {
+        var pow5 = Self.coefflimitsBID32(a)
+        cint = cint >> t  // srl128(cint.hi, cint.low, t)
+        if cint <= pow5 { // le128(cint.hi, cint.low, pow5.hi, pow5.low) {
+          var cc = cint
+          pow5 = power5(a)
+          cc = mul128x128Low(cc, pow5)
+          return Self(sign: s, exponent: -a, mantissa: Mantissa(cc._lowWord)) // return_bid32(s, EXPONENT_BIAS - a, Int(cc.low))
+        }
+      }
+    }
+    
+    // Check for "trivial" underflow, when 2^e * 2^113 <= 10^emin * 1/4,
+    // so test e <= floor(emin * log_2(10) - 115)
+    // In this case just fix ourselves at that value for uniformity.
+    //
+    // This is important not only to keep the tables small but to maintain the
+    // testing of the round/sticky words as a correct rounding method
+    if e <= -450 {
+      e = -450
+    }
+    
+    // Now look up our exponent e, and the breakpoint between e and e+1
+    let m_min = Tables.bid_breakpoints_bid32[e+450]
+    var e_out = Int(Tables.bid_exponents_bid32[e+450])
+    
+    // Choose exponent and reciprocal multiplier based on breakpoint
+    var r:UInt256
+    if c <= m_min { // le128(c.components.high, c.components.low, m_min.high, m_min.low) {
+      r = Tables.bid_multipliers1_bid32[e+450]
+    } else {
+      r = Tables.bid_multipliers2_bid32[e+450]
+      e_out += 1
+    }
+    
+    // Do the reciprocal multiplication
+    var z=UInt384()
+    Self.mul128x256to384(&z, c, r)
+    var c_prov = Mantissa(z.w[5])
+    
+    // Test inexactness and underflow (when testing tininess before rounding)
+    //    if ((z.w[4] != 0) || (z.w[3] != 0)) {
+    //        // __set_status_flags(pfpsf,BID_INEXACT_EXCEPTION);
+    //        state.insert(.inexact)
+    //        if (c_prov < 1000000) {
+    //            state.insert(.underflow)
+    //            // __set_status_flags(pfpsf,BID_UNDERFLOW_EXCEPTION);
+    //        }
+    //    }
+    
+    // Round using round-sticky words
+    // If we spill over into the next decade, correct
+    // Flag underflow where it may be needed even for |result| = SNN
+    let ind = roundboundIndex(rnd_mode, s == .minus, Int(c_prov))
+    if bid_roundbound_128[ind] < UInt128(high: z.w[4], low: z.w[3]) { // z.w[4], z.w[3])) {
+      c_prov += 1
+      let max = largestNumber+1
+      if c_prov == max {
+        c_prov = max/10
+        e_out += 1
+        //      } else if c_prov == max/10 && e_out == 0 {
+        // let ind = roundboundIndex(rnd_mode, false, 0) >> 2
+        //            if ((((ind & 3) == 0) && (z.w[4] <= 17524406870024074035)) ||
+        //                ((ind + (s & 1) == 2) && (z.w[4] <= 16602069666338596454))) {
+        //                state.insert(.underflow)
+        //            }
+      }
+    }
+    
+    // Check for overflow
+    if e_out > 90 + exponentBias {
+      // state.formUnion([.overflow, .inexact])
+      return overflow(s, rnd_mode: rnd_mode)
+    }
+    
+    // Set the inexact flag as appropriate and check underflow
+    // It's no doubt superfluous to check inexactness, but anyway...
+    //    if z.w[4] != 0 || z.w[3] != 0 {
+    //        state.insert(.inexact)
+    //        if c_prov < 1_000_000 {
+    //            state.insert(.underflow)
+    //        }
+    //    }
+    
+    // Package up the result
+    return Self(sign: s, exponent: e_out, mantissa: c_prov) // return_bid32 (s, e_out, Int(c_prov))
+  }
+  
+  static func bid (from x:UInt64, _ rnd_mode:Rounding) -> Self {
+    // Get BID from a 64-bit unsigned integer
+    if x <= Self.largestNumber { // x <= 10^7-1 and the result is exact
+      return Self(sign: .plus, exponent: 0, mantissa: Mantissa(x))
+    } else { // x >= 10^7 and the result may be inexact
+      // the smallest x is 10^7 which has 8 decimal digits
+      // the largest x is 0xffffffffffffffff = 18446744073709551615 w/ 20 digits
+      var q, ind : Int // number of digits to remove for q
+      switch x {
+        case 0..<100_000_000:                q =  8; ind =  1
+        case  ..<1_000_000_000:              q =  9; ind =  2
+        case  ..<10_000_000_000:             q = 10; ind =  3
+        case  ..<100_000_000_000:            q = 11; ind =  4
+        case  ..<1_000_000_000_000:          q = 12; ind =  5
+        case  ..<10_000_000_000_000:         q = 13; ind =  6
+        case  ..<100_000_000_000_000:        q = 14; ind =  7
+        case  ..<1_000_000_000_000_000:      q = 15; ind =  8
+        case  ..<10_000_000_000_000_000:     q = 16; ind =  9
+        case  ..<100_000_000_000_000_000:    q = 17; ind = 10
+        case  ..<1_000_000_000_000_000_000:  q = 18; ind = 11
+        case  ..<10_000_000_000_000_000_000: q = 19; ind = 12
+        default:                             q = 20; ind = 13
+      }
+      
+      // overflow and underflow are not possible
+      // Note: performance can be improved by inlining this call
+      var is_midpoint_lt_even = false, is_midpoint_gt_even = false
+      var is_inexact_lt_midpoint = false, is_inexact_gt_midpoint = false
+      var res64 = UInt64(), res128 = UInt128(), incr_exp = 0
+      var res: UInt32
+      if (q <= 19) {
+        bid_round64_2_18 ( // would work for 20 digits too if x fits in 64 bits
+          q, ind, x, &res64, &incr_exp,
+          &is_midpoint_lt_even, &is_midpoint_gt_even,
+          &is_inexact_lt_midpoint, &is_inexact_gt_midpoint)
+        res = UInt32(res64)
+      } else { // q = 20
+        let x128 = UInt128(high: 0, low:x)
+        bid_round128_19_38 (q, ind, x128, &res128, &incr_exp,
+                            &is_midpoint_lt_even, &is_midpoint_gt_even,
+                            &is_inexact_lt_midpoint, &is_inexact_gt_midpoint)
+        res = UInt32(res128._lowWord) // res.w[1] is 0
+      }
+      if incr_exp != 0 {
+        ind += 1
+      }
+      // set the inexact flag
+      //      if (is_inexact_lt_midpoint || is_inexact_gt_midpoint ||
+      //          is_midpoint_lt_even || is_midpoint_gt_even)
+      //          *pfpsf |= BID_INEXACT_EXCEPTION;
+      // general correction from RN to RA, RM, RP, RZ; result uses ind for exp
+      if (rnd_mode != BID_ROUNDING_TO_NEAREST) {
+        if ((rnd_mode == BID_ROUNDING_UP && is_inexact_lt_midpoint) ||
+            ((rnd_mode == BID_ROUNDING_TIES_AWAY || rnd_mode == BID_ROUNDING_UP)
+             && is_midpoint_gt_even)) {
+          res = res + 1;
+          if res == 10000000 { // res = 10^7 => rounding overflow
+            res = 1000000 // 10^6
+            ind = ind + 1;
+          }
+        } else if ((is_midpoint_lt_even || is_inexact_gt_midpoint) &&
+                   (rnd_mode == BID_ROUNDING_DOWN ||
+                    rnd_mode == BID_ROUNDING_TO_ZERO)) {
+          res = res - 1;
+          // check if we crossed into the lower decade
+          if res == 999999 { // 10^6 - 1
+            res = 9999999 // 10^7 - 1
+            ind = ind - 1;
+          }
+        } else {
+          // exact, the result is already correct
+        }
+      }
+      return Self(sign: .plus, exponent: ind, mantissa: res)
+//      if (res < 0x00800000) { // res < 2^23
+//        res = ((ind + 101) << 23) | res;
+//      } else { // res >= 2^23
+//        res = 0x60000000 | ((ind + 101) << 21) | (res & 0x001fffff);
+//      }
+    }
+  }
+  
+  static func bid_round64_2_18 (
+    _ q: Int, _ x:Int, _ C: UInt64, _ ptr_Cstar: inout UInt64,
+    _ incr_exp: inout Int, _ ptr_is_midpoint_lt_even: inout Bool,
+    _ ptr_is_midpoint_gt_even: inout Bool,
+    _ ptr_is_inexact_lt_midpoint: inout Bool,
+    _ ptr_is_inexact_gt_midpoint: inout Bool) {
+      // Note:
+      //    In round128_2_18() positive numbers with 2 <= q <= 18 will be
+      //    rounded to nearest only for 1 <= x <= 3:
+      //     x = 1 or x = 2 when q = 17
+      //     x = 2 or x = 3 when q = 18
+      // However, for generality and possible uses outside the frame of IEEE 754
+      // this implementation works for 1 <= x <= q - 1
+      
+      // assume *ptr_is_midpoint_lt_even, *ptr_is_midpoint_gt_even,
+      // *ptr_is_inexact_lt_midpoint, and *ptr_is_inexact_gt_midpoint are
+      // initialized to 0 by the caller
+      
+      // round a number C with q decimal digits, 2 <= q <= 18
+      // to q - x digits, 1 <= x <= 17
+      // C = C + 1/2 * 10^x where the result C fits in 64 bits
+      // (because the largest value is 999999999999999999 + 50000000000000000 =
+      // 0x0e92596fd628ffff, which fits in 60 bits)
+      var ind = x - 1;    // 0 <= ind <= 16
+      let C = C + bid_midpoint64(ind)
+      // kx ~= 10^(-x), kx = bid_Kx64[ind] * 2^(-Ex), 0 <= ind <= 16
+      // P128 = (C + 1/2 * 10^x) * kx * 2^Ex = (C + 1/2 * 10^x) * Kx
+      // the approximation kx of 10^(-x) was rounded up to 64 bits
+      var P128 = UInt128().components
+      P128 = mul64x64to128(C, bid_Kx64(ind)).components
+      // calculate C* = floor (P128) and f*
+      // Cstar = P128 >> Ex
+      // fstar = low Ex bits of P128
+      let shift = bid_Ex64m64(ind)    // in [3, 56]
+      var Cstar = P128.high >> shift
+      let fstar = UInt128(high: P128.high & bid_mask64(ind), low: P128.low)
+      // the top Ex bits of 10^(-x) are T* = bid_ten2mxtrunc64[ind], e.g.
+      // if x=1, T*=bid_ten2mxtrunc64[0]=0xcccccccccccccccc
+      // if (0 < f* < 10^(-x)) then the result is a midpoint
+      //   if floor(C*) is even then C* = floor(C*) - logical right
+      //       shift; C* has q - x decimal digits, correct by Prop. 1)
+      //   else if floor(C*) is odd C* = floor(C*)-1 (logical right
+      //       shift; C* has q - x decimal digits, correct by Pr. 1)
+      // else
+      //   C* = floor(C*) (logical right shift; C has q - x decimal digits,
+      //       correct by Property 1)
+      // in the caling function n = C* * 10^(e+x)
+      
+      // determine inexactness of the rounding of C*
+      // if (0 < f* - 1/2 < 10^(-x)) then
+      //   the result is exact
+      // else // if (f* - 1/2 > T*) then
+      //   the result is inexact
+      if (fstar.high > bid_half(ind) || (fstar.high == bid_half(ind) &&
+                                         fstar.low != 0)) {
+        // f* > 1/2 and the result may be exact
+        // Calculate f* - 1/2
+        let tmp64 = fstar.high - bid_half(ind)
+        if (tmp64 != 0 || fstar.low > bid_ten2mxtrunc64(ind)) {
+          // f* - 1/2 > 10^(-x)
+          ptr_is_inexact_lt_midpoint = true
+        }    // else the result is exact
+      } else {    // the result is inexact; f2* <= 1/2
+        ptr_is_inexact_gt_midpoint = true
+      }
+      // check for midpoints (could do this before determining inexactness)
+      if (fstar.high == 0 && fstar.low <= bid_ten2mxtrunc64(ind)) {
+        // the result is a midpoint
+        if (Cstar & 0x01 != 0) {    // Cstar is odd; MP in [EVEN, ODD]
+          // if floor(C*) is odd C = floor(C*) - 1; the result may be 0
+          Cstar-=1    // Cstar is now even
+          ptr_is_midpoint_gt_even = true
+          ptr_is_inexact_lt_midpoint = false
+          ptr_is_inexact_gt_midpoint = false
+        } else {    // else MP in [ODD, EVEN]
+          ptr_is_midpoint_lt_even = true
+          ptr_is_inexact_lt_midpoint = false
+          ptr_is_inexact_gt_midpoint = false
+        }
+      }
+      // check for rounding overflow, which occurs if Cstar = 10^(q-x)
+      ind = q - x;    // 1 <= ind <= q - 1
+      if (Cstar == bid_ten2k64(ind)) {    // if  Cstar = 10^(q-x)
+        Cstar = bid_ten2k64(ind - 1);    // Cstar = 10^(q-x-1)
+        incr_exp = 1;
+      } else {    // 10^33 <= Cstar <= 10^34 - 1
+        incr_exp = 0;
+      }
+      ptr_Cstar = Cstar;
+    }
+  
+  static func bid_round128_19_38 (
+    _ q:Int, _ x:Int, _ C:UInt128, _ ptr_Cstar:inout UInt128,
+    _ incr_exp:inout Int, _ ptr_is_midpoint_lt_even:inout Bool,
+    _ ptr_is_midpoint_gt_even:inout Bool,
+    _ ptr_is_inexact_lt_midpoint:inout Bool,
+    _ ptr_is_inexact_gt_midpoint:inout Bool) {
+      var P256 = UInt256(), fstar = UInt256(), Cstar = UInt128(), C = C
+      // Note:
+      //    In bid_round128_19_38() positive numbers with 19 <= q <= 38 will be
+      //    rounded to nearest only for 1 <= x <= 23:
+      //     x = 3 or x = 4 when q = 19
+      //     x = 4 or x = 5 when q = 20
+      //     ...
+      //     x = 18 or x = 19 when q = 34
+      //     x = 1 or x = 2 or x = 19 or x = 20 when q = 35
+      //     x = 2 or x = 3 or x = 20 or x = 21 when q = 36
+      //     x = 3 or x = 4 or x = 21 or x = 22 when q = 37
+      //     x = 4 or x = 5 or x = 22 or x = 23 when q = 38
+      // However, for generality and possible uses outside the frame of IEEE 754
+      // this implementation works for 1 <= x <= q - 1
+      
+      // assume ptr_is_midpoint_lt_even, ptr_is_midpoint_gt_even,
+      // ptr_is_inexact_lt_midpoint, and ptr_is_inexact_gt_midpoint are
+      // initialized to 0 by the caller
+      
+      // round a number C with q decimal digits, 19 <= q <= 38
+      // to q - x digits, 1 <= x <= 37
+      // C = C + 1/2 * 10^x where the result C fits in 128 bits
+      // (because the largest value is 99999999999999999999999999999999999999 +
+      // 5000000000000000000000000000000000000 =
+      // 0x4efe43b0c573e7e68a043d8fffffffff, which fits is 127 bits)
+      var ind = x - 1;    // 0 <= ind <= 36
+      if (ind <= 18) {    // if 0 <= ind <= 18
+          let tmp64 = C.lo;
+          C.lo = C.lo + bid_midpoint64[ind];
+          if (C.lo < tmp64) { C.hi+=1 }
+      } else {    // if 19 <= ind <= 37
+          let tmp64 = C.lo;
+          C.lo = C.lo + bid_midpoint128[ind - 19].lo;
+          if (C.lo < tmp64) { C.hi+=1 }
+          C.hi = C.hi + bid_midpoint128[ind - 19].hi;
+      }
+      // kx ~= 10^(-x), kx = bid_Kx128[ind] * 2^(-Ex), 0 <= ind <= 36
+      // P256 = (C + 1/2 * 10^x) * kx * 2^Ex = (C + 1/2 * 10^x) * Kx
+      // the approximation kx of 10^(-x) was rounded up to 128 bits
+      __mul_128x128_to_256(&P256, C, bid_Kx128[ind]);
+      // calculate C* = floor (P256) and f*
+      // Cstar = P256 >> Ex
+      // fstar = low Ex bits of P256
+      let shift = bid_Ex128m128[ind];    // in [2, 63] but have to consider two cases
+      if (ind <= 18) {    // if 0 <= ind <= 18
+          Cstar.lo = (P256.w[2] >> shift) | (P256.w[3] << (64 - shift));
+          Cstar.hi = (P256.w[3] >> shift);
+          fstar.w[0] = P256.w[0];
+          fstar.w[1] = P256.w[1];
+          fstar.w[2] = P256.w[2] & bid_mask128[ind];
+          fstar.w[3] = 0x0;
+      } else {    // if 19 <= ind <= 37
+          Cstar.lo = P256.w[3] >> shift;
+          Cstar.hi = 0x0;
+          fstar.w[0] = P256.w[0];
+          fstar.w[1] = P256.w[1];
+          fstar.w[2] = P256.w[2];
+          fstar.w[3] = P256.w[3] & bid_mask128[ind];
+      }
+      // the top Ex bits of 10^(-x) are T* = bid_ten2mxtrunc64[ind], e.g.
+      // if x=1, T*=bid_ten2mxtrunc128[0]=0xcccccccccccccccccccccccccccccccc
+      // if (0 < f* < 10^(-x)) then the result is a midpoint
+      //   if floor(C*) is even then C* = floor(C*) - logical right
+      //       shift; C* has q - x decimal digits, correct by Prop. 1)
+      //   else if floor(C*) is odd C* = floor(C*)-1 (logical right
+      //       shift; C* has q - x decimal digits, correct by Pr. 1)
+      // else
+      //   C* = floor(C*) (logical right shift; C has q - x decimal digits,
+      //       correct by Property 1)
+      // in the caling function n = C* * 10^(e+x)
+      
+      // determine inexactness of the rounding of C*
+      // if (0 < f* - 1/2 < 10^(-x)) then
+      //   the result is exact
+      // else // if (f* - 1/2 > T*) then
+      //   the result is inexact
+      if (ind <= 18) {    // if 0 <= ind <= 18
+          if (fstar.w[2] > bid_half128[ind] || (fstar.w[2] == bid_half128[ind] && (fstar.w[1] != 0 || fstar.w[0] != 0))) {
+              // f* > 1/2 and the result may be exact
+              // Calculate f* - 1/2
+              let tmp64 = fstar.w[2] - bid_half128[ind];
+              if (tmp64 != 0 || fstar.w[1] > bid_ten2mxtrunc128[ind].hi ||
+                  (fstar.w[1] == bid_ten2mxtrunc128[ind].hi && fstar.w[0] > bid_ten2mxtrunc128[ind].lo)) {    // f* - 1/2 > 10^(-x)
+                  ptr_is_inexact_lt_midpoint = true
+              }    // else the result is exact
+          } else {    // the result is inexact; f2* <= 1/2
+              ptr_is_inexact_gt_midpoint = true
+          }
+      } else {    // if 19 <= ind <= 37
+          if (fstar.w[3] > bid_half128[ind] || (fstar.w[3] == bid_half128[ind] &&
+                                                (fstar.w[2] != 0 || fstar.w[1] != 0 || fstar.w[0] != 0))) {
+              // f* > 1/2 and the result may be exact
+              // Calculate f* - 1/2
+              let tmp64 = fstar.w[3] - bid_half128[ind];
+              if (tmp64 != 0 || fstar.w[2] != 0 || fstar.w[1] > bid_ten2mxtrunc128[ind].hi || (fstar.w[1] == bid_ten2mxtrunc128[ind].hi && fstar.w[0] > bid_ten2mxtrunc128[ind].lo)) {    // f* - 1/2 > 10^(-x)
+                  ptr_is_inexact_lt_midpoint = true
+              }    // else the result is exact
+          } else {    // the result is inexact; f2* <= 1/2
+              ptr_is_inexact_gt_midpoint = true
+          }
+      }
+      // check for midpoints (could do this before determining inexactness)
+      if (fstar.w[3] == 0 && fstar.w[2] == 0 &&
+          (fstar.w[1] < bid_ten2mxtrunc128[ind].hi ||
+           (fstar.w[1] == bid_ten2mxtrunc128[ind].hi &&
+            fstar.w[0] <= bid_ten2mxtrunc128[ind].lo))) {
+          // the result is a midpoint
+          if (Cstar.lo & 0x01 != 0) {    // Cstar is odd; MP in [EVEN, ODD]
+              // if floor(C*) is odd C = floor(C*) - 1; the result may be 0
+              Cstar.lo-=1    // Cstar is now even
+              if Cstar.lo == 0xffffffffffffffff { Cstar.hi-=1 }
+              ptr_is_midpoint_gt_even = true
+              ptr_is_inexact_lt_midpoint = false
+              ptr_is_inexact_gt_midpoint = false
+          } else {    // else MP in [ODD, EVEN]
+              ptr_is_midpoint_lt_even = true
+              ptr_is_inexact_lt_midpoint = false
+              ptr_is_inexact_gt_midpoint = false
+          }
+      }
+      // check for rounding overflow, which occurs if Cstar = 10^(q-x)
+      ind = q - x;    // 1 <= ind <= q - 1
+      if (ind <= 19) {
+          if (Cstar.hi == 0x0 && Cstar.lo == bid_ten2k64[ind]) {
+              // if  Cstar = 10^(q-x)
+              Cstar.lo = bid_ten2k64[ind - 1];    // Cstar = 10^(q-x-1)
+              incr_exp = 1;
+          } else {
+              incr_exp = 0;
+          }
+      } else if (ind == 20) {
+          // if ind = 20
+          if (Cstar.hi == bid_ten2k128[0].hi && Cstar.lo == bid_ten2k128[0].lo) {
+              // if  Cstar = 10^(q-x)
+              Cstar.lo = bid_ten2k64[19];    // Cstar = 10^(q-x-1)
+              Cstar.hi = 0x0;
+              incr_exp = 1;
+          } else {
+              incr_exp = 0;
+          }
+      } else {    // if 21 <= ind <= 37
+          if (Cstar.hi == bid_ten2k128[ind - 20].hi && Cstar.lo == bid_ten2k128[ind - 20].lo) {
+              // if  Cstar = 10^(q-x)
+              Cstar.lo = bid_ten2k128[ind - 21].lo;    // Cstar = 10^(q-x-1)
+              Cstar.hi = bid_ten2k128[ind - 21].hi;
+              incr_exp = 1;
+          } else {
+              incr_exp = 0;
+          }
+      }
+      ptr_Cstar = Cstar
+  }
+    
+  ///////////////////////////////////////////////////////////////////////
+  // MARK: - Table-derived functions
+  
+  /// Returns the number of decimal digits in `2^i` where `i ≥ 0`.
+  static func estimateDecDigits(_ i: Int) -> Int { digitsIn(UInt128(1) << i) }
+  
+  /// Returns ten to the `i`th power or `10^i` where `i ≥ 0`.
+  static func power10<T:FixedWidthInteger>(_ i:Int) -> T { power(T(10), to:i) }
+  
+  /// Returns ten to the `i`th power or `10^i` where `i ≥ 0`.
+  static func power5<T:FixedWidthInteger>(_ i: Int) -> T { power(T(5), to: i) }
+  
+  /// Returns the number of decimal digits in `sig`.
+  static func digitsIn<T:BinaryInteger>(_ sig: T) -> Int {
+    // find power of 10 just greater than sig
+    var tenPower = T(10), digits = 1
+    while sig >= tenPower { tenPower *= 10; digits += 1 }
+    return digits
+  }
+  
+  // bid_ten2mk64 power-of-two scaling
+  static var bid_powers : [UInt8] {
+    [64, 64, 64, 67, 70, 73, 77, 80, 83, 87, 90, 93, 97, 100, 103, 107]
+  }
+  
+  // bid_ten2k64[i] = 10^i, 0 <= i <= 19
+  static func bid_ten2k64<T:FixedWidthInteger>(_ i:Int) -> T { power10(i) }
+  
+  // Values of 10^(-x) trancated to Ex bits beyond the binary point, and
+  // in the right position to be compared with the fraction from C * kx,
+  // 1 <= x <= 17; the fraction consists of the low Ex bits in C * kx
+  // (these values are aligned with the low 64 bits of the fraction)
+  static func bid_ten2mk64(_ i:Int) -> UInt64 {
+     UInt64((UInt128(1) << bid_powers[i]) / power10(i+1))+1
+  }
+  
+  static func bid_midpoint64(_ i:Int) -> UInt64 { 5 * bid_ten2k64(i) }
+  
+  /// Returns rounding constants for a given rounding mode `rnd` and
+  /// power of ten given by `10^(i-1)`.
+  static func bid_round_const_table(_ rnd:Int, _ i:Int) -> UInt64 {
+    if i == 0 { return 0 }
+    switch rnd {
+      case 0, 4: return 5 * power10(i-1)
+      case 2: return power10(i-1)-1
+      default: return 0 // covers rnd = 1, 3
+    }
+  }
+  
+  static var coefflimits: [UInt64] {
+    [10000000, 2000000, 400000, 80000, 16000, 3200, 640, 128, 25, 5, 1]
+  }
+  
+  static func coefflimitsBID32(_ i: Int) -> UInt128 {
+    i > 10 ? 0 : UInt128(coefflimits[i])
+  }
+  
+  static var shortReciprocalScale: [Int8] {
+    [1, 1, 5, 7, 11, 12, 17, 21, 24, 27, 31, 34, 37, 41, 44, 47, 51, 54]
+  }
+  
+  // Values of 10^(-x) trancated to Ex bits beyond the binary point, and
+  // in the right position to be compared with the fraction from C * kx,
+  // 1 <= x <= 17; the fraction consists of the low Ex bits in C * kx
+  // (these values are aligned with the low 64 bits of the fraction)
+  static func bid_ten2mxtrunc64(_ i:Int) -> UInt64 {
+    UInt64((UInt128(1) << (64+bid_Ex64m64(i))) / power10(i+1))
+  }
+  
+  // Ex-64 from 10^(-x) ~= Kx * 2^(-Ex); Kx rounded up to 64 bits, 1 <= x <= 17
+  static func bid_Ex64m64(_ i:Int) -> UInt8 {
+    UInt8(shortReciprocalScale[i+3])
+  }
+  
+  // Values of 1/2 in the right position to be compared with the fraction from
+  // C * kx, 1 <= x <= 17; the fraction consists of the low Ex bits in C * kx
+  // (these values are aligned with the high 64 bits of the fraction)
+  static func bid_half<T:UnsignedInteger>(_ i: Int) -> T {
+    (T(1) << bid_shiftright128[i+3] - 1)
+  }
+  
+  // Kx from 10^(-x) ~= Kx * 2^(-Ex); Kx rounded up to 64 bits, 1 <= x <= 17
+  static func bid_Kx64(_ i:Int) -> UInt64 {
+    bid_ten2mxtrunc64(i)+1
+  }
+  
+  /// Returns `2^s[i] / 10^i + 1` where `s` is a table of
+  /// reciprocal scaling factors and `i ≥ 0`.
+  static func reciprocals10<T:UnsignedInteger>(_ i: Int) -> T {
+    if i == 0 { return 1 }
+    let twoPower = shortReciprocalScale[i] + 64
+    return T(UInt128(1) << twoPower / power10(i)) + 1
+  }
+  
+  static func mul128x128Low(_ A:UInt128, _ B:UInt128) -> UInt128 {
+    // var ALBL = UInt128()
+    let a = A.components, b = B.components
+    let ALBL = mul64x64to128(a.low, b.low)
+    let QM64 = b.low*a.high + a.low*b.high
+    return UInt128(high: QM64 + ALBL.components.high, low: ALBL.components.low)
+  }
+  
+  static func mul64x64to128(_ CX:UInt64, _ CY:UInt64) -> UInt128 {
+    let res = CX.multipliedFullWidth(by: CY)
+    return UInt128(high: res.high, low: res.low)
+  }
+  
+  static internal func mul64x256to320(_ P:inout UInt384, _ A:UInt64,
+                                      _ B:UInt256) {
+    var lC = false
+    let lP0 = mul64x64to128(A, B.w[0]).components
+    let lP1 = mul64x64to128(A, B.w[1]).components
+    let lP2 = mul64x64to128(A, B.w[2]).components
+    let lP3 = mul64x64to128(A, B.w[3]).components
+    P.w[0] = lP0.low
+    (P.w[1],lC) = add(lP1.low,lP0.high)
+    (P.w[2],lC) = add(lP2.low,lP1.high,lC)
+    (P.w[3],lC) = add(lP3.low,lP2.high,lC)
+    P.w[4] = lP3.high + (lC ? 1 : 0)
+  }
+  
+  // 128x256->384 bit multiplication (missing from existing macros)
+  // I derived this by propagating (A).w[2] = 0 in __mul_192x256_to_448
+  static internal func mul128x256to384(_  P: inout UInt384, _ A:UInt128,
+                                       _ B:UInt256) {
+    var P0=UInt384(),P1=UInt384()
+    var CY=false
+    mul64x256to320(&P0, A.components.low, B)
+    mul64x256to320(&P1, A.components.high, B)
+    P.w[0] = P0.w[0]
+    (P.w[1],CY) = add(P1.w[0],P0.w[1])
+    (P.w[2],CY) = add(P1.w[1],P0.w[2],CY)
+    (P.w[3],CY) = add(P1.w[2],P0.w[3],CY)
+    (P.w[4],CY) = add(P1.w[3],P0.w[4],CY)
+    P.w[5] = P1.w[4] + (CY ? 1 : 0)
+  }
+  
+  // bid_shiftright128[] contains the right shift count to obtain C2* from
+  // the top 128 bits of the 128x128-bit product C2 * Kx
+  static var bid_shiftright128: [UInt8] {
+    [ 0, 0, 0, 3, 6, 9, 13, 16, 19, 23, 26, 29, 33, 36, 39, 43, 46, 49, 53, 56,
+      59, 63, 66, 69, 73, 76, 79, 83, 86, 89, 92, 96, 99, 102
+    ]
+  }
+  
+  // bid_maskhigh128[] contains the mask to apply to the top 128 bits of the
+  // 128x128-bit product in order to obtain the high bits of f2*
+  // the 64-bit word order is L, H
+  static func bid_maskhigh128(_ i:Int) -> UInt64 {
+    if i < 3 { return 0 }
+    return (UInt64(1) << (bid_shiftright128[i] - UInt8(i < 22 ? 0 : 64))) - 1
+  }
+  
+  @inlinable static func add(_ X:UInt64, _ Y:UInt64) -> (UInt64, Bool) {
+    X.addingReportingOverflow(Y)
+  }
+
+  @inlinable static func add(_ X:UInt64, _ Y:UInt64, _ CI:Bool) ->
+                                                            (UInt64, Bool)  {
+    let (x1, over1) = X.addingReportingOverflow(CI ? 1 : 0)
+    let (s , over2) = x1.addingReportingOverflow(Y)
+    return (s, over1 || over2)
+  }
+  
+  static var bid_roundbound_128: [UInt128] {
+    let midPoint = UInt128(high: 1 << 63, low: 0)
+    return [
+      // BID_ROUNDING_TO_NEAREST
+      midPoint,      // positive|even
+      midPoint - 1,  // positive|odd
+      midPoint,      // negative|even
+      midPoint - 1,  // negative|odd
+      
+      // BID_ROUNDING_DOWN
+      UInt128.max,   // positive|even
+      UInt128.max,   // positive|odd
+      UInt128.min,   // negative|even
+      UInt128.min,   // negative|odd
+      
+      // BID_ROUNDING_UP
+      UInt128.min,   // positive|even
+      UInt128.min,   // positive|odd
+      UInt128.max,   // negative|even
+      UInt128.max,   // negative|odd
+      
+      // BID_ROUNDING_TO_ZERO
+      UInt128.max,   // positive|even
+      UInt128.max,   // positive|odd
+      UInt128.max,   // negative|even
+      UInt128.max,   // negative|odd
+      
+      // BID_ROUNDING_TIES_AWAY
+      midPoint - 1,  // positive|even
+      midPoint - 1,  // positive|odd
+      midPoint - 1,  // negative|even
+      midPoint - 1   // negative|odd
+    ]
+  }
+  
   /// Algorithm to decode a 10-bit portion of a densely-packed decimal
   /// number into a corresponding integer. The strategy here is the break
   /// the decoding process into a number of smaller code spaces used to
   /// calculate the corresponding integral number.
+  ///
+  /// This algorithm may be sped up by replacement with a table lookup as in
+  /// the original code. Tests have verified that this algorithm exactly
+  /// reproduces the original table.
   static func intFrom(dpd: Int) -> Int {
     precondition(dpd >= 0 && dpd < 1024, "Illegal dpd decoding input")
     
     func getBits(_ range: ClosedRange<Int>) -> Int { gBits(range, from: dpd) }
-    func getBit(_ bit:Int) -> Int { (1 << bit) & dpd == 0 ? 0 : 1 }
+    func getBit(_ bit:Int) -> Int { ((1 << bit) & dpd) == 0 ? 0 : 1 }
     
     // decode the 10-bit dpd number
     let select = (getBit(3), getBits(1...2), getBits(5...6))
@@ -449,7 +1162,7 @@ public extension IntegerDecimal {
       case (1, 0b11, 0b10):
         return getBits(7...9)*100 + (bit4 + 8)*10 + bit0 + 8
         
-        // final case covers remaining 3.125% of the numbers
+      // final case covers remaining 3.125% of the numbers
       default:
         return (bit7 + 8)*100 + (bit4 + 8)*10 + bit0 + 8
     }
@@ -457,8 +1170,12 @@ public extension IntegerDecimal {
   
   /// Algorithm to encode a 12-bit bcd integer (3 digits) into a
   /// densely-packed decimal. This is the inverse of the `intFrom(dpd:)`.
+  ///
+  /// This algorithm may be sped up by replacement with a table lookup as in
+  /// the original code. Tests have verified that this algorithm exactly
+  /// reproduces the original code table.
   static func intToDPD(_ n: Int) -> Int {
-    precondition(n >= 0 && n < 1000)
+    precondition(n >= 0 && n < 1000, "Illegal dpd encoding input")
     
     let hundreds = (n / 100) % 10
     let tens = (n / 10) % 10
@@ -505,55 +1222,655 @@ public extension IntegerDecimal {
     }
     return res
   }
+}
+
+extension IntegerDecimal {
   
   ///////////////////////////////////////////////////////////////////////
-  // MARK: - Table-derived functions
-  
-  /// Returns the number of decimal digits in 2^i.
-  static func bid_estimate_decimal_digits(_ i: Int) -> Int {
-    let n = UInt128(1) << i
-    return digitsIn(n)
-  }
-  
-  static func digitsIn<T:BinaryInteger>(_ sig_x: T) -> Int {
-    // find power of 10 just greater than sig_x
-    var tenPower = T(10), digits = 1
-    while sig_x >= tenPower { tenPower *= 10; digits += 1 }
-    return digits
-  }
-  
-  static func bid_power10_table_128(_ i: Int) -> UInt128 {
-    power(UInt128(10), to: i)
-  }
-  
-  static func bid_round_const_table(_ rnd:Int, _ i:Int) -> UInt64 {
-    if i == 0 { return 0 }
-    switch rnd {
-      case 0, 4: return 5 * bid_ten2k64(i-1)
-      case 2: return bid_ten2k64(i-1)-1
-      default: return 0 // covers rnd = 1, 3
+  // MARK: - General-purpose comparison functions
+  public static func equals (lhs: Self, rhs: Self) -> Bool {
+    guard !lhs.isNaN && !rhs.isNaN else { return false }
+    
+    // all data bits equsl case
+    if lhs.data == rhs.data { return true }
+    
+    // infinity cases
+    if lhs.isInfinite && rhs.isInfinite { return lhs.sign == rhs.sign }
+    if lhs.isInfinite || rhs.isInfinite { return false }
+    
+    // zero cases
+    let xisZero = lhs.isZero, yisZero = rhs.isZero
+    if xisZero && yisZero { return true }
+    if (xisZero && !yisZero) || (!xisZero && yisZero) { return false }
+    
+    // normal numbers
+    var (xsign, xexp, xman, _) = lhs.unpack()
+    var (ysign, yexp, yman, _) = rhs.unpack()
+    
+    // opposite signs
+    if xsign != ysign { return false }
+    
+    // redundant representations
+    if xexp > yexp {
+      swap(&xexp, &yexp)
+      swap(&xman, &yman)
     }
+    if yexp - xexp > Self.numberOfDigits-1 { return false }
+    for _ in 0..<(yexp - xexp) {
+      // recalculate y's significand upwards
+      yman *= 10
+      if yman > Self.largestNumber { return false }
+    }
+    return xman == yman
   }
   
-  // bid_ten2k64[i] = 10^i, 0 <= i <= 19
-  static func bid_ten2k64(_ i:Int) -> UInt64 {
-    UInt64(bid_power10_table_128(i))
-  }
-  
-  static func bid_reciprocals10_64(_ i: Int) -> UInt64 {
-    if i == 0 { return 1 }
-    let twoPower = bid_short_recip_scale[i]+64
-    return UInt64(UInt128(1) << twoPower / bid_power10_table_128(i)) + 1
+  public static func lessThan (lhs: Self, rhs: Self) -> Bool {
+    guard !lhs.isNaN && !rhs.isNaN else { return false }
+    
+    // all data bits equsl case
+    if lhs.data == rhs.data { return false }
+    
+    // infinity cases
+    if lhs.isInfinite {
+      if lhs.sign == .minus {
+        // lhs is -inf, which is less than y unless y is -inf
+        return !rhs.isInfinite || rhs.sign == .plus
+      } else {
+        // lhs is +inf, which can never be less than y
+        return false
+      }
+    } else if rhs.isInfinite {
+      // lhs is finite so:
+      //   if rhs is +inf, lhs<rhs
+      //   if rhs is -inf, lhs>rhs
+      return rhs.sign == .plus
+    }
+    
+    // normal numbers
+    let (xsign, xexp, xman, _) = lhs.unpack()
+    let (ysign, yexp, yman, _) = rhs.unpack()
+    
+    // zero cases
+    let xisZero = lhs.isZero, yisZero = rhs.isZero
+    if xisZero && yisZero { return false }
+    else if xisZero { return ysign == .plus }  // x < y if y > 0
+    else if yisZero { return xsign == .minus } // x < y if y < 0
+    
+    // opposite signs
+    if xsign != ysign { return ysign == .plus } // x < y if y > 0
+    
+    // check if both mantissa and exponents and bigger or smaller
+    if xman > yman && xexp >= yexp { return xsign == .minus }
+    if xman < yman && xexp <= yexp { return xsign == .plus }
+    
+    // if xexp is `numberOfDigits`-1 greater than yexp, no need to continue
+    if xexp - yexp > Self.numberOfDigits-1 { return xsign == .plus }
+    
+    // need to compensate the mantissa
+    var manPrime: Self.Mantissa
+    if xexp > yexp {
+      manPrime = xman * power(Self.Mantissa(10), to: xexp - yexp)
+      if manPrime == yman { return false }
+      return (manPrime < yman) != (xsign == .minus)
+    }
+    
+    // adjust y mantissa upwards
+    manPrime = yman * power(Self.Mantissa(10), to: yexp - xexp)
+    if manPrime == xman { return false }
+    
+    // if positive, return whichever abs number is smaller
+    return (xman < manPrime) != (xsign == .minus)
   }
 }
 
-// Need to place this somewhere else eventually
-let bid_short_recip_scale: [Int8] = [
-  1, 1, 5, 7, 11, 12, 17, 21, 24, 27, 31, 34, 37, 41, 44, 47, 51, 54
-]
+extension IntegerDecimal {
+  
+  ///////////////////////////////////////////////////////////////////////
+  // MARK: - General-purpose math functions
+  static func add(_ x: Self, _ y: Self, rounding: Rounding) -> Self {
+    let xb = x, yb = y
+    let (signX, exponentX, mantissaX, validX) = xb.unpack()
+    let (signY, exponentY, mantissaY, validY) = yb.unpack()
+    
+    // Deal with illegal numbers
+    if !validX {
+      if xb.isNaN {
+        if xb.isSNaN || yb.isSNaN { /* invalid Op */ }
+        return Self(sign: .plus, exponent: 0, mantissa: xb.nanQuiet())
+      }
+      if xb.isInfinite {
+        if yb.isNaNInf {
+          if signX == signY {
+            return Self(sign: .plus, exponent: 0, mantissa: mantissaX)
+          } else {
+            return y // invalid Op
+          }
+        }
+        if yb.isNaN {
+          if yb.isSNaN { /* invalid Op */ }
+          return Self(sign: .plus, exponent: 0, mantissa: yb.nanQuiet())
+        } else {
+          // +/- infinity
+          return x
+        }
+      } else {
+        // x = 0
+        if !yb.isInfinite && mantissaY != 0 {
+          if exponentY <= exponentX { return y }
+        }
+      }
+    }
+    
+    if !validY {
+      if yb.isInfinite {
+        if yb.isSNaN { /* invalid Op */ }
+        return Self(sign: .plus, exponent: 0, mantissa: yb.nanQuiet())
+      }
+      
+      // y = 0
+      if mantissaX == 0 {
+        // x also 0
+        let exp: Int
+        var sign = FloatingPointSign.plus
+        if exponentX <= exponentY {
+          exp = exponentX
+        } else {
+          exp = exponentY
+        }
+        if signX == signY { sign = signX }
+        if rounding == .down && signX != signY { sign = .minus }
+        return Self(sign: sign, exponent: exp, mantissa: 0)
+      } else if exponentY >= exponentX {
+        return x
+      }
+    }
+    
+    // sort arguments by exponent
+    var (signA, exponentA, mantissaA) = (signY, exponentY, mantissaY)
+    var (signB, exponentB, mantissaB) = (signX, exponentX, mantissaX)
+    if exponentX >= exponentY {
+      swap(&signA, &signB)
+      swap(&exponentA, &exponentB)
+      swap(&mantissaA, &mantissaB)
+    }
+    
+    // exponent difference
+    var exponentDiff = exponentA - exponentB
+    if exponentDiff > numberOfDigits {
+      let binExpon = Double(mantissaA).exponent
+      let scaleCA = estimateDecDigits(binExpon)
+      let d2 = 16 - scaleCA
+      if exponentDiff > d2 {
+        exponentDiff = d2
+        exponentB = exponentA - exponentDiff
+      }
+    }
+    
+    let signAB = signA != signB ? FloatingPointSign.minus : .plus
+    let addIn = signAB == .minus ? Int64(1) : 0
+    let CB = UInt64(bitPattern: (Int64(mantissaB) + addIn) ^ addIn)
+    
+    let SU = UInt64(mantissaA) * power10(exponentDiff)
+    var S = Int64(bitPattern: SU &+ CB)
+    
+    if S < 0 {
+      signA = signA == .minus ? .plus : .minus // toggle the sign
+      S = -S
+    }
+    var P = UInt64(S)
+    var n_digits:Int
+    if P == 0 {
+      signA = .plus
+      if rounding == BID_ROUNDING_DOWN { signA = .minus }
+      if mantissaA == 0 { signA = signX }
+      n_digits=0
+    } else {
+      let tempx = Double(P)
+      let bin_expon = tempx.exponent
+      n_digits = estimateDecDigits(bin_expon)
+      if P >= power10(n_digits) {
+        n_digits+=1
+      }
+    }
+    
+    if n_digits <= numberOfDigits {
+      return Self(sign: signA, exponent: exponentB, mantissa: Mantissa(P))
+    }
+    
+    let extra_digits = n_digits - numberOfDigits
+    
+    var irmode = roundboundIndex(rounding) >> 2
+    if signA == .minus && (UInt(irmode) &- 1) < 2 {
+      irmode = 3 - irmode
+    }
+    
+    // add a constant to P, depending on rounding mode
+    // 0.5*10^(digits_p - 16) for round-to-nearest
+    P += bid_round_const_table(irmode, extra_digits)
+    //var Tmp = UInt128()
+    let Tmp = P.multipliedFullWidth(by: reciprocals10(extra_digits))
+    // __mul_64x64_to_128(&Tmp, P, bid_reciprocals10_64(extra_digits))
+    
+    // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-64
+    let amount = shortReciprocalScale[extra_digits]
+    var Q = Tmp.high >> amount
+    
+    // remainder
+    let R = P - Q * power10(extra_digits)
+//    if R == ID.bid_round_const_table(irmode, extra_digits) {
+//      status = []
+//    } else {
+//      status.insert(.inexact)
+//    }
+    
+    if rounding == BID_ROUNDING_TO_NEAREST {
+      if R == 0 {
+        Q &= 0xffff_fffe
+      }
+    }
+    return Self(sign:signA, exponent:exponentB+extra_digits,
+                mantissa:Mantissa(Q))
+  }
+  
+  static func round(_ x: Self, _ rmode: Rounding) -> Self {
+    var res = Mantissa(0)
+    var (x_sign, exp, C1, _) = x.unpack()
+    
+    // check for NaNs and infinities
+    if x.isNaN {    // check for NaN
+      if C1 > largestNumber/10 { // 999_999_999_999_999 {
+        C1 = 0 // x = x & 0xfe00000000000000    // clear G6-G12 and the payload bits
+      //} else {
+        // nt(C1)) // x = x & 0xfe03ffffffffffff    // clear G6-G12
+      }
+      if x.isSNaN {
+        // set invalid flag
+        // pfpsf.insert(.invalidOperation)
+        // return quiet (SNaN)
+        return Self(sign: x_sign, exponent: -exponentBias, mantissa: x.nanQuiet())
+      } else {    // QNaN
+        return nan(x_sign, Int(C1))
+      }
+    } else if x.isInfinite {
+      return x
+    }
+    // unpack x
+//    var C1: UInt64
+//    if ((x & MASK_STEERING_BITS) == MASK_STEERING_BITS) {
+//      // if the steering bits are 11 (condition will be 0), then
+//      // the exponent is G[0:w+1]
+//      exp = Int((x & MASK_BINARY_EXPONENT2) >> EXPONENT_SHIFT_LARGE64) - EXPONENT_BIAS
+//      C1 = (x & MASK_BINARY_SIG2) | MASK_BINARY_OR2
+//      if C1 > MAX_NUMBER {    // non-canonical
+//        C1 = 0;
+//      }
+//    } else {    // if ((x & MASK_STEERING_BITS) != MASK_STEERING_BITS)
+//      exp = Int((x & MASK_BINARY_EXPONENT1) >> EXPONENT_SHIFT_SMALL64) - EXPONENT_BIAS
+//      C1 = (x & MASK_BINARY_SIG1)
+//    }
+    
+    // if x is 0 or non-canonical return 0 preserving the sign bit and
+    // the preferred exponent of MAX(Q(x), 0)
+    if C1 == 0 {
+      if exp < 0 {
+        exp = 0
+      }
+      return Self(sign:x_sign, exponent:exp, mantissa: 0)
+    }
+    // x is a finite non-zero number (not 0, non-canonical, or special)
+    switch rmode {
+      case BID_ROUNDING_TO_NEAREST, BID_ROUNDING_TIES_AWAY:
+        // return 0 if (exp <= -(p+1))
+        if exp <= -17 {
+          // res = x_sign | zero
+          //pfpsf.insert(.inexact)
+          return zero(x_sign)
+        }
+      case BID_ROUNDING_DOWN:
+        // return 0 if (exp <= -p)
+        if exp <= -16 {
+          if x_sign != .plus {
+            return Self(sign: .minus, exponent: 0, mantissa: 1)
+            //res = (zero+1) | SIGN_MASK64  // 0xb1c0000000000001
+          } else {
+            return zero(.plus)
+          }
+          //pfpsf.insert(.inexact)
+        }
+      case BID_ROUNDING_UP:
+        // return 0 if (exp <= -p)
+        if exp <= -16 {
+          if x_sign != .plus {
+            return zero(.minus) // res = zero | SIGN_MASK64  // 0xb1c0000000000000
+          } else {
+            return Self(sign: .plus, exponent: 0, mantissa: 1) // res = zero+1
+          }
+          //pfpsf.insert(.inexact)
+        }
+      case BID_ROUNDING_TO_ZERO:
+        // return 0 if (exp <= -p)
+        if exp <= -16 {
+          return zero(x_sign) // x_sign | zero
+          //pfpsf.insert(.inexact)
+        }
+      default: break
+    }    // end switch ()
+    
+    // q = nr. of decimal digits in x (1 <= q <= 54)
+    //  determine first the nr. of bits in x
+    let q = digitsIn(C1)
+    if exp >= 0 {
+      // the argument is an integer already
+      return x
+    }
+    
+    var ind: Int
+    var P128 = UInt128().components, fstar = UInt128().components
+    switch rmode {
+      case BID_ROUNDING_TO_NEAREST:
+        if ((q + exp) >= 0) {    // exp < 0 and 1 <= -exp <= q
+          // need to shift right -exp digits from the coefficient; exp will be 0
+          ind = -exp;    // 1 <= ind <= 16; ind is a synonym for 'x'
+          // chop off ind digits from the lower part of C1
+          // C1 = C1 + 1/2 * 10^x where the result C1 fits in 64 bits
+          // FOR ROUND_TO_NEAREST, WE ADD 1/2 ULP(y) then truncate
+          C1 = C1 + Mantissa(bid_midpoint64(ind - 1))
+          // calculate C* and f*
+          // C* is actually floor(C*) in this case
+          // C* and f* need shifting and masking, as shown by
+          // bid_shiftright128[] and bid_maskhigh128[]
+          // 1 <= x <= 16
+          // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+          // C* = (C1 + 1/2 * 10^x) * 10^(-x)
+          // the approximation of 10^(-x) was rounded up to 64 bits
+          P128 = mul64x64to128(UInt64(C1), bid_ten2mk64(ind - 1)).components
+          
+          // if (0 < f* < 10^(-x)) then the result is a midpoint
+          //   if floor(C*) is even then C* = floor(C*) - logical right
+          //       shift; C* has p decimal digits, correct by Prop. 1)
+          //   else if floor(C*) is odd C* = floor(C*)-1 (logical right
+          //       shift; C* has p decimal digits, correct by Pr. 1)
+          // else
+          //   C* = floor(C*) (logical right shift; C has p decimal digits,
+          //       correct by Property 1)
+          // n = C* * 10^(e+x)
+          
+          if (ind - 1 <= 2) {    // 0 <= ind - 1 <= 2 => shift = 0
+            res = Mantissa(P128.high)
+            fstar.high = 0
+            fstar.low = P128.low
+          } else if (ind - 1 <= 21) {    // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
+            let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
+            res = Mantissa((P128.high >> shift))
+            fstar.high = P128.high & bid_maskhigh128(ind - 1)
+            fstar.low = P128.low
+          }
+          // if (0 < f* < 10^(-x)) then the result is a midpoint
+          // since round_to_even, subtract 1 if current result is odd
+          if (res & 0x1 != 0) && (fstar.high == 0) &&
+              (fstar.low < bid_ten2mk64(ind - 1)) {
+            res -= 1
+          }
+          // determine inexactness of the rounding of C*
+          // if (0 < f* - 1/2 < 10^(-x)) then
+          //   the result is exact
+          // else // if (f* - 1/2 > T*) then
+          //   the result is inexact
+//          if (ind - 1 <= 2) {
+//            if (fstar.low > MASK_SIGN) {
+//              // f* > 1/2 and the result may be exact
+//              // fstar.low - MASK_SIGN is f* - 1/2
+//              if ((fstar.low - MASK_SIGN) > bid_ten2mk64[ind - 1]) {
+//                // set the inexact flag
+//                //pfpsf.insert(.inexact)
+//              }    // else the result is exact
+//            } else {    // the result is inexact; f2* <= 1/2
+//              // set the inexact flag
+//              //pfpsf.insert(.inexact)
+//            }
+//          } else {    // if 3 <= ind - 1 <= 21
+//            if fstar.high > bid_onehalf128[ind - 1] || (fstar.high == bid_onehalf128[ind - 1] && fstar.low != 0) {
+//              // f2* > 1/2 and the result may be exact
+//              // Calculate f2* - 1/2
+//              if fstar.high > bid_onehalf128[ind - 1] || fstar.low > bid_ten2mk64[ind - 1] {
+//                // set the inexact flag
+//                pfpsf.insert(.inexact)
+//              }    // else the result is exact
+//            } else {    // the result is inexact; f2* <= 1/2
+//              // set the inexact flag
+//              pfpsf.insert(.inexact)
+//            }
+//          }
+          // set exponent to zero as it was negative before.
+          // res = x_sign | zero | res;
+          return Self(sign: x_sign, exponent: 0, mantissa: Mantissa(res))
+        } else {    // if exp < 0 and q + exp < 0
+          // the result is +0 or -0
+          return zero(x_sign)
+         // pfpsf.insert(.inexact)
+        }
+      case BID_ROUNDING_TIES_AWAY:
+        if (q + exp) >= 0 {    // exp < 0 and 1 <= -exp <= q
+          // need to shift right -exp digits from the coefficient; exp will be 0
+          ind = -exp   // 1 <= ind <= 16; ind is a synonym for 'x'
+          // chop off ind digits from the lower part of C1
+          // C1 = C1 + 1/2 * 10^x where the result C1 fits in 64 bits
+          // FOR ROUND_TO_NEAREST, WE ADD 1/2 ULP(y) then truncate
+          C1 = C1 + Mantissa(bid_midpoint64(ind - 1))
+          // calculate C* and f*
+          // C* is actually floor(C*) in this case
+          // C* and f* need shifting and masking, as shown by
+          // bid_shiftright128[] and bid_maskhigh128[]
+          // 1 <= x <= 16
+          // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+          // C* = (C1 + 1/2 * 10^x) * 10^(-x)
+          // the approximation of 10^(-x) was rounded up to 64 bits
+          P128 = mul64x64to128(UInt64(C1), bid_ten2mk64(ind - 1)).components
+          
+          // if (0 < f* < 10^(-x)) then the result is a midpoint
+          //   C* = floor(C*) - logical right shift; C* has p decimal digits,
+          //       correct by Prop. 1)
+          // else
+          //   C* = floor(C*) (logical right shift; C has p decimal digits,
+          //       correct by Property 1)
+          // n = C* * 10^(e+x)
+          
+          if ind - 1 <= 2 {    // 0 <= ind - 1 <= 2 => shift = 0
+            res = Mantissa(P128.high)
+            fstar.high = 0
+            fstar.low = P128.low
+          } else if ind - 1 <= 21 {    // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
+            let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
+            res = Self.Mantissa((P128.high >> shift))
+            fstar.high = P128.high & bid_maskhigh128(ind - 1)
+            fstar.low = P128.low
+          }
+          // midpoints are already rounded correctly
+          // determine inexactness of the rounding of C*
+          // if (0 < f* - 1/2 < 10^(-x)) then
+          //   the result is exact
+          // else // if (f* - 1/2 > T*) then
+          //   the result is inexact
+//          if ind - 1 <= 2 {
+//            if fstar.low > MASK_SIGN {
+//              // f* > 1/2 and the result may be exact
+//              // fstar.low - MASK_SIGN is f* - 1/2
+//              if (fstar.low - MASK_SIGN) > bid_ten2mk64[ind - 1] {
+//                // set the inexact flag
+//                pfpsf.insert(.inexact)
+//              }    // else the result is exact
+//            } else {    // the result is inexact; f2* <= 1/2
+//              // set the inexact flag
+//              pfpsf.insert(.inexact)
+//            }
+//          } else {    // if 3 <= ind - 1 <= 21
+//            if fstar.high > bid_onehalf128[ind - 1] || (fstar.high == bid_onehalf128[ind - 1] && fstar.low != 0) {
+//              // f2* > 1/2 and the result may be exact
+//              // Calculate f2* - 1/2
+//              if fstar.high > bid_onehalf128[ind - 1] || fstar.low > bid_ten2mk64[ind - 1] {
+//                // set the inexact flag
+//                pfpsf.insert(.inexact)
+//              }    // else the result is exact
+//            } else {    // the result is inexact; f2* <= 1/2
+//              // set the inexact flag
+//              pfpsf.insert(.inexact)
+//            }
+//          }
+          // set exponent to zero as it was negative before.
+          return Self(sign: x_sign, exponent: 0, mantissa: res)
+        } else {    // if exp < 0 and q + exp < 0
+          // the result is +0 or -0
+          return zero(x_sign)
+        }
+      case BID_ROUNDING_DOWN:
+        if (q + exp) > 0 {    // exp < 0 and 1 <= -exp < q
+          // need to shift right -exp digits from the coefficient; exp will be 0
+          ind = -exp    // 1 <= ind <= 16; ind is a synonym for 'x'
+          // chop off ind digits from the lower part of C1
+          // C1 fits in 64 bits
+          // calculate C* and f*
+          // C* is actually floor(C*) in this case
+          // C* and f* need shifting and masking, as shown by
+          // bid_shiftright128[] and bid_maskhigh128[]
+          // 1 <= x <= 16
+          // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+          // C* = C1 * 10^(-x)
+          // the approximation of 10^(-x) was rounded up to 64 bits
+          P128 = mul64x64to128(UInt64(C1), bid_ten2mk64(ind - 1)).components
+          
+          // C* = floor(C*) (logical right shift; C has p decimal digits,
+          //       correct by Property 1)
+          // if (0 < f* < 10^(-x)) then the result is exact
+          // n = C* * 10^(e+x)
+          
+          if ind - 1 <= 2 {    // 0 <= ind - 1 <= 2 => shift = 0
+            res = Mantissa(P128.high)
+            fstar.high = 0
+            fstar.low = P128.low
+          } else if ind - 1 <= 21 {    // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
+            let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
+            res = Mantissa(P128.high >> shift)
+            fstar.high = P128.high & bid_maskhigh128(ind - 1)
+            fstar.low = P128.low
+          }
+          // if (f* > 10^(-x)) then the result is inexact
+          if (fstar.high != 0) || (fstar.low >= bid_ten2mk64(ind - 1)) {
+            if x_sign != .plus {
+              // if negative and not exact, increment magnitude
+              res+=1
+            }
+            // pfpsf.insert(.inexact)
+          }
+          // set exponent to zero as it was negative before.
+          return Self(sign: x_sign, exponent: 0, mantissa: Mantissa(res))
+        } else {    // if exp < 0 and q + exp <= 0
+          // the result is +0 or -1
+          if x_sign != .plus {
+            return Self(sign: .minus, exponent: 0, mantissa: 1) // 0xb1c0000000000001
+          } else {
+            return zero(.plus)
+          }
+          // pfpsf.insert(.inexact)
+        }
+      case BID_ROUNDING_UP:
+        if (q + exp) > 0 {    // exp < 0 and 1 <= -exp < q
+          // need to shift right -exp digits from the coefficient; exp will be 0
+          ind = -exp    // 1 <= ind <= 16; ind is a synonym for 'x'
+          // chop off ind digits from the lower part of C1
+          // C1 fits in 64 bits
+          // calculate C* and f*
+          // C* is actually floor(C*) in this case
+          // C* and f* need shifting and masking, as shown by
+          // bid_shiftright128[] and bid_maskhigh128[]
+          // 1 <= x <= 16
+          // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+          // C* = C1 * 10^(-x)
+          // the approximation of 10^(-x) was rounded up to 64 bits
+          P128 = mul64x64to128(UInt64(C1), bid_ten2mk64(ind - 1)).components
+          
+          // C* = floor(C*) (logical right shift; C has p decimal digits,
+          //       correct by Property 1)
+          // if (0 < f* < 10^(-x)) then the result is exact
+          // n = C* * 10^(e+x)
+          
+          if ind - 1 <= 2 {    // 0 <= ind - 1 <= 2 => shift = 0
+            res = Mantissa(P128.high)
+            fstar.high = 0
+            fstar.low = P128.low
+          } else if ind - 1 <= 21 {    // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
+            let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
+            res = Mantissa((P128.high >> shift))
+            fstar.high = P128.high & bid_maskhigh128(ind - 1)
+            fstar.low = P128.low
+          }
+          // if (f* > 10^(-x)) then the result is inexact
+          if (fstar.high != 0) || (fstar.low >= bid_ten2mk64(ind - 1)) {
+            if x_sign == .plus {
+              // if positive and not exact, increment magnitude
+              res+=1
+            }
+            //pfpsf.insert(.inexact)
+          }
+          // set exponent to zero as it was negative before.
+          return Self(sign: x_sign, exponent: 0, mantissa: res) // x_sign | zero | res
+        } else {    // if exp < 0 and q + exp <= 0
+          // the result is -0 or +1
+          if x_sign != .plus {
+            return zero(.minus)
+          } else {
+            return Self(sign: .plus, exponent: 0, mantissa: 1)
+          }
+        }
+      case BID_ROUNDING_TO_ZERO:
+        if (q + exp) >= 0 {    // exp < 0 and 1 <= -exp <= q
+          // need to shift right -exp digits from the coefficient; exp will be 0
+          ind = -exp    // 1 <= ind <= 16; ind is a synonym for 'x'
+          // chop off ind digits from the lower part of C1
+          // C1 fits in 127 bits
+          // calculate C* and f*
+          // C* is actually floor(C*) in this case
+          // C* and f* need shifting and masking, as shown by
+          // bid_shiftright128[] and bid_maskhigh128[]
+          // 1 <= x <= 16
+          // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+          // C* = C1 * 10^(-x)
+          // the approximation of 10^(-x) was rounded up to 64 bits
+          P128 = mul64x64to128(UInt64(C1), bid_ten2mk64(ind - 1)).components
+          
+          // C* = floor(C*) (logical right shift; C has p decimal digits,
+          //       correct by Property 1)
+          // if (0 < f* < 10^(-x)) then the result is exact
+          // n = C* * 10^(e+x)
+          
+          if ind - 1 <= 2 {    // 0 <= ind - 1 <= 2 => shift = 0
+            res = Mantissa(P128.high)
+            fstar.high = 0
+            fstar.low = P128.low
+          } else if ind - 1 <= 21 {    // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
+            let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
+            res = Mantissa((P128.high >> shift))
+            fstar.high = P128.high & bid_maskhigh128(ind - 1)
+            fstar.low = P128.low
+          }
+          // if (f* > 10^(-x)) then the result is inexact
+//          if (fstar.high != 0) || (fstar.low >= bid_ten2mk64[ind - 1]) {
+//            pfpsf.insert(.inexact)
+//          }
+          // set exponent to zero as it was negative before.
+          return Self(sign: x_sign, exponent: 0, mantissa: Mantissa(res))
+        } else {    // if exp < 0 and q + exp < 0
+          // the result is +0 or -0
+          return zero(x_sign)
+          // pfpsf.insert(.inexact)
+        }
+      default: break
+    }    // end switch ()
+    return Self(sign: x_sign, exponent: exp, mantissa: res)
+  }
+}
 
 // MARK: - Extended UInt Definitions
-// Use these for now
+// These are usd primarily for table and extended calculation storage
 struct UInt512 { var w = [UInt64](repeating: 0, count: 8) }
 struct UInt384 { var w = [UInt64](repeating: 0, count: 6) }
 struct UInt256 { var w = [UInt64](repeating: 0, count: 4) }
@@ -937,7 +2254,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
 //    if rounded != 0 {
 //      T.state.insert(.inexact)
 //    }
-    return T(sign: sign, exponent: add_expon,
+    return T(sign: sign, exponent: add_expon+T.exponentBias,
              mantissa: T.Mantissa(coefficient_x))
 //    return T(sign: sign,
 //             exponentBitPattern: T.RawExponent(add_expon + T.exponentBias),
