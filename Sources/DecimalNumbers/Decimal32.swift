@@ -124,7 +124,13 @@ extension Decimal32 : ExpressibleByFloatLiteral {
 
 extension Decimal32 : ExpressibleByIntegerLiteral {
   public init(integerLiteral value: IntegerLiteralType) {
-    
+    if IntegerLiteralType.isSigned {
+      let x = Int(value).magnitude
+      self.init(bid: ID.bid(from: UInt64(x), Self.rounding))
+      if value.signum() < 0 { self.negate() }
+    } else {
+      self.init(bid: ID.bid(from: UInt64(value), Self.rounding))
+    }
   }
 }
 
@@ -146,11 +152,12 @@ extension Decimal32 : FloatingPoint {
   
   public init(sign: FloatingPointSign, exponent: Int, significand: Self) {
     let (_, _, mantissa, _) = significand.bid.unpack()
-    bid = ID(sign: sign, exponent: exponent, mantissa: mantissa)
+    bid = ID(sign: sign, exponent: exponent+Self.exponentBias,
+             mantissa: mantissa)
   }
     
   public mutating func round(_ rule: FloatingPointRoundingRule) {
-    // FIXME: - Round
+    self.bid = ID.round(self.bid, rule)
   }
   
   ///////////////////////////////////////////////////////////////////////////
@@ -179,7 +186,8 @@ extension Decimal32 : FloatingPoint {
   }
   
   @inlinable public static var pi: Self {
-    Self(bid: ID(exponent: -ID.numberOfDigits+1, mantissa: 3141593))
+    Self(bid: ID(exponent: ID.exponentBias-ID.numberOfDigits+1,
+                 mantissa: 3141593))
   }
     
   ///////////////////////////////////////////////////////////////////////////
@@ -187,7 +195,6 @@ extension Decimal32 : FloatingPoint {
   
   public var ulp: Self               { nextUp - self }
   public var sign: FloatingPointSign { bid.sign }
-  public var exponent: Int           { bid.exponent + ID.numberOfDigits - 1 }
   public var isNormal: Bool          { bid.isNormal }
   public var isSubnormal: Bool       { bid.isSubnormal }
   public var isFinite: Bool          { !bid.isInfinite }
@@ -197,10 +204,14 @@ extension Decimal32 : FloatingPoint {
   public var isSignalingNaN: Bool    { bid.isSNaN }
   public var isCanonical: Bool       { bid.isCanonical }
   
+  public var exponent: Int {
+    bid.exponent - ID.exponentBias + ID.numberOfDigits - 1
+  }
+
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()
     if !valid { return self }
-    return Self(bid: ID(mantissa: man))
+    return Self(bid: ID(exponent: ID.exponentBias, mantissa: man))
   }
   
   ///////////////////////////////////////////////////////////////////////////
@@ -276,30 +287,19 @@ extension Decimal32 : DecimalFloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Instance properties and attributes
   
-  public var significandBitPattern: UInt32 { bid.data }
+  public var significandBitPattern: UInt32 { UInt32(bid.mantissa) }
   public var exponentBitPattern: UInt      { UInt(bid.exponent) }
   public var dpd: UInt32                   { bid.dpd }
   
   public var significandDigitCount: Int {
-    guard bid.isValid else { return 0 }
+    guard bid.isValid else { return -1 }
     return ID.digitsIn(bid.mantissa)
-  }
-  
-  public var significandDigits: [UInt8] {
-    guard bid.isValid else { return [] }
-    return Array(String(bid.mantissa)).map { UInt8($0.wholeNumberValue!) }
   }
   
   public var decade: Self {
     let (_, exp, _, valid) = bid.unpack()
     if !valid { return self } // For infinity, Nan, sNaN
     return Self(bid: ID(exponent: exp, mantissa: 1))
-  }
-  
-  public func unpack() -> (sign: FloatingPointSign, exp: Int, coeff: UInt,
-                           valid: Bool) {
-    let x = bid.unpack()
-    return (x.sign, x.exponent, x.mantissa, x.valid)
   }
   
 }

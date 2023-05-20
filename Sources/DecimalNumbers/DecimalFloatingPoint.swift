@@ -398,19 +398,19 @@ extension DecimalFloatingPoint {
 extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
   
   static func _decimalLogarithm<Source:BinaryInteger>(_ x:Source) ->
-                                            (exp:Int, digits:[UInt8]) {
+                                    (exp:Int, digits:Self.RawSignificand) {
     assert(x > (0 as Source))  // negatives and zero are illegal
-    var digits = [UInt8]()
+    var digits = 0
     let ten = (10 as Source)
     var expx10 = 0
     var n = x
     while n > ten {
       expx10 += 1
       let x = n.quotientAndRemainder(dividingBy: ten)
-      digits.append(UInt8(x.remainder))
+      digits = digits * 10 + Int(x.remainder)
       n = x.quotient
     }
-    return (expx10, digits)
+    return (expx10, Self.RawSignificand(digits))
   }
   
   public // @testable
@@ -419,7 +419,7 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     // Note: Self's exponent is x10ⁿ where n is the radix 10 exponent whereas
     // Source's exponent is x2ª where a is the radix 2 exponent.
     // Useful constants:
-    let exponentBias = (1 as Self).exponentBitPattern
+    let exponentBias = Self.exponentBias
     
     //  Zero is really extra simple, and saves us from trying to normalize a
     //  value that cannot be normalized.
@@ -440,8 +440,8 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     //  significandDigits in the initializer.
     let value = Self(
       sign: Source.isSigned && source < 0 ? .minus : .plus,
-      exponentBitPattern: exponentBias,
-      significandBitPattern: expMag.digits as! Self.RawSignificand
+      exponentBitPattern: Self.RawExponent(exponentBias),
+      significandBitPattern: expMag.digits
     )
     return (value, expMag.exp <= Self.significandDigitCount)
   }
