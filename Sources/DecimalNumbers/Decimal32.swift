@@ -31,8 +31,13 @@ public struct IntegerDecimal32 : IntegerDecimal {
   
   public init(_ word: RawDataFields) { self.data = word }
   
+  public init(sign: FloatingPointSign, exponent: Int, mantissa: UInt) {
+    self.init(sign: sign, exponent: exponent, mantissa: mantissa, round: 0)
+  }
+  
   public init(sign:FloatingPointSign = .plus, exponent:Int = 0,
-              mantissa:Mantissa) {
+              mantissa:Mantissa, round:Int = 0) {
+    
     self.sign = sign
     self.set(exponent: exponent, mantissa: mantissa)
   }
@@ -126,10 +131,10 @@ extension Decimal32 : ExpressibleByIntegerLiteral {
   public init(integerLiteral value: IntegerLiteralType) {
     if IntegerLiteralType.isSigned {
       let x = Int(value).magnitude
-      self.init(bid: ID.bid(from: UInt64(x), Self.rounding))
+      bid = ID.bid(from: UInt64(x), Self.rounding)
       if value.signum() < 0 { self.negate() }
     } else {
-      self.init(bid: ID.bid(from: UInt64(value), Self.rounding))
+      bid = ID.bid(from: UInt64(value), Self.rounding)
     }
   }
 }
@@ -194,10 +199,11 @@ extension Decimal32 : FloatingPoint {
   // MARK: - Instance properties and attributes
   
   public var ulp: Self               { nextUp - self }
+  public var nextUp: Self            { Self(bid: ID.nextup(self.bid)) }
   public var sign: FloatingPointSign { bid.sign }
   public var isNormal: Bool          { bid.isNormal }
   public var isSubnormal: Bool       { bid.isSubnormal }
-  public var isFinite: Bool          { !bid.isInfinite }
+  public var isFinite: Bool          { bid.isFinite }
   public var isZero: Bool            { bid.isZero }
   public var isInfinite: Bool        { bid.isInfinite }
   public var isNaN: Bool             { bid.isNaN }
@@ -211,7 +217,7 @@ extension Decimal32 : FloatingPoint {
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()
     if !valid { return self }
-    return Self(bid: ID(exponent: ID.exponentBias, mantissa: man))
+    return Self(bid: ID(exponent: exponent+ID.exponentBias, mantissa: man))
   }
   
   ///////////////////////////////////////////////////////////////////////////
@@ -243,10 +249,6 @@ extension Decimal32 : FloatingPoint {
   
   public mutating func addProduct(_ lhs: Self, _ rhs: Self) {
     self += lhs * rhs // FIXME: -
-  }
-  
-  public var nextUp: Self {
-    Self(0) // FIXME: -
   }
   
   public func isEqual(to other: Self) -> Bool  { self == other }

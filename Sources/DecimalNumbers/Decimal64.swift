@@ -31,8 +31,27 @@ public struct IntegerDecimal64 : IntegerDecimal {
     self.data = word
   }
   
+  public init(sign: FloatingPointSign, exponent: Int, mantissa: Mantissa) {
+    self.init(sign: sign, exponent: exponent, mantissa: mantissa, round: 0)
+  }
+  
   public init(sign:FloatingPointSign = .plus, exponent:Int = 0,
-              mantissa:Mantissa) {
+              mantissa:Mantissa, round:Int = 0) {
+    var exponent = exponent
+    var mantissa = mantissa
+    
+    if mantissa > Self.largestNumber {
+      exponent += 1
+      mantissa = (Self.largestNumber+1)/10
+    }
+    if round != 0 {
+      // check for possible underflow/overflow
+      if Mantissa(bitPattern: Int64(exponent)) > Self.maximumExponent {
+        self = Self.handleRounding(sign, exponent, Int(mantissa), round,
+                                   Decimal32.rounding)
+        return
+      }
+    }
     self.sign = sign
     self.set(exponent: exponent, mantissa: mantissa)
   }

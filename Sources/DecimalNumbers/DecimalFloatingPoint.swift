@@ -403,11 +403,13 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     var digits = 0
     let ten = (10 as Source)
     var expx10 = 0
+    var pow10 = 1
     var n = x
-    while n > ten {
+    while n > 0 {
       expx10 += 1
       let x = n.quotientAndRemainder(dividingBy: ten)
-      digits = digits * 10 + Int(x.remainder)
+      digits = digits + Int(x.remainder) * pow10
+      pow10 *= 10
       n = x.quotient
     }
     return (expx10, Self.RawSignificand(digits))

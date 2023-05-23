@@ -16,16 +16,7 @@ limitations under the License.
 
 import UInt128
 
-extension UInt128  {
-  @available(macOS 13.3, iOS 16.4, macCatalyst 16.4, tvOS 16.4, watchOS 9.4, *)
-  public init(bigInt: StaticBigInt) {
-    precondition(bigInt.signum() >= 0, "UInt128 literal cannot be negative")
-    precondition(bigInt.bitWidth <= Self.bitWidth,
-                 "\(bigInt.bitWidth)-bit literal too large for UInt128")
-    precondition(Low.bitWidth == 64, "Expecting 64-bit UInt")
-    self.init(high: High(bigInt[1]), low: Low(bigInt[0]))
-  }
-}
+
 
 /// Definition of the data storage for the Decimal128 floating-point data type.
 /// the `IntegerDecimal` protocol defines many supporting operations
@@ -34,6 +25,7 @@ extension UInt128  {
 /// to completely define many of the Decimal128 operations. The `data` word
 /// holds all 128 bits of the Decimal128 data type.
 public struct IntegerDecimal128 : IntegerDecimal {
+    
   public typealias RawDataFields = UInt128
   public typealias Mantissa = UInt128
   
@@ -45,8 +37,12 @@ public struct IntegerDecimal128 : IntegerDecimal {
   
   public init(sign:FloatingPointSign = .plus, exponent:Int = 0,
               mantissa:Mantissa) {
-    self.sign = sign
-    self.set(exponent: exponent, mantissa: mantissa)
+    self.init(sign: sign, exponent: exponent, mantissa: mantissa, round: 0)
+  }
+  
+  public init(sign: FloatingPointSign, exponent: Int, mantissa: Mantissa,
+              round: Int) {
+    
   }
   
   // Define the fields and required parameters
@@ -58,9 +54,9 @@ public struct IntegerDecimal128 : IntegerDecimal {
   
   // Awkward way of using StaticBigInts — fix me.
   public static var largestNumber: Mantissa {
-    if #available(macOS 13.3, iOS 16.4, macCatalyst 16.4, tvOS 16.4,
-                  watchOS 9.4, *) {
-      return Mantissa(bigInt: 9_999_999_999_999_999_999_999_999_999_999_999)
+    if#available(macOS 13.3,iOS 16.4,macCatalyst 16.4,tvOS 16.4,watchOS 9.4,*){
+      let x : StaticBigInt = 9_999_999_999_999_999_999_999_999_999_999_999
+      return Mantissa(integerLiteral: x)
     } else {
       // Fallback on earlier versions - same number in hexadecimal
       return Mantissa(high: 0x1_ED09_BEAD_87C0, low: 0x378D_8E63_FFFF_FFFF)
@@ -131,9 +127,9 @@ public struct Decimal128 {
   
   @inlinable public static var pi: Self {
     let p: ID.Mantissa
-    if #available(macOS 13.3, iOS 16.4, macCatalyst 16.4, tvOS 16.4,
-                  watchOS 9.4, *) {
-      p = ID.Mantissa(bigInt: 3_141_592_653_589_793_238_462_643_383_279_503)
+    if#available(macOS 13.3,iOS 16.4,macCatalyst 16.4,tvOS 16.4,watchOS 9.4,*){
+      let x : StaticBigInt = 3_141_592_653_589_793_238_462_643_383_279_503
+      p = ID.Mantissa(integerLiteral: x)
     } else {
       // Fallback on earlier versions - same number in hexadecimal
       p = ID.Mantissa(high: 0x9AE4_7957_96A7, low: 0xBABE_5564_E6F3_9F8F)
