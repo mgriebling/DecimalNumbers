@@ -8,18 +8,13 @@
 import UInt128
 
 extension UInt128 {
-  @available(macOS 13.3, iOS 16.4, macCatalyst 16.4, tvOS 16.4, watchOS 9.4, *)
+  typealias IntegerLiteralType = StaticBigInt
   public init(integerLiteral value: StaticBigInt) {
     precondition(value.signum() >= 0, "UInt128 literal cannot be negative")
     precondition(value.bitWidth <= Self.bitWidth,
                  "\(value.bitWidth)-bit literal too large for UInt128")
     precondition(Low.bitWidth == 64, "Expecting 64-bit UInt")
     self.init(high: High(value[1]), low: Low(value[0]))
-  }
-  
-  @available(macOS 10, *)
-  public init(integerLiteral value: IntegerLiteralType) {
-    self.init(high: 0, low: Low(value))
   }
 }
 
