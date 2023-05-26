@@ -31,11 +31,11 @@ public struct IntegerDecimal32 : IntegerDecimal {
   
   public init(_ word: RawDataFields) { self.data = word }
   
-  public init(sign: FloatingPointSign, exponent: Int, mantissa: UInt) {
+  public init(sign: Sign, exponent: Int, mantissa: UInt) {
     self.init(sign: sign, exponent: exponent, mantissa: mantissa, round: 0)
   }
   
-  public init(sign:FloatingPointSign = .plus, exponent:Int = 0,
+  public init(sign:Sign = .plus, exponent:Int = 0,
               mantissa:Mantissa, round:Int = 0) {
     
     self.sign = sign
@@ -46,7 +46,7 @@ public struct IntegerDecimal32 : IntegerDecimal {
   public static var exponentBias:    Int {  101 }
   public static var maximumExponent: Int {  191 }
   public static var minimumExponent: Int {    0 }
-  public static var numberOfDigits:  Int {    7 }
+  public static var maximumDigits:   Int {    7 }
   public static var exponentBits:    Int {    8 }
   
   public static var largestNumber: Mantissa { 9_999_999 }
@@ -69,14 +69,14 @@ public struct IntegerDecimal32 : IntegerDecimal {
 /// decimal encoding format is supported too in the library, by means of
 /// conversion functions between the two encoding formats.
 public struct Decimal32 : Codable, Hashable {
-  
   public typealias ID32 = IntegerDecimal32
-  var bid: ID32
+  var bid: ID32 = ID32.zero(.plus)
   
+  public init(bid: UInt32) { self.bid.data = bid }
   public init(bid: ID32) { self.bid = bid }
   
   public init?(_ s: String) {
-    if let n:ID32 = numberFromString(s, round: .toNearestOrEven) {
+    if let n: ID32 = numberFromString(s, round: .toNearestOrEven) {
       bid = n
     }
     return nil
@@ -151,23 +151,23 @@ extension Decimal32 : FloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for FloatingPoint
   
-  public init(sign: FloatingPointSign, exponent: Int, significand: Self) {
-    bid = ID32(sign: sign, exponent: exponent+Self.exponentBias,
+  public init(sign: Sign, exponent: Int, significand: Self) {
+    self.bid = ID32(sign: sign, exponent: exponent+Self.exponentBias,
                mantissa: significand.bid.unpack().mantissa)
   }
     
-  public mutating func round(_ rule: FloatingPointRoundingRule) {
+  public mutating func round(_ rule: Rounding) {
     self.bid = ID32.round(self.bid, rule)
   }
   
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - DecimalFloatingPoint properties and attributes
   
-  public static var rounding = FloatingPointRoundingRule.toNearestOrEven
+  public static var rounding = Rounding.toNearestOrEven
   
   @inlinable public static var exponentBitCount: Int      {ID32.exponentBits}
   @inlinable public static var exponentBias: Int          {ID32.exponentBias}
-  @inlinable public static var significandDigitCount: Int {ID32.numberOfDigits}
+  @inlinable public static var significandDigitCount: Int {ID32.maximumDigits}
   
   @inlinable public static var nan: Self          {Self(bid:ID32.nan(.plus,0))}
   @inlinable public static var signalingNaN: Self {Self(bid:ID32.snan)}
@@ -186,7 +186,7 @@ extension Decimal32 : FloatingPoint {
   }
   
   @inlinable public static var pi: Self {
-    Self(bid: ID32(exponent: ID32.exponentBias-ID32.numberOfDigits+1,
+    Self(bid: ID32(exponent: ID32.exponentBias-ID32.maximumDigits+1,
                  mantissa: 3141593))
   }
     
@@ -195,7 +195,7 @@ extension Decimal32 : FloatingPoint {
   
   public var ulp: Self               { nextUp - self }
   public var nextUp: Self            { Self(bid: ID32.nextup(self.bid)) }
-  public var sign: FloatingPointSign { bid.sign }
+  public var sign: Sign { bid.sign }
   public var isNormal: Bool          { bid.isNormal }
   public var isSubnormal: Bool       { bid.isSubnormal }
   public var isFinite: Bool          { bid.isFinite }
@@ -206,7 +206,7 @@ extension Decimal32 : FloatingPoint {
   public var isCanonical: Bool       { bid.isCanonical }
   
   public var exponent: Int {
-    bid.exponent - ID32.exponentBias + ID32.numberOfDigits - 1
+    bid.exponent - ID32.exponentBias + ID32.maximumDigits - 1
   }
 
   public var significand: Self {
@@ -255,7 +255,7 @@ extension Decimal32 : FloatingPoint {
   
   public var magnitude: Self {
     var data = bid.data; data.clear(bit: ID32.signBit)
-    return Self(bid: ID32(ID32.RawDataFields(data)))
+    return Self(bid: data)
   }
 }
 
@@ -267,14 +267,14 @@ extension Decimal32 : DecimalFloatingPoint {
   // MARK: - Initializers for DecimalFloatingPoint
   public init(bitPattern bits: RawSignificand, bidEncoding: Bool) {
     if bidEncoding {
-      bid = ID32(ID32.RawDataFields(bits))
+      bid.data = bits
     } else {
       // convert from dpd to bid
       bid = ID32(dpd: ID32.RawDataFields(bits))
     }
   }
   
-  public init(sign: FloatingPointSign, exponentBitPattern: RawExponent,
+  public init(sign: Sign, exponentBitPattern: RawExponent,
               significandBitPattern significantBitPattern: RawSignificand) {
     bid = ID32(sign: sign, exponent: Int(exponentBitPattern),
              mantissa: ID32.Mantissa(significantBitPattern))
@@ -297,4 +297,3 @@ extension Decimal32 : DecimalFloatingPoint {
     return Self(bid: ID32(exponent: bid.exponent, mantissa: 1))
   }
 }
-

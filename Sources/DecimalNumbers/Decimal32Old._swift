@@ -55,7 +55,7 @@ public struct Decimal32Old : Codable, Hashable {
   // MARK: - Decimal32 State variables - this probably needs to change
   //         to better support multi-tasking
   static public var state = Status.clearFlags
-  static public var rounding = FloatingPointRoundingRule.toNearestOrEven
+  static public var rounding = Rounding.toNearestOrEven
   
   //////////////////////////////////////////////////////////////////////////
   // MARK: - Decimal32 State constants
@@ -100,14 +100,14 @@ public struct Decimal32Old : Codable, Hashable {
   
   public init(_ value: Int = 0) { self.init(integerLiteral: value) }
 
-  public init(sign: FloatingPointSign, exponentBitPattern: UInt32,
+  public init(sign: Sign, exponentBitPattern: UInt32,
               significandDigits: [UInt8]) {
     let mantissa = significandDigits.reduce(into: 0) { $0 = $0 * 10 + Int($1) }
     self.init(sign: sign, exponent: Int(exponentBitPattern),
               significand: Self(mantissa))
   }
   
-  public init(sign: FloatingPointSign, exponent: Int, significand: Self) {
+  public init(sign: Sign, exponent: Int, significand: Self) {
     let sgn = sign == .minus ? Self.SIGN_MASK : 0
     let s = Self.unpack(bid32: significand.x)
     self.init()
@@ -208,7 +208,7 @@ extension Decimal32Old : Strideable {
 
 extension Decimal32Old { // }: FloatingPoint {
   
-  public mutating func round(_ rule: FloatingPointRoundingRule) {
+  public mutating func round(_ rule: Rounding) {
     let dec64 = Self.bid32_to_bid64(x, &Self.state)
     let res = Self.bid64_round_integral_exact(dec64, rule, &Self.state)
     if Self.state == .inexact { Self.state = .clearFlags }
@@ -258,7 +258,7 @@ extension Decimal32Old { // }: FloatingPoint {
 
 public extension Decimal32Old {
   
-  var sign: FloatingPointSign { x & Self.SIGN_MASK != 0 ? .minus : .plus }
+  var sign: Sign { x & Self.SIGN_MASK != 0 ? .minus : .plus }
   
   var dpd32: Word          { Self.bid_to_dpd32(x) }
   var decimal64: UInt64    { Self.bid32_to_bid64(x, &Self.state) }

@@ -49,7 +49,7 @@ public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
   ///     the new value.
   ///   - significandBitPattern: Bit pattern to use for the mantissa field of
   ///     the new value.
-  init(sign: FloatingPointSign, exponentBitPattern: RawExponent,
+  init(sign: Sign, exponentBitPattern: RawExponent,
        significandBitPattern: RawSignificand)
   
   /// Initialize from raw Binary Integer Decimal (BID) or
@@ -142,7 +142,7 @@ public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
   
   // FIXME: - Discussion on how to do rounding and state tracking
   /// Class-wide setting for how numbers will be rounded in calculations.
-  static var rounding: FloatingPointRoundingRule { get set }
+  static var rounding: Rounding { get set }
   
   /// The number of digits required to represent the value's significand.
   ///

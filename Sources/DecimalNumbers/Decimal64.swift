@@ -31,11 +31,11 @@ public struct IntegerDecimal64 : IntegerDecimal {
     self.data = word
   }
   
-  public init(sign: FloatingPointSign, exponent: Int, mantissa: Mantissa) {
+  public init(sign: Sign, exponent: Int, mantissa: Mantissa) {
     self.init(sign: sign, exponent: exponent, mantissa: mantissa, round: 0)
   }
   
-  public init(sign:FloatingPointSign = .plus, exponent:Int = 0,
+  public init(sign:Sign = .plus, exponent:Int = 0,
               mantissa:Mantissa, round:Int = 0) {
     var exponent = exponent
     var mantissa = mantissa
@@ -60,7 +60,7 @@ public struct IntegerDecimal64 : IntegerDecimal {
   public static var exponentBias:    Int {  398 }
   public static var maximumExponent: Int {  369 } // unbiased
   public static var minimumExponent: Int { -398 } // unbiased
-  public static var numberOfDigits:  Int {   16 }
+  public static var maximumDigits:  Int {   16 }
   public static var exponentBits:    Int {   10 }
   
   public static var largestNumber: Mantissa { 9_999_999_999_999_999 }
@@ -98,7 +98,7 @@ public struct Decimal64 {
     return nil
   }
   
-  func add(_ y: Self, rounding: FloatingPointRoundingRule) -> Self {
+  func add(_ y: Self, rounding: Rounding) -> Self {
     return self
   }
   
@@ -107,9 +107,9 @@ public struct Decimal64 {
   
   public static var exponentBitCount: Int         { ID.exponentBits }
   public static var exponentBias: Int             { ID.exponentBias }
-  public static var significandDigitCount: Int    { ID.numberOfDigits }
+  public static var significandDigitCount: Int    { ID.maximumDigits }
   
-  public static var rounding = FloatingPointRoundingRule.toNearestOrEven
+  public static var rounding = Rounding.toNearestOrEven
   
   @inlinable public static var nan: Self          { Self(bid:ID.nan(.plus,0)) }
   @inlinable public static var signalingNaN: Self { Self(bid:ID.snan) }
@@ -129,7 +129,7 @@ public struct Decimal64 {
   
   @inlinable public static var pi: Self {
     let p : ID.Mantissa = 3_141_592_653_589_793
-    return Self(bid: ID(exponent: -ID.numberOfDigits+1, mantissa: p))
+    return Self(bid: ID(exponent: -ID.maximumDigits+1, mantissa: p))
   }
   
 }
@@ -142,7 +142,7 @@ extension Decimal64 : AdditiveArithmetic {
   }
   
   public mutating func negate() {
-    bid.sign = bid.sign == .minus ? FloatingPointSign.plus : .minus
+    bid.sign = bid.sign == .minus ? Sign.plus : .minus
   }
   
   public static func + (lhs: Self, rhs: Self) -> Self {

@@ -8,7 +8,7 @@ final class DecimalNumbersTests: XCTestCase {
   
   struct TestCase {
     let id:String
-    let roundMode:FloatingPointRoundingRule
+    let roundMode:Rounding
     let istr, istr2, istr3:String
     let res:UInt64
     let reshi:UInt64
@@ -29,8 +29,8 @@ final class DecimalNumbersTests: XCTestCase {
       return status
     }
     
-    static func toRounding(_ int:Int) -> FloatingPointRoundingRule {
-      var round:FloatingPointRoundingRule
+    static func toRounding(_ int:Int) -> Rounding {
+      var round:Rounding
       switch int {
         case 0: round = .toNearestOrEven
         case 1: round = .down
@@ -1608,145 +1608,6 @@ final class DecimalNumbersTests: XCTestCase {
       TestCase("bid32_isZero", 0, "0xfc100100", 0, 0x00),
       TestCase("bid32_isZero", 0, "0xfe000000", 0, 0x00),
       
-      TestCase("bid32_llround", 0, "0x2F4C4B40", 1, 00), // 0.5
-      TestCase("bid32_llround", 0, "0x2F8F4240", 1, 00), // 1
-      TestCase("bid32_llround", 0, "0x2F96E360", 2, 00), // 1.5
-      TestCase("bid32_llround", 0, "0x30ADC6C0", 300, 00), // 30
-      TestCase("bid32_llround", 0, "0x30ADDA48", 301, 00), // 300.5
-      TestCase("bid32_llround", 0, "0x310003E7", 1, 00), // 0.999
-      TestCase("bid32_llround", 0, "0x310005DC", 2, 00), // 1.5
-      TestCase("bid32_llround", 0, "0x310495D4", 301, 00), // 300.5
-      TestCase("bid32_llround", 0, "0x31800096", 2, 00), // 1.5
-      TestCase("bid32_llround", 0, "0x31807562", 301, 00), // 300.5
-      TestCase("bid32_llround", 0, "0x32000005", 1, 00), // 0.5
-      TestCase("bid32_llround", 0, "0x3200000F", 2, 00), // 1.5
-      TestCase("bid32_llround", 0, "0x32000BB8", 300, 00), // 30
-      TestCase("bid32_llround", 0, "0x32000BBD", 301, 00), // 300.5
-      TestCase("bid32_llround", 0, "0x32800001", 1, 00), // 1
-      TestCase("bid32_llround", 0, "0x3280012C", 300, 00), // 30
-      TestCase("bid32_llround", 0, "0x3300001E", 300, 00), // 30
-      TestCase("bid32_llround", 0, "0x33800003", 300, 00), // 30
-      TestCase("bid32_llround", 0, "0x3420C49C", 2147484000, 00), // 2^31+1
-      TestCase("bid32_llround", 0, "0x343D0900", 4000000000, 00), // 4e9
-      TestCase("bid32_llround", 0, "0x34418937", 4294967000, 00), // 2^32+1
-      TestCase("bid32_llround", 0, "0x344C4B40", 5000000000, 00), // 5e9
-      TestCase("bid32_llround", 0, "0x349E8480", 20000000000, 00), // 2e10
-      TestCase("bid32_llround", 0, "0x37000004", 4000000000, 00), // 4e9
-      TestCase("bid32_llround", 0, "0x37000005", 5000000000, 00), // 5e9
-      TestCase("bid32_llround", 0, "0x371E8480", 2000000000000000, 00), // 2e15
-      TestCase("bid32_llround", 0, "0x37800002", 20000000000, 00), // 2e10
-      TestCase("bid32_llround", 0, "0x390F4240",
-               UInt64(bitPattern: -9223372036854775808), 01), // 1e19
-      TestCase("bid32_llround", 0, "0x3916E360",
-               UInt64(bitPattern: -9223372036854775808), 01), // 1.5e19
-      TestCase("bid32_llround", 0, "0x391C25C2",
-               UInt64(bitPattern: -9223372036854775808), 01), // 2^64+1
-      TestCase("bid32_llround", 0, "0x391E8480",
-               UInt64(bitPattern: -9223372036854775808), 01), // 2e19
-      TestCase("bid32_llround", 0, "0x392625A0",
-               UInt64(bitPattern: -9223372036854775808), 01), // 2.5e19
-      TestCase("bid32_llround", 0, "0x398F4240",
-               UInt64(bitPattern: -9223372036854775808), 01), // 1e0x20),
-      TestCase("bid32_llround", 0, "0x3A000002",
-               2000000000000000, 00), // 2e15
-      TestCase("bid32_llround", 0, "0x3B80000F",
-               UInt64(bitPattern: -9223372036854775808), 01), // 1.5e19
-      TestCase("bid32_llround", 0, "0x3B800019",
-               UInt64(bitPattern: -9223372036854775808), 01), // 2.5e19
-      TestCase("bid32_llround", 0, "0x3C000001",
-               UInt64(bitPattern: -9223372036854775808), 01), // 1e19
-      TestCase("bid32_llround", 0, "0x3C000002",
-               UInt64(bitPattern: -9223372036854775808), 01), // 2e19
-      TestCase("bid32_llround", 0, "0x3C800001",
-               UInt64(bitPattern: -9223372036854775808), 01), // 1e0x20),
-      TestCase("bid32_llround", 0, "0x6BD86F70", 1, 00), // 0.999
-      TestCase("bid32_llround", 0, "0x6E2CBCCC",
-               9223372000000000000, 00), // 2^63+1
-      TestCase("bid32_llround", 0, "0xAF4C4B40",
-               UInt64(bitPattern:-1), 00), // -(0.5)
-      TestCase("bid32_llround", 0, "0xAF8F4240",
-               UInt64(bitPattern:-1), 00), // -(1)
-      TestCase("bid32_llround", 0, "0xAF96E360",
-               UInt64(bitPattern:-2), 00), // -(1.5)
-      TestCase("bid32_llround", 0, "0xB0ADC6C0",
-               UInt64(bitPattern:-300), 00), // -(300)
-      TestCase("bid32_llround", 0, "0xB0ADDA48",
-               UInt64(bitPattern:-301), 00), // -(300.5)
-      TestCase("bid32_llround", 0, "0xB10003E7",
-               UInt64(bitPattern:-1), 00), // -(0.999)
-      TestCase("bid32_llround", 0, "0xB10005DC",
-               UInt64(bitPattern:-2), 00), // -(1.5)
-      TestCase("bid32_llround", 0, "0xB10495D4",
-               UInt64(bitPattern:-301), 00), // -(300.5)
-      TestCase("bid32_llround", 0, "0xB1800096",
-               UInt64(bitPattern:-2), 00), // -(1.5)
-      TestCase("bid32_llround", 0, "0xB1807562",
-               UInt64(bitPattern:-301), 00), // -(300.5)
-      TestCase("bid32_llround", 0, "0xB2000005",
-               UInt64(bitPattern:-1), 00), // -(0.5)
-      TestCase("bid32_llround", 0, "0xB200000F",
-               UInt64(bitPattern:-2), 00), // -(1.5)
-      TestCase("bid32_llround", 0, "0xB2000BB8",
-               UInt64(bitPattern:-300), 00), // -(300)
-      TestCase("bid32_llround", 0, "0xB2000BBD",
-               UInt64(bitPattern:-301), 00), // -(300.5)
-      TestCase("bid32_llround", 0, "0xB2800001",
-               UInt64(bitPattern:-1), 00), // -(1)
-      TestCase("bid32_llround", 0, "0xB280012C",
-               UInt64(bitPattern:-300), 00), // -(300)
-      TestCase("bid32_llround", 0, "0xB300001E",
-               UInt64(bitPattern:-300), 00), // -(300)
-      TestCase("bid32_llround", 0, "0xB3800003",
-               UInt64(bitPattern:-300), 00), // -(300)
-      TestCase("bid32_llround", 0, "0xB420C49C",
-               UInt64(bitPattern:-2147484000), 00), // -(2^31+1)
-      TestCase("bid32_llround", 0, "0xB43D0900",
-               UInt64(bitPattern:-4000000000), 00), // -(4e9)
-      TestCase("bid32_llround", 0, "0xB4418937",
-               UInt64(bitPattern:-4294967000), 00), // -(2^32+1)
-      TestCase("bid32_llround", 0, "0xB44C4B40",
-               UInt64(bitPattern:-5000000000), 00), // -(5e9)
-      TestCase("bid32_llround", 0, "0xB49E8480",
-               UInt64(bitPattern:-20000000000), 00), // -(2e10)
-      TestCase("bid32_llround", 0, "0xB7000004",
-               UInt64(bitPattern:-4000000000), 00), // -(4e9)
-      TestCase("bid32_llround", 0, "0xB7000005",
-               UInt64(bitPattern:-5000000000), 00), // -(5e9)
-      TestCase("bid32_llround", 0, "0xB71E8480",
-               UInt64(bitPattern:-2000000000000000), 00), // -(2e15)
-      TestCase("bid32_llround", 0, "0xB7800002",
-               UInt64(bitPattern:-20000000000), 00), // -(2e10)
-      TestCase("bid32_llround", 0, "0xB90F4240",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(1e19)
-      TestCase("bid32_llround", 0, "0xB90F4240",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(1e19+0.5)
-      TestCase("bid32_llround", 0, "0xB916E360",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(1.5e19)
-      TestCase("bid32_llround", 0, "0xB91C25C2",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(2^64+1)
-      TestCase("bid32_llround", 0, "0xB91E8480",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(2e19)
-      TestCase("bid32_llround", 0, "0xB92625A0",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(2.5e19)
-      TestCase("bid32_llround", 0, "0xB98F4240",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(1e20)
-      TestCase("bid32_llround", 0, "0xBA000002",
-               UInt64(bitPattern:-2000000000000000), 00), // -(2e15)
-      TestCase("bid32_llround", 0, "0xBB80000F",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(1.5e19)
-      TestCase("bid32_llround", 0, "0xBB800019",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(2.5e19)
-      TestCase("bid32_llround", 0, "0xBC000001",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(1e19)
-      TestCase("bid32_llround", 0, "0xBC000002",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(2e19)
-      TestCase("bid32_llround", 0, "0xBC800001",
-               UInt64(bitPattern:-9223372036854775808), 01), // -(1e20)
-      TestCase("bid32_llround", 0, "0xEBD86F70",
-               UInt64(bitPattern:-1), 00), // -(0.999)
-      TestCase("bid32_llround", 0, "0xEE2CBCCC",
-               UInt64(bitPattern:-9223372000000000000), 00), // -(2^63+1)
-      
       TestCase("bid32_mul", 0, "0x00000001", "1.0", 0x00000001, 0x00),
       TestCase("bid32_mul", 0, "0x00080001", "1.0", 0x00080001, 0x00),
       TestCase("bid32_mul", 0, "1.0", "0x00000001", 0x00000001, 0x00),
@@ -2902,6 +2763,150 @@ final class DecimalNumbersTests: XCTestCase {
       TestCase("bid32_to_binary64", 4, "0xf7f8967f", 0xd412ba093e5c6114, 0x20),
       TestCase("bid32_to_binary64", 4, "0xf8000000", 0xfff0000000000000, 0x00),
       
+      TestCase("bid32_round_integral_exact", 0, "0x00000001", 0x32800000, 0x20),
+      TestCase("bid32_round_integral_exact", 0, "0x00080001", 0x32800000, 0x20),
+      TestCase("bid32_round_integral_exact", 0, "1.0", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_exact", 0, "-1.0", 0xb2800001, 0x00),
+      TestCase("bid32_round_integral_exact", 0, "1.0e-96", 0x32800000, 0x20),
+      TestCase("bid32_round_integral_exact", 0, "-1.0e-96", 0xb2800000, 0x20),
+      TestCase("bid32_round_integral_exact", 0, "0x6098967f", 0x32800000, 0x20),
+      TestCase("bid32_round_integral_exact", 0, "0x60989680", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_exact", 0, "0x7c000000", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_exact", 0, "0x7c8f423f", 0x7c0f423f, 0x00),
+      TestCase("bid32_round_integral_exact", 0, "0x7c8f4240", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_exact", 0, "0x7e100000", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_exact", 0, "0x7e100100", 0x7c000100, 0x01),
+      TestCase("bid32_round_integral_exact", 0, "0x7e8f423f", 0x7c0f423f, 0x01),
+      TestCase("bid32_round_integral_exact", 0, "0x7e8f4240", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_exact", 0, "0x80000001", 0xb2800000, 0x20),
+      TestCase("bid32_round_integral_exact", 0, "9.999999e-95", 0x32800000, 0x20),
+      TestCase("bid32_round_integral_exact", 0, "-9.999999e-95", 0xb2800000, 0x20),
+      TestCase("bid32_round_integral_exact", 0, "9.999999e96", 0x77f8967f, 0x00),
+      TestCase("bid32_round_integral_exact", 0, "-9.999999e96", 0xf7f8967f, 0x00),
+      TestCase("bid32_round_integral_exact", 0, "0xfc100000", 0xfc000000, 0x00),
+      TestCase("bid32_round_integral_exact", 0, "0xfc100100", 0xfc000100, 0x00),
+      TestCase("bid32_round_integral_exact", 0, "0xfe000000", 0xfc000000, 0x01),
+               
+      TestCase("bid32_round_integral_nearest_away", 0, "0x00000001", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x00080001", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "1.0", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "-1.0", 0xb2800001, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "1.0e-96", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "-1.0e-96", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x6098967f", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x60989680", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x7c000000", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x7c8f423f", 0x7c0f423f, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x7c8f4240", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x7e100000", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x7e100100", 0x7c000100, 0x01),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x7e8f423f", 0x7c0f423f, 0x01),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x7e8f4240", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_nearest_away", 0, "0x80000001", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "9.999999e-95", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "-9.999999e-95", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "9.999999e96", 0x77f8967f, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "-9.999999e96", 0xf7f8967f, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "0xfc100000", 0xfc000000, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "0xfc100100", 0xfc000100, 0x00),
+      TestCase("bid32_round_integral_nearest_away", 0, "0xfe000000", 0xfc000000, 0x01),
+               
+      TestCase("bid32_round_integral_nearest_even", 0, "0x00000001", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x00080001", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "1.0", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "-1.0", 0xb2800001, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "1.0e-96", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "-1.0e-96", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x6098967f", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x60989680", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x7c000000", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x7c8f423f", 0x7c0f423f, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x7c8f4240", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x7e100000", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x7e100100", 0x7c000100, 0x01),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x7e8f423f", 0x7c0f423f, 0x01),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x7e8f4240", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_nearest_even", 0, "0x80000001", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "9.999999e-95", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "-9.999999e-95", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "9.999999e96", 0x77f8967f, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "-9.999999e96", 0xf7f8967f, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "0xfc100000", 0xfc000000, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "0xfc100100", 0xfc000100, 0x00),
+      TestCase("bid32_round_integral_nearest_even", 0, "0xfe000000", 0xfc000000, 0x01),
+               
+      TestCase("bid32_round_integral_negative", 0, "0x00000001", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "0x00080001", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "1.0", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "-1.0", 0xb2800001, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "1.0e-96", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "-1.0e-96", 0xb2800001, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "0x6098967f", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "0x60989680", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "0x7c000000", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "0x7c8f423f", 0x7c0f423f, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "0x7c8f4240", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "0x7e100000", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_negative", 0, "0x7e100100", 0x7c000100, 0x01),
+      TestCase("bid32_round_integral_negative", 0, "0x7e8f423f", 0x7c0f423f, 0x01),
+      TestCase("bid32_round_integral_negative", 0, "0x7e8f4240", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_negative", 0, "0x80000001", 0xb2800001, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "9.999999e-95", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "-9.999999e-95", 0xb2800001, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "9.999999e96", 0x77f8967f, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "-9.999999e96", 0xf7f8967f, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "0xfc100000", 0xfc000000, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "0xfc100100", 0xfc000100, 0x00),
+      TestCase("bid32_round_integral_negative", 0, "0xfe000000", 0xfc000000, 0x01),
+               
+      TestCase("bid32_round_integral_positive", 0, "0x00000001", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "0x00080001", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "1.0", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "-1.0", 0xb2800001, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "1.0e-96", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "-1.0e-96", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "0x6098967f", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "0x60989680", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "0x7c000000", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "0x7c8f423f", 0x7c0f423f, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "0x7c8f4240", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "0x7e100000", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_positive", 0, "0x7e100100", 0x7c000100, 0x01),
+      TestCase("bid32_round_integral_positive", 0, "0x7e8f423f", 0x7c0f423f, 0x01),
+      TestCase("bid32_round_integral_positive", 0, "0x7e8f4240", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_positive", 0, "0x80000001", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "9.999999e-95", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "-9.999999e-95", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "9.999999e96", 0x77f8967f, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "-9.999999e96", 0xf7f8967f, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "0xfc100000", 0xfc000000, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "0xfc100100", 0xfc000100, 0x00),
+      TestCase("bid32_round_integral_positive", 0, "0xfe000000", 0xfc000000, 0x01),
+               
+      TestCase("bid32_round_integral_zero", 0, "0x00000001", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "0x00080001", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "1.0", 0x32800001, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "-1.0", 0xb2800001, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "1.0e-96", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "-1.0e-96", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "0x6098967f", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "0x60989680", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "0x7c000000", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "0x7c8f423f", 0x7c0f423f, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "0x7c8f4240", 0x7c000000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "0x7e100000", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_zero", 0, "0x7e100100", 0x7c000100, 0x01),
+      TestCase("bid32_round_integral_zero", 0, "0x7e8f423f", 0x7c0f423f, 0x01),
+      TestCase("bid32_round_integral_zero", 0, "0x7e8f4240", 0x7c000000, 0x01),
+      TestCase("bid32_round_integral_zero", 0, "0x80000001", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "9.999999e-95", 0x32800000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "-9.999999e-95", 0xb2800000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "9.999999e96", 0x77f8967f, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "-9.999999e96", 0xf7f8967f, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "0xfc100000", 0xfc000000, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "0xfc100100", 0xfc000100, 0x00),
+      TestCase("bid32_round_integral_zero", 0, "0xfe000000", 0xfc000000, 0x01),
+      
       TestCase("bid32_to_int64_int", 0, "0xb348af10",
                UInt64(bitPattern:-47634080), 0x00),
       TestCase("bid32_to_int64_int", 0, "0xb8fd0b20",
@@ -3153,6 +3158,43 @@ final class DecimalNumbersTests: XCTestCase {
 //          let b64 = t1.decimal64
 //          let error = "\(test.res) != \(b64)"
 //          checkValues(test, b64, state, error)
+        case "bid32_round_integral_exact":
+          // "0x00000001", 0x32800000, 0x20),
+          let t1 = getNumber(test.istr).rounded()
+          let dtest = Decimal32(UInt32(test.res))
+          let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]",
+                             test.res, t1.bid.data)
+          checkValues(test, UInt64(t1.bid.data), state, error)
+        case "bid32_round_integral_zero":
+          let t1 = getNumber(test.istr).rounded(.towardZero)
+          let dtest = Decimal32(UInt32(test.res))
+          let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]",
+                             test.res, t1.bid.data)
+          checkValues(test, UInt64(t1.bid.data), state, error)
+        case "bid32_round_integral_positive":
+          let t1 = getNumber(test.istr).rounded(.up)
+          let dtest = Decimal32(UInt32(test.res))
+          let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]",
+                             test.res, t1.bid.data)
+          checkValues(test, UInt64(t1.bid.data), state, error)
+        case "bid32_round_integral_negative":
+          let t1 = getNumber(test.istr).rounded(.down)
+          let dtest = Decimal32(UInt32(test.res))
+          let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]",
+                             test.res, t1.bid.data)
+          checkValues(test, UInt64(t1.bid.data), state, error)
+        case "bid32_round_integral_nearest_even":
+          let t1 = getNumber(test.istr).rounded(.toNearestOrEven)
+          let dtest = Decimal32(UInt32(test.res))
+          let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]",
+                             test.res, t1.bid.data)
+          checkValues(test, UInt64(t1.bid.data), state, error)
+        case "bid32_round_integral_nearest_away":
+          let t1 = getNumber(test.istr).rounded(.toNearestOrAwayFromZero)
+          let dtest = Decimal32(UInt32(test.res))
+          let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]",
+                             test.res, t1.bid.data)
+          checkValues(test, UInt64(t1.bid.data), state, error)
         case "bid32_abs":
           let t1 = getNumber(test.istr).magnitude
           let state = state
@@ -3223,13 +3265,6 @@ final class DecimalNumbersTests: XCTestCase {
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]",
                              test.res, t1.bid.data)
           checkValues(test, UInt64(t1.bid.data), state, error)
-        case "bid32_llround":
-          // let x = UInt64(Decimal32(56))
-          break
-//          let t1 = getNumber(test.istr).rounded()
-//          let error = "\(test.res) != \(t1)"
-//          checkValues(test, UInt64(bitPattern: Int64(t1)), state,
-//                      error)
         case "bid32_from_int64", "bid32_from_int32":
           let t1 = getNumber(test.istr)
           let error = "\(test.res) != \(t1)"
@@ -3341,7 +3376,7 @@ final class DecimalNumbersTests: XCTestCase {
     
     var a1 = Decimal32("8.625"); let b1 = Decimal32("0.75")
     let rem = a1.remainder(dividingBy: b1)
-    print("\(a1).formRemainder(dividingBy: \(b1) = ", rem)
+//    print("\(a1).formRemainder(dividingBy: \(b1) = ", rem)
 //    XCTAssert(rem == Decimal32("-0.375"))
     a1 = Decimal32("8.625")
     let q = (a1/b1).rounded(.towardZero); print(q)
@@ -3362,21 +3397,21 @@ final class DecimalNumbersTests: XCTestCase {
 //    }
 
     // Equivalent to the C 'round' function:
-//    let w = Decimal32(6.5)
-//    print(w.rounded(.toNearestOrAwayFromZero))
-//    XCTAssert(w.rounded(.toNearestOrAwayFromZero) == Decimal32(7)) // w = 7.0
-//
-//    // Equivalent to the C 'trunc' function:
-//    print(w.rounded(.towardZero))
-//    XCTAssert(w.rounded(.towardZero) == Decimal32(6)) // x = 6.0
-//
-//    // Equivalent to the C 'ceil' function:
-//    print(w.rounded(.up))
-//    XCTAssert(w.rounded(.up) == Decimal32(7)) // w = 7.0
-//
-//    // Equivalent to the C 'floor' function:
-//    print(w.rounded(.down))
-//    XCTAssert(w.rounded(.down) == Decimal32(6)) // x = 6.0
+    let w = Decimal32(6.5)
+    print(w.rounded(.toNearestOrAwayFromZero))
+    XCTAssert(w.rounded(.toNearestOrAwayFromZero) == Decimal32(7)) // w = 7.0
+
+    // Equivalent to the C 'trunc' function:
+    print(w.rounded(.towardZero))
+    XCTAssert(w.rounded(.towardZero) == Decimal32(6)) // x = 6.0
+
+    // Equivalent to the C 'ceil' function:
+    print(w.rounded(.up))
+    XCTAssert(w.rounded(.up) == Decimal32(7)) // w = 7.0
+
+    // Equivalent to the C 'floor' function:
+    print(w.rounded(.down))
+    XCTAssert(w.rounded(.down) == Decimal32(6)) // x = 6.0
   }
   
   // Tests adapted from CDecNumber test suite
@@ -3386,21 +3421,25 @@ final class DecimalNumbersTests: XCTestCase {
     
     func test(_ value: String, result: String) {
       testNumber += 1
-//      let n = Decimal32(stringLiteral: value)
-//      var ns = String(n.dpd, radix: 16, uppercase: true)
-//      ns = String(repeating: "0", count: 8-ns.count) + ns
-//      print("Test \(testNumber): \"\(value)\" [\(ns)] = \(result.uppercased())")
-//            // - \(n.numberClass.description)")
-//      XCTAssertEqual(ns, result.uppercased())
+      let n = Decimal32(stringLiteral: value)
+      if testNumber == 51 {
+        let n = Decimal32(stringLiteral: value)
+        print(n)
+      }
+      var ns = String(n.dpd, radix: 16, uppercase: true)
+      ns = String(repeating: "0", count: 8-ns.count) + ns
+      print("Test \(testNumber): \"\(value)\" [\(ns)] = \(result.uppercased())")
+            // - \(n.numberClass.description)")
+      XCTAssertEqual(ns, result.uppercased())
     }
     
     func test(_ value: Int, result : String) {
       testNumber += 1
-//      let n = Decimal32(value)
-//      let ns = String(n.dpd, radix: 16, uppercase: true)
-//      print("Test \(testNumber): \(value) [\(ns)] = \(result.uppercased())")
-//            // - \(n.numberClass.description)")
-//      XCTAssertEqual(ns, result.uppercased())
+      let n = Decimal32(value)
+      let ns = String(n.dpd, radix: 16, uppercase: true)
+      print("Test \(testNumber): \(value) [\(ns)] = \(result.uppercased())")
+            // - \(n.numberClass.description)")
+      XCTAssertEqual(ns, result.uppercased())
     }
     
     /// Check min/max values
