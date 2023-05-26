@@ -3018,7 +3018,7 @@ final class DecimalNumbersTests: XCTestCase {
       TestCase("bid32_to_uint64_int", 0, "0x2F4C4B40", 0, 0x00), // 0.5                           // 1
       TestCase("bid32_to_uint64_int", 0, "0x2F8F4240", 1, 0x00), // 1
       TestCase("bid32_to_uint64_int", 0, "0x2F96E360", 1, 0x00), // 1.5
-      TestCase("bid32_to_uint64_int", 0, "0x30ADC6C0", 300, 0x00), // 30x00),
+      TestCase("bid32_to_uint64_int", 0, "0x30ADC6C0", 300, 0x00), // 300),
       TestCase("bid32_to_uint64_int", 0, "0x30ADDA48", 300, 0x00), // 300.5
       TestCase("bid32_to_uint64_int", 0, "0x310003E7", 0, 0x00), // 0.999
       TestCase("bid32_to_uint64_int", 0, "0x32000005", 0, 0x00), // 0.5
@@ -3039,13 +3039,13 @@ final class DecimalNumbersTests: XCTestCase {
       TestCase("bid32_to_uint64_int", 0, "0x391C25C2", 18446740000000000000, 0x00), // 2^64
       TestCase("bid32_to_uint64_int", 0, "0x391E8480", 9223372036854775808, 0x01), // 2e19
       TestCase("bid32_to_uint64_int", 0, "0x392625A0", 9223372036854775808, 0x01), // 2.5e19
-      TestCase("bid32_to_uint64_int", 0, "0x398F4240", 9223372036854775808, 0x01), // 1e0x20),
+      TestCase("bid32_to_uint64_int", 0, "0x398F4240", 9223372036854775808, 0x01), // 1e20),
       TestCase("bid32_to_uint64_int", 0, "0x3A000002", 2000000000000000, 0x00), // 2e15
       TestCase("bid32_to_uint64_int", 0, "0x3B80000F", 15000000000000000000, 0x00), // 1.5e19
       TestCase("bid32_to_uint64_int", 0, "0x3B800019", 9223372036854775808, 0x01), // 2.5e19
       TestCase("bid32_to_uint64_int", 0, "0x3C000001", 10000000000000000000, 0x00), // 1e19
       TestCase("bid32_to_uint64_int", 0, "0x3C000002", 9223372036854775808, 0x01), // 2e19        // 30
-      TestCase("bid32_to_uint64_int", 0, "0x3C800001", 9223372036854775808, 0x01), // 1e0x20),
+      TestCase("bid32_to_uint64_int", 0, "0x3C800001", 9223372036854775808, 0x01), // 1e20),
       TestCase("bid32_to_uint64_int", 0, "0x6BD86F70", 0, 0x00), // 0.999
       TestCase("bid32_to_uint64_int", 0, "0x6CB89680", 0, 0x00),
       TestCase("bid32_to_uint64_int", 0, "0x6E2CBCCC", 9223372000000000000, 0x00), // 2^63
@@ -3129,16 +3129,17 @@ final class DecimalNumbersTests: XCTestCase {
 //          let error = "\(d1) != \(t1)"
 //          checkValues(test, UInt64(t1.bid.data), state, error)
         case "bid32_to_int64_int":
-          break
-//          let t1 = getNumber(test.istr)
-//          let error = "\(Int64(bitPattern:test.res)) != \(t1.int)"
-//          checkValues(test, UInt64(bitPattern: Int64(t1.int)), state,
-//                      error)
+          let t1 = getNumber(test.istr)
+          let error = "\(Int64(bitPattern:test.res)) != \(t1.int)"
+          checkValues(test, UInt64(bitPattern: Int64(t1.int)), state,
+                      error)
         case "bid32_to_uint64_int":
-          break
-//          let t1 = getNumber(test.istr)
-//          let error = "\(test.res) != \(t1.uint)"
-//          checkValues(test, UInt64(t1.uint), state, error)
+//          if testID == 30 {
+//            print("fail")
+//          }
+          let t1 = getNumber(test.istr)
+          let error = "\(test.res) != \(t1.uint)"
+          checkValues(test, UInt64(t1.uint), state, error)
         case "bid32_negate":
           var t1 = getNumber(test.istr); t1.negate()
           let dtest = Decimal32(UInt32(test.res))
@@ -3375,13 +3376,15 @@ final class DecimalNumbersTests: XCTestCase {
     XCTAssert(Decimal32.infinity.description == "Inf")
     
     var a1 = Decimal32("8.625"); let b1 = Decimal32("0.75")
-    let rem = a1.remainder(dividingBy: b1)
+//    let rem = a1.remainder(dividingBy: b1)
 //    print("\(a1).formRemainder(dividingBy: \(b1) = ", rem)
 //    XCTAssert(rem == Decimal32("-0.375"))
     a1 = Decimal32("8.625")
     let q = (a1/b1).rounded(.towardZero); print(q)
     a1 = a1 - q * b1
     print("\(a1)")
+    
+    // let x2 = Decimal32(56.7)
       
 //    for i in 0...63 {
 //      let calc = ID32.bid_power10_index_binexp(i)

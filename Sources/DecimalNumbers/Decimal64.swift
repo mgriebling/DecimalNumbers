@@ -60,7 +60,7 @@ public struct IntegerDecimal64 : IntegerDecimal {
   public static var exponentBias:    Int {  398 }
   public static var maximumExponent: Int {  369 } // unbiased
   public static var minimumExponent: Int { -398 } // unbiased
-  public static var maximumDigits:  Int {   16 }
+  public static var maximumDigits:   Int {   16 }
   public static var exponentBits:    Int {   10 }
   
   public static var largestNumber: Mantissa { 9_999_999_999_999_999 }

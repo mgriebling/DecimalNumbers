@@ -22,6 +22,7 @@ import UInt128
 /// mantissa fields.  By specifying some key bit positions, it is possible
 /// to completely define many of the Decimal32 operations.  The `data` word
 /// holds all 32 bits of the Decimal32 data type.
+@frozen
 public struct IntegerDecimal32 : IntegerDecimal {
   
   public typealias RawDataFields = UInt32
@@ -68,7 +69,7 @@ public struct IntegerDecimal32 : IntegerDecimal {
 /// the binary encoding format for decimal floating-point values, but the
 /// decimal encoding format is supported too in the library, by means of
 /// conversion functions between the two encoding formats.
-public struct Decimal32 : Codable, Hashable {
+@frozen public struct Decimal32 : Codable, Hashable {
   public typealias ID32 = IntegerDecimal32
   var bid: ID32 = ID32.zero(.plus)
   
@@ -212,7 +213,7 @@ extension Decimal32 : FloatingPoint {
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()
     if !valid { return self }
-    return Self(bid: ID32(exponent: exponent+ID32.exponentBias, mantissa: man))
+    return Self(bid: ID32(exponent: Int(exponentBitPattern), mantissa: man))
   }
   
   ///////////////////////////////////////////////////////////////////////////
@@ -286,6 +287,8 @@ extension Decimal32 : DecimalFloatingPoint {
   public var significandBitPattern: UInt32 { UInt32(bid.mantissa) }
   public var exponentBitPattern: UInt      { UInt(bid.exponent) }
   public var dpd: UInt32                   { bid.dpd }
+  public var int: Int64                    { bid.int(Self.rounding) }
+  public var uint: UInt64                  { bid.uint(Self.rounding) }
   
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }
