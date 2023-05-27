@@ -110,6 +110,14 @@ extension Decimal32 : Comparable {
   public static func < (lhs: Self, rhs: Self) -> Bool {
     ID32.lessThan(lhs: lhs.bid, rhs: rhs.bid)
   }
+  
+  public static func >= (lhs: Self, rhs: Self) -> Bool {
+    ID32.greaterOrEqual(lhs: lhs.bid, rhs: rhs.bid)
+  }
+  
+  public static func > (lhs: Self, rhs: Self) -> Bool {
+    ID32.greaterThan(lhs: lhs.bid, rhs: rhs.bid)
+  }
 }
 
 extension Decimal32 : CustomStringConvertible {
@@ -154,9 +162,9 @@ extension Decimal32 : FloatingPoint {
   
   public init(sign: Sign, exponent: Int, significand: Self) {
     self.bid = ID32(sign: sign, exponent: exponent+Self.exponentBias,
-               mantissa: significand.bid.unpack().mantissa)
+                    mantissa: significand.bid.unpack().mantissa)
   }
-    
+  
   public mutating func round(_ rule: Rounding) {
     self.bid = ID32.round(self.bid, rule)
   }
@@ -188,9 +196,9 @@ extension Decimal32 : FloatingPoint {
   
   @inlinable public static var pi: Self {
     Self(bid: ID32(exponent: ID32.exponentBias-ID32.maximumDigits+1,
-                 mantissa: 3141593))
+                   mantissa: 3141593))
   }
-    
+  
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Instance properties and attributes
   
@@ -209,13 +217,13 @@ extension Decimal32 : FloatingPoint {
   public var exponent: Int {
     bid.exponent - ID32.exponentBias + ID32.maximumDigits - 1
   }
-
+  
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()
     if !valid { return self }
     return Self(bid: ID32(exponent: Int(exponentBitPattern), mantissa: man))
   }
-  
+
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Floating-point basic operations
   

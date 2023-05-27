@@ -1826,6 +1826,16 @@ extension IntegerDecimal {
     return xman == yman
   }
   
+  public static func greaterOrEqual (lhs: Self, rhs: Self) -> Bool {
+    guard !lhs.isNaN && !rhs.isNaN else { return false }
+    return !lessThan(lhs: lhs, rhs: rhs)
+  }
+  
+  public static func greaterThan (lhs: Self, rhs: Self) -> Bool {
+    guard !lhs.isNaN && !rhs.isNaN else { return false }
+    return !(lessThan(lhs: lhs, rhs: rhs) || equals(lhs: lhs, rhs: rhs))
+  }
+  
   public static func lessThan (lhs: Self, rhs: Self) -> Bool {
     guard !lhs.isNaN && !rhs.isNaN else { return false }
     
@@ -1866,7 +1876,11 @@ extension IntegerDecimal {
     if xman < yman && xexp <= yexp { return xsign == .plus }
     
     // if xexp is `numberOfDigits`-1 greater than yexp, no need to continue
-    if xexp - yexp > Self.maximumDigits-1 { return xsign == .plus }
+    if xexp - yexp > Self.maximumDigits-1 { return xsign == .minus }
+    
+    // difference cannot be greater than 10^6
+    // if exp_x is 6 less than exp_y, no need for compensation
+    if yexp - xexp > Self.maximumDigits-1 { return xsign == .plus }
     
     // need to compensate the mantissa
     var manPrime: Self.Mantissa
@@ -2679,10 +2693,8 @@ public struct Status: OptionSet, CustomStringConvertible {
   
   public init(rawValue: Int) { self.rawValue = rawValue }
   
-  public var hasError: Bool { !Status.errorFlags.intersection(self).isEmpty}
-  public var hasInfo: Bool {
-    !Status.informationFlags.intersection(self).isEmpty
-  }
+  public var hasError:Bool {!Status.errorFlags.intersection(self).isEmpty}
+  public var hasInfo:Bool {!Status.informationFlags.intersection(self).isEmpty}
   
   public var description: String {
     var str = ""
@@ -2746,8 +2758,6 @@ internal func addDecimalPointAndExponent(_ ps:String, _ exponent:Int,
   return ps
 }
 
-
-
 // MARK: - Generic String Conversion functions
 
 /// Converts a decimal floating point number `x` into a string
@@ -2786,7 +2796,8 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   var ps = s.lowercased()
   
   // get first non-whitespace character
-  var c = ps.isEmpty ? "\0" : ps.removeFirst()
+  let eos = Character("\0")
+  var c = ps.isEmpty ? eos : ps.removeFirst()
   var right_radix_leading_zeros = 0
   
   func handleEmpty() -> T {
@@ -2798,7 +2809,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   }
   
   // detect special cases (INF or NaN)
-  if c == "\0" || (c != "." && c != "-" && c != "+" && (c < "0" || c > "9")) {
+  if c == eos || (c != "." && c != "-" && c != "+" && !c.isNumber) {
     // Infinity?
     if c == "i" && (ps.hasPrefix("nfinity") || ps.hasPrefix("nf")) {
       return T.infinite(.plus)
@@ -2843,11 +2854,11 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   
   // get next character if leading +/- sign
   if c == "-" || c == "+" {
-    c = ps.isEmpty ? "\0" : ps.removeFirst()
+    c = ps.isEmpty ? eos : ps.removeFirst()
   }
   
   // if c isn"t a decimal point or a decimal digit, return NaN
-  if c != "." && (c < "0" || c > "9") {
+  if c != "." && !c.isNumber {
     // return NaN
     return T.nan(sign, 0)
   }
@@ -2859,13 +2870,13 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   if c == "0" || c == "." {
     if c == "." {
       rdx_pt_enc = true
-      c = ps.isEmpty ? "\0" : ps.removeFirst()
+      c = ps.isEmpty ? eos : ps.removeFirst()
     }
     // if all numbers are zeros (with possibly 1 radix point, the number
     // is zero
     // should catch cases such as: 000.0
     while c == "0" {
-      c = ps.isEmpty ? "\0" : ps.removeFirst()
+      c = ps.isEmpty ? eos : ps.removeFirst()
       // for numbers such as 0.0000000000000000000000000000000000001001,
       // we want to count the leading zeros
       if rdx_pt_enc {
@@ -2881,7 +2892,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
           if ps.isEmpty {
             return handleEmpty()
           }
-          c = ps.isEmpty ? "\0" : ps.removeFirst()
+          c = ps.isEmpty ? eos : ps.removeFirst()
         } else {
           // if 2 radix points, return NaN
           return T.nan(sign, 0)
@@ -2897,15 +2908,15 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   var midpoint = 0
   var rounded_up = 0
   var add_expon = 0
-//Decimal32.exponentBias  var rounded = 0
-  while (c >= "0" && c <= "9") || c == "." {
+
+  while c.isNumber || c == "." {
     if c == "." {
       if rdx_pt_enc {
         // return NaN
         return T.nan(sign, 0)
       }
       rdx_pt_enc = true
-      c = ps.isEmpty ? "\0" : ps.removeFirst()
+      c = ps.isEmpty ? eos : ps.removeFirst()
       continue
     }
     if rdx_pt_enc { dec_expon_scale += 1 }
@@ -2924,7 +2935,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
           // if str[MAXDIG+1] > 5, we MUST round up
           // if str[MAXDIG+1] == 5 and coefficient is ODD, ROUND UP!
           if c > "5" || (c == "5" && (coefficient_x & 1) != 0) {
-            coefficient_x+=1
+            coefficient_x += 1
             rounded_up = 1
           }
         case .down:
@@ -2954,12 +2965,12 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
 //        rounded = 1;
 //      }
     }
-    c = ps.isEmpty ? "\0" : ps.removeFirst()
+    c = ps.isEmpty ? eos : ps.removeFirst()
   }
   
   add_expon -= dec_expon_scale + Int(right_radix_leading_zeros)
   
-  if c == "\0" {
+  if c == eos {
 //    if rounded != 0 {
 //      T.state.insert(.inexact)
 //    }
@@ -2971,26 +2982,27 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
     // return NaN
     return T.nan(sign, 0)
   }
-  c = ps.isEmpty ? "\0" : ps.removeFirst()
-  let sgn_expon = (c == "-") ? 1 : 0
-  var expon_x = 0
+  c = ps.isEmpty ? eos : ps.removeFirst()
+  
+  let sgn_expon = c == "-"
   if c == "-" || c == "+" {
-    c = ps.isEmpty ? "\0" : ps.removeFirst()
+    c = ps.isEmpty ? eos : ps.removeFirst()
   }
-  if c == "\0" || c < "0" || c > "9" {
+  if c == eos || !c.isNumber {
     // return NaN
     return T.nan(sign, 0)
   }
   
+  var expon_x = 0
   while c.isNumber {
-    if expon_x < (1<<T.smallMantissaBits.upperBound) {
+    if expon_x < (1 << T.smallMantissaBits.upperBound) {
       expon_x = (expon_x << 1) + (expon_x << 3)
       expon_x += c.wholeNumberValue ?? 0
     }
-    c = ps.isEmpty ? "\0" : ps.removeFirst()
+    c = ps.isEmpty ? eos : ps.removeFirst()
   }
   
-  if c != "\0" {
+  if c != eos {
     // return NaN
     return T.nan(sign, 0)
   }
@@ -2999,7 +3011,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
 //    T.state.insert(.inexact)
 //  }
   
-  if sgn_expon != 0 {
+  if sgn_expon {
     expon_x = -expon_x
   }
   
