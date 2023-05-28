@@ -39,7 +39,6 @@ public protocol IntegerDecimal : Codable, Hashable {
   init(_ word: RawDataFields)
   
   /// Initialize with sign, biased exponent, and unsigned mantissa
-  init(sign: Sign, exponent: Int, mantissa: Mantissa, round:Int)
   init(sign: Sign, exponent: Int, mantissa: Mantissa)
   
   //////////////////////////////////////////////////////////////////
@@ -79,9 +78,11 @@ public protocol IntegerDecimal : Codable, Hashable {
   static var specialBits: ClosedRange<Int> { get }
   
   static var exponentBias: Int    { get }
+  static var exponentBits: Int    { get }
   static var maximumExponent: Int { get } // unbiased & normal
   static var minimumExponent: Int { get } // unbiased & normal
-  static var maximumDigits:  Int { get }
+  static var maximumDigits:  Int  { get }
+
   
   static var largestNumber: Mantissa { get }
   
@@ -112,6 +113,14 @@ public extension IntegerDecimal {
   static var nanBitRange: ClosedRange<Int>   { maxBit-6 ... maxBit-1 }
   static var nanClearRange: ClosedRange<Int> { 0 ... maxBit-7 }
   static var g6tog10Range: ClosedRange<Int>  { maxBit-11 ... maxBit-7 }
+  
+  static var exponentLMBits: ClosedRange<Int> {
+    maxBit-exponentBits ... maxBit-1
+  }
+  
+  static var exponentSMBits: ClosedRange<Int> {
+    maxBit-exponentBits-2 ... maxBit-3
+  }
   
   // masks for clearing bits
   static var sNanRange: ClosedRange<Int>     { 0 ... maxBit-6 }
@@ -1905,29 +1914,31 @@ extension IntegerDecimal {
   // MARK: - General-purpose math functions
   static func add(_ x: Self, _ y: Self, rounding: Rounding) -> Self {
     let xb = x, yb = y
-    let (signX, exponentX, mantissaX, validX) = xb.unpack()
-    let (signY, exponentY, mantissaY, validY) = yb.unpack()
+    var (signX, exponentX, mantissaX, validX) = xb.unpack()
+    var (signY, exponentY, mantissaY, validY) = yb.unpack()
     
     // Deal with illegal numbers
     if !validX {
       if xb.isNaN {
-        if xb.isSNaN || yb.isSNaN { /* invalid Op */ }
-        return Self(sign: .plus, exponent: 0, mantissa: xb.nanQuiet())
+        // if xb.isSNaN || yb.isSNaN { /* invalid Op */ }
+        mantissaX.clear(bit: Self.nanBitRange.lowerBound)
+        return Self(RawDataFields(mantissaX))
       }
       if xb.isInfinite {
         if yb.isNaNInf {
           if signX == signY {
-            return Self(sign: .plus, exponent: 0, mantissa: mantissaX)
+            return Self(RawDataFields(mantissaX))
           } else {
-            return y // invalid Op
+            return Self.nan(.plus, 0) // invalid Op
           }
         }
         if yb.isNaN {
-          if yb.isSNaN { /* invalid Op */ }
-          return Self(sign: .plus, exponent: 0, mantissa: yb.nanQuiet())
+          // if yb.isSNaN { /* invalid Op */ }
+          mantissaY.clear(bit: Self.nanBitRange.lowerBound)
+          return Self(RawDataFields(mantissaY))
         } else {
           // +/- infinity
-          return x
+          return Self(RawDataFields(mantissaX))
         }
       } else {
         // x = 0
@@ -1939,8 +1950,9 @@ extension IntegerDecimal {
     
     if !validY {
       if yb.isInfinite {
-        if yb.isSNaN { /* invalid Op */ }
-        return Self(sign: .plus, exponent: 0, mantissa: yb.nanQuiet())
+        // if yb.isSNaN { /* invalid Op */ }
+        mantissaY.clear(bit: Self.nanBitRange.lowerBound)
+        return Self(RawDataFields(mantissaY))
       }
       
       // y = 0
@@ -1982,9 +1994,8 @@ extension IntegerDecimal {
       }
     }
     
-    let signAB = signA != signB ? Sign.minus : .plus
-    let addIn = signAB == .minus ? Int64(1) : 0
-    let CB = UInt64(bitPattern: (Int64(mantissaB) + addIn) ^ addIn)
+    let signAB = signA != signB ? Int64(-1) : 0
+    let CB = UInt64(bitPattern: (Int64(mantissaB) + signAB) ^ signAB)
     
     let SU = UInt64(mantissaA) * power10(exponentDiff)
     var S = Int64(bitPattern: SU &+ CB)
@@ -2041,11 +2052,11 @@ extension IntegerDecimal {
     
     if rounding == .toNearestOrEven {
       if R == 0 {
-        Q &= 0xffff_fffe
+        Q.clear(bit: 0)  // Q &= 0xffff_fffe
       }
     }
-    return Self(sign:signA, exponent:exponentB+extra_digits,
-                mantissa:Mantissa(Q))
+    return Self(Self.adjustOverflowUnderflow(signA, exponentB+extra_digits,
+                                        Mantissa(Q), rounding))
   }
   
   static func round(_ x: Self, _ rmode: Rounding) -> Self {

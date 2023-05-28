@@ -4723,9 +4723,6 @@ final class DecimalNumbersTests: XCTestCase {
           checkValues(test, UInt64(bitPattern: Int64(t1.int)), state,
                       error)
         case "bid32_to_uint64_int":
-//          if testID == 30 {
-//            print("fail")
-//          }
           let t1 = getNumber(test.istr)
           let error = "\(test.res) != \(t1.uint)"
           checkValues(test, UInt64(t1.uint), state, error)
@@ -4858,26 +4855,30 @@ final class DecimalNumbersTests: XCTestCase {
           } else if test.id.hasSuffix("isZero") {
             flag = t1.isZero ? 1 : 0
           }
-          checkValues(test, UInt64(flag), state,
-                      "\(test.res) != \(flag)")
-        case "bid32_add", "bid32_div", "bid32_mul", "bid32_sub":
+          checkValues(test, UInt64(flag), state, "\(test.res) != \(flag)")
+        case "bid32_div", "bid32_mul":
           break
-//          let t1 = getNumber(test.istr)
-//          let t2 = getNumber(test.istr2)
-//          let res: Decimal32
-//          if test.id.hasSuffix("add") {
-//            res = t1 + t2
-//          } else if test.id.hasSuffix("sub") {
-//            res = t1 - t2
-//          } else if test.id.hasSuffix("mul") {
-//            res = t1 * t2
-//          } else {
-//            res = t1 / t2
-//          }
-//          let dtest = Decimal32(UInt32(test.res))
-//          let error = String(format:
-//              "Expected: 0x%08X[\(dtest)] != 0x%08X[\(res)]", test.res, res.bid.data)
-//          checkValues(test, UInt64(res.bid.data), state, error)
+        case "bid32_add", "bid32_sub":
+          let t1 = getNumber(test.istr)
+          let t2 = getNumber(test.istr2)
+          let res: Decimal32
+          if test.id.hasSuffix("add") {
+            res = t1 + t2
+          } else if test.id.hasSuffix("sub") {
+//            if testID == 12 {
+//              print(t1, "-", t2)
+//            }
+            res = t1 - t2
+          } else if test.id.hasSuffix("mul") {
+            res = t1 * t2
+          } else {
+            res = t1 / t2
+          }
+          let dtest = Decimal32(bid: UInt32(test.res))
+          let error = String(format:
+                              "Expected: 0x%08X[\(dtest)] != 0x%08X[\(res)]",
+                              test.res, res.bid.data)
+          checkValues(test, UInt64(res.bid.data), state, error)
         case "bid32_nextup", "bid32_nextdown":
           let t1: Decimal32
           if test.id.hasSuffix("down") {
@@ -5049,10 +5050,6 @@ final class DecimalNumbersTests: XCTestCase {
     func test(_ value: String, result: String) {
       testNumber += 1
       let n = Decimal32(stringLiteral: value)
-      if testNumber == 51 {
-        let n = Decimal32(stringLiteral: value)
-        print(n)
-      }
       var ns = String(n.dpd, radix: 16, uppercase: true)
       ns = String(repeating: "0", count: 8-ns.count) + ns
       print("Test \(testNumber): \"\(value)\" [\(ns)] = \(result.uppercased())")
