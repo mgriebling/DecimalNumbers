@@ -32,7 +32,7 @@ extension FixedWidthInteger {
   
   /// Returns the bits in the `range` of the current number where
   /// `range.lowerBound` ≥ 0 and the `range.upperBound` < Self.bitWidth
-  public func get(range: ClosedRange<Int>) -> Int {
+  public func get(range: IntRange) -> Int {
     precondition(range.lowerBound >= 0 && range.upperBound < Self.bitWidth)
     return Int((self >> range.lowerBound) & mask(range.count))
   }
@@ -58,6 +58,12 @@ extension FixedWidthInteger {
     self &= ~(1 << n)
   }
   
+  /// Non-mutating version of the above
+  public func clear(bitNR n: Int) -> Self {
+    precondition(n >= 0 && n < Self.bitWidth)
+    return self & ~(1 << n)
+  }
+  
   /// Sets to `1` the `n`th bit of the current number where
   /// 0 ≤ `n` < Self.bitWidth
   public mutating func set(bit n: Int) {
@@ -73,14 +79,20 @@ extension FixedWidthInteger {
   
   /// Sets to `0` the bits in the `range` of the current number where
   /// `range.lowerBound` ≥ 0 and the `range.upperBound` < Self.bitWidth
-  public mutating func clear(range: ClosedRange<Int>) {
+  public mutating func clear(range: IntRange) {
     precondition(range.lowerBound >= 0 && range.upperBound < Int.bitWidth)
     self &= ~(mask(range.count) << range.lowerBound)
   }
   
+  /// Nonmutating version of the above
+  public func clear(rangeNR range: IntRange) -> Self {
+    precondition(range.lowerBound >= 0 && range.upperBound < Int.bitWidth)
+    return self & ~(mask(range.count) << range.lowerBound)
+  }
+  
   /// Replaces the bits in the `range` of the current number where
   /// `range.lowerBound` ≥ 0 and the `range.upperBound` < Self.bitWidth
-  public mutating func set(range: ClosedRange<Int>, with value: Int) {
+  public mutating func set(range: IntRange, with value: Int) {
     self.clear(range: range)
     self |= (Self(value) & mask(range.count)) << range.lowerBound
   }

@@ -19,19 +19,19 @@ import UInt128
 
 
 /// Definition of the data storage for the Decimal128 floating-point data type.
-/// the `IntegerDecimal` protocol defines many supporting operations
+/// the `IntDecimal` protocol defines many supporting operations
 /// including packing and unpacking of the Decimal128 sign, exponent, and
 /// mantissa fields. By specifying some key bit positions, it is possible
 /// to completely define many of the Decimal128 operations. The `data` word
 /// holds all 128 bits of the Decimal128 data type.
-@frozen public struct IntegerDecimal128 : IntegerDecimal {
+@frozen public struct IntegerDecimal128 : IntDecimal {
     
-  public typealias RawDataFields = UInt128
+  public typealias RawData = UInt128
   public typealias Mantissa = UInt128
   
-  public var data: RawDataFields = 0
+  public var data: RawData = 0
   
-  public init(_ word: RawDataFields) {
+  public init(_ word: RawData) {
     self.data = word
   }
   
@@ -53,8 +53,8 @@ import UInt128
   }
   
   // Two mantissa sizes must be supported
-  public static var largeMantissaBits: ClosedRange<Int> { 0...112 }
-  public static var smallMantissaBits: ClosedRange<Int> { 0...110 }
+  public static var largeMantissaBits: IntRange { 0...112 }
+  public static var smallMantissaBits: IntRange { 0...110 }
 }
 
 /// Implementation of the 128-bit Decimal128 floating-point operations from
@@ -275,7 +275,7 @@ extension Decimal128 : DecimalFloatingPoint {
       bid.data = bits
     } else {
       // convert from dpd to bid
-      bid = ID(dpd: ID.RawDataFields(bits))
+      bid = ID(dpd: ID.RawData(bits))
     }
   }
   

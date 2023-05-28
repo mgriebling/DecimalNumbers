@@ -15,19 +15,19 @@ limitations under the License.
 */
 
 /// Definition of the data storage for the Decimal64 floating-point data type.
-/// the `IntegerDecimal` protocol defines many supporting operations
+/// the `IntDecimal` protocol defines many supporting operations
 /// including packing and unpacking of the Decimal64 sign, exponent, and
 /// mantissa fields.  By specifying some key bit positions, it is possible
 /// to completely define many of the Decimal64 operations.  The `data` word
 /// holds all 64 bits of the Decimal64 data type.
-@frozen public struct IntegerDecimal64 : IntegerDecimal {
+@frozen public struct IntegerDecimal64 : IntDecimal {
 
-  public typealias RawDataFields = UInt64
+  public typealias RawData = UInt64
   public typealias Mantissa = UInt64
   
-  public var data: RawDataFields = 0
+  public var data: RawData = 0
   
-  public init(_ word: RawDataFields) { self.data = word }
+  public init(_ word: RawData) { self.data = word }
   
   public init(sign:Sign = .plus, exponent:Int=0, mantissa:Mantissa) {
     self.sign = sign
@@ -44,8 +44,8 @@ limitations under the License.
   public static var largestNumber: Mantissa { 9_999_999_999_999_999 }
   
   // Two mantissa sizes must be supported
-  public static var largeMantissaBits: ClosedRange<Int> { 0...52 }
-  public static var smallMantissaBits: ClosedRange<Int> { 0...50 }
+  public static var largeMantissaBits: IntRange { 0...52 }
+  public static var smallMantissaBits: IntRange { 0...50 }
 }
 
 /// Implementation of the 64-bit Decimal64 floating-point operations from
@@ -265,7 +265,7 @@ extension Decimal64 : DecimalFloatingPoint {
       bid.data = bits
     } else {
       // convert from dpd to bid
-      bid = ID(dpd: ID.RawDataFields(bits))
+      bid = ID(dpd: ID.RawData(bits))
     }
   }
   

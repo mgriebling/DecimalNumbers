@@ -17,19 +17,19 @@ limitations under the License.
 import UInt128
 
 /// Definition of the data storage for the Decimal32 floating-point data type.
-/// the `IntegerDecimal` protocol defines many supporting operations
+/// the `IntDecimal` protocol defines many supporting operations
 /// including packing and unpacking of the Decimal32 sign, exponent, and
 /// mantissa fields.  By specifying some key bit positions, it is possible
 /// to completely define many of the Decimal32 operations.  The `data` word
 /// holds all 32 bits of the Decimal32 data type.
-@frozen public struct IntegerDecimal32 : IntegerDecimal {
+@frozen public struct IntegerDecimal32 : IntDecimal {
   
-  public typealias RawDataFields = UInt32
+  public typealias RawData = UInt32
   public typealias Mantissa = UInt
   
-  public var data: RawDataFields = 0
+  public var data: RawData = 0
   
-  public init(_ word: RawDataFields) { self.data = word }
+  public init(_ word: RawData) { self.data = word }
   
   public init(sign:Sign = .plus, exponent:Int=0, mantissa:Mantissa) {
     self.sign = sign
@@ -46,8 +46,8 @@ import UInt128
   public static var largestNumber: Mantissa { 9_999_999 }
   
   // Two mantissa sizes must be supported
-  public static var largeMantissaBits: ClosedRange<Int> { 0...22 }
-  public static var smallMantissaBits: ClosedRange<Int> { 0...20 }
+  public static var largeMantissaBits: IntRange { 0...22 }
+  public static var smallMantissaBits: IntRange { 0...20 }
 }
 
 /// Implementation of the 32-bit Decimal32 floating-point operations from
@@ -267,7 +267,7 @@ extension Decimal32 : DecimalFloatingPoint {
       bid.data = bits
     } else {
       // convert from dpd to bid
-      bid = ID(dpd: ID.RawDataFields(bits))
+      bid = ID(dpd: ID.RawData(bits))
     }
   }
   

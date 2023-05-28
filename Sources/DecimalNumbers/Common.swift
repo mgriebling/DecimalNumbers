@@ -24,28 +24,29 @@ import UInt128
 
 public typealias Sign = FloatingPointSign
 public typealias Rounding = FloatingPointRoundingRule
+public typealias IntRange = ClosedRange<Int>
 
-public protocol IntegerDecimal : Codable, Hashable {
+public protocol IntDecimal : Codable, Hashable {
   
-  associatedtype RawDataFields : UnsignedInteger & FixedWidthInteger
+  associatedtype RawData : UnsignedInteger & FixedWidthInteger
   associatedtype Mantissa : UnsignedInteger & FixedWidthInteger
   
-  var data: RawDataFields { get set }
+  var data: RawData { get set }
   
   //////////////////////////////////////////////////////////////////
   /// Initializers
   
   /// Initialize with a raw data word
-  init(_ word: RawDataFields)
+  init(_ word: RawData)
   
   /// Initialize with sign, biased exponent, and unsigned mantissa
   init(sign: Sign, exponent: Int, mantissa: Mantissa)
   
   //////////////////////////////////////////////////////////////////
   /// Conversions from/to densely packed decimal numbers
-  init(dpd: RawDataFields)
+  init(dpd: RawData)
   
-  var dpd: RawDataFields { get }
+  var dpd: RawData { get }
   
   //////////////////////////////////////////////////////////////////
   /// Essential data to extract or update from the fields
@@ -75,7 +76,7 @@ public protocol IntegerDecimal : Codable, Hashable {
   //////////////////////////////////////////////////////////////////
   /// Decimal number definitions
   static var signBit: Int { get }
-  static var specialBits: ClosedRange<Int> { get }
+  static var specialBits: IntRange { get }
   
   static var exponentBias: Int    { get }
   static var exponentBits: Int    { get }
@@ -83,57 +84,50 @@ public protocol IntegerDecimal : Codable, Hashable {
   static var minimumExponent: Int { get } // unbiased & normal
   static var maximumDigits:  Int  { get }
 
-  
   static var largestNumber: Mantissa { get }
   
   // For large mantissa
-  static var exponentLMBits: ClosedRange<Int> { get }
-  static var largeMantissaBits: ClosedRange<Int> { get }
+  static var exponentLMBits: IntRange { get }
+  static var largeMantissaBits: IntRange { get }
   
   // For small mantissa
-  static var exponentSMBits: ClosedRange<Int> { get }
-  static var smallMantissaBits: ClosedRange<Int> { get }
+  static var exponentSMBits: IntRange { get }
+  static var smallMantissaBits: IntRange { get }
 }
 
 ///
 /// Free functionality when complying with IntegerDecimalField
-public extension IntegerDecimal {
+public extension IntDecimal {
   
   static var highMantissaBit: Int { 1 << exponentLMBits.lowerBound }
+  static var largestMantissa: Mantissa { (largestNumber+1)/10 }
   
   /// These bit fields can be predetermined just from the size of
   /// the number type `RawDataFields` `bitWidth`
-  static var maxBit: Int { RawDataFields.bitWidth - 1 }
-  static var largestBID : Self {
-    Self(sign: .plus, exponent: maximumExponent, mantissa: largestNumber)
-  }
+  static var maxBit: Int { RawData.bitWidth - 1 }
+  static var largestBID : Self { max() }
   
-  static var signBit: Int                    { maxBit }
-  static var specialBits: ClosedRange<Int>   { maxBit-2 ... maxBit-1 }
-  static var nanBitRange: ClosedRange<Int>   { maxBit-6 ... maxBit-1 }
-  static var nanClearRange: ClosedRange<Int> { 0 ... maxBit-7 }
-  static var g6tog10Range: ClosedRange<Int>  { maxBit-11 ... maxBit-7 }
+  static var signBit: Int             { maxBit }
+  static var specialBits: IntRange    { maxBit-2 ... maxBit-1 }
+  static var nanBitRange: IntRange    { maxBit-6 ... maxBit-1 }
+  static var nanClearRange: IntRange  { 0 ... maxBit-7 }
+  static var g6tog10Range: IntRange   { maxBit-11 ... maxBit-7 }
   
-  static var exponentLMBits: ClosedRange<Int> {
-    maxBit-exponentBits ... maxBit-1
-  }
-  
-  static var exponentSMBits: ClosedRange<Int> {
-    maxBit-exponentBits-2 ... maxBit-3
-  }
+  static var exponentLMBits: IntRange { maxBit-exponentBits ... maxBit-1 }
+  static var exponentSMBits: IntRange { maxBit-exponentBits-2 ... maxBit-3 }
   
   // masks for clearing bits
-  static var sNanRange: ClosedRange<Int>     { 0 ... maxBit-6 }
-  static var sInfinityRange: ClosedRange<Int>{ 0 ... maxBit-5 }
+  static var sNanRange: IntRange      { 0 ... maxBit-6 }
+  static var sInfinityRange: IntRange { 0 ... maxBit-5 }
   
   /// bit field definitions for DPD numbers
-  static var lowMan: Int    { smallMantissaBits.upperBound }  // 20
+  static var lowMan: Int    { smallMantissaBits.upperBound }
   static var upperExp1: Int { exponentSMBits.upperBound }
   static var upperExp2: Int { exponentLMBits.upperBound }
   
-  static var expLower: ClosedRange<Int> { lowMan...maxBit-6 }
-  static var manLower: ClosedRange<Int> { 0...lowMan-1 }
-  static var expUpper: ClosedRange<Int> { lowMan+1...lowMan+6 }
+  static var expLower: IntRange { lowMan...maxBit-6 }
+  static var manLower: IntRange { 0...lowMan-1 }
+  static var expUpper: IntRange { lowMan+1...lowMan+6 }
   
   /// Bit patterns prefixes for special numbers
   static var nanPattern: Int      { 0b1_1111_0 }
@@ -154,8 +148,7 @@ public extension IntegerDecimal {
   }
   
   @inlinable var mantissa: Mantissa {
-    let range = isSmallMantissa ? Self.smallMantissaBits
-                                : Self.largeMantissaBits
+    let range = isSmallMantissa ?Self.smallMantissaBits: Self.largeMantissaBits
     if isSmallMantissa {
       return Mantissa(data.get(range:range) + Self.highMantissaBit)
     } else {
@@ -164,11 +157,11 @@ public extension IntegerDecimal {
   }
   
   static func adjustOverflowUnderflow(_ sign: Sign, _ exp: Int,
-                      _ mant: Mantissa, _ rmode: Rounding) -> RawDataFields {
+                            _ mant: Mantissa, _ rmode: Rounding) -> RawData {
     var exp = exp, mant = mant, rmode = rmode
-    var raw = RawDataFields(0)
+    var raw = RawData(0)
     if mant > largestNumber {
-      exp += 1; mant = (largestNumber+1)/10
+      exp += 1; mant = largestMantissa
     }
     
     // check for possible underflow/overflow
@@ -213,13 +206,13 @@ public extension IntegerDecimal {
             remainder_h &-= 1  // decrement without overflow check
             remainder_h >>= amount2
             remainder_h &= Q.components.high
-            if remainder_h == 0 && Q.components.low < reciprocals10(extraDigits) {
+            if remainder_h==0 && Q.components.low<reciprocals10(extraDigits) {
               C64 -= 1
             }
           }
         }
         
-        raw = RawDataFields(C64)
+        raw = RawData(C64)
         raw.set(bit: signBit, with: sign == .minus ? 1 : 0)
         return raw
       }
@@ -227,7 +220,7 @@ public extension IntegerDecimal {
       if mant == 0 {
         if exp > maximumExponent { exp = maximumExponent }
       }
-      while mant < (largestNumber+1)/10 && exp > maximumExponent {
+      while mant < largestMantissa && exp > maximumExponent {
         mant = (mant << 3) + (mant << 1)  // times 10
         exp -= 1
       }
@@ -271,12 +264,12 @@ public extension IntegerDecimal {
     var exponent: Int, mantissa: Mantissa
     if isSpecial {
       if isInfinite {
-        mantissa = Mantissa(data); mantissa.clear(range: Self.g6tog10Range)
-        if data.get(range: Self.manLower) >= (Self.largestNumber+1)/10 {
-          mantissa = Mantissa(data); mantissa.clear(range: Self.sNanRange)
+        mantissa = Mantissa(data).clear(rangeNR:Self.g6tog10Range)
+        if data.get(range: Self.manLower) >= Self.largestMantissa {
+          mantissa = Mantissa(data).clear(rangeNR: Self.sNanRange)
         }
         if isNaNInf {
-          mantissa = Mantissa(data); mantissa.clear(range: Self.sInfinityRange)
+          mantissa = Mantissa(data).clear(rangeNR: Self.sInfinityRange)
         }
         return (self.sign, 0, mantissa, false)
       }
@@ -295,11 +288,11 @@ public extension IntegerDecimal {
   }
   
   /// Return `dpd` pieces all at once
-  static func unpack(dpd: RawDataFields) ->
+  static func unpack(dpd: RawData) ->
                   (sign: Sign, exponent: Int, high: Int, trailing: Mantissa) {
     let sgn = dpd.get(bit: signBit) == 1 ? Sign.minus : .plus
     var exponent, high: Int, trailing: Mantissa
-    let expRange2: ClosedRange<Int>
+    let expRange2: IntRange
     
     if dpd.get(range: specialBits) == specialPattern {
       // small mantissa
@@ -316,10 +309,7 @@ public extension IntegerDecimal {
   }
   
   @inlinable func nanQuiet() -> Mantissa {
-    // let quietMask = ~(Mantissa(1) << Self.nanBitRange.lowerBound)
-    var data = self.data
-    data.clear(bit: Self.nanBitRange.lowerBound)
-    return Mantissa(data)
+    Mantissa(data.clear(bitNR:Self.nanBitRange.lowerBound))
   }
   
   ///////////////////////////////////////////////////////////////////////
@@ -344,12 +334,12 @@ public extension IntegerDecimal {
     Self(sign: .plus, exponent: snanPattern<<2, mantissa: 0)
   }
   
-  @inlinable static func zero(_ sign: Sign) -> Self {
+  @inlinable static func zero(_ sign: Sign = .plus) -> Self {
     Self(sign: sign, exponent: exponentBias, mantissa: 0)
   }
   
   @inlinable
-  static func nan(_ sign: Sign, _ payload: Int) -> Self {
+  static func nan(_ sign: Sign = .plus, _ payload: Int = 0) -> Self {
     let man = payload > largestNumber/10 ? 0 : Mantissa(payload)
     return Self(sign:sign, exponent:nanPattern<<2, mantissa:man)
   }
@@ -448,7 +438,7 @@ public extension IntegerDecimal {
   // MARK: - Convert to/from BID/DPD numbers
   
   /// Create a new BID number from the `dpd` DPD number.
-  init(dpd: RawDataFields) {
+  init(dpd: RawData) {
     
     func getNan() -> Int { dpd.get(range: Self.nanBitRange) }
     
@@ -476,8 +466,8 @@ public extension IntegerDecimal {
   }
   
   /// Convert `self` to a DPD number.
-  var dpd: RawDataFields {
-    var res : RawDataFields = 0
+  var dpd: RawData {
+    var res : RawData = 0
     var (sign, exp, mantissa, _) = unpack()
     var trailing = mantissa.get(range: Self.manLower) // & 0xfffff
     var nanb = false
@@ -1025,7 +1015,7 @@ public extension IntegerDecimal {
              && is_midpoint_gt_even)) {
           res = res + 1
           if res == largestNumber+1 { // res = 10^7 => rounding overflow
-            res = (largestNumber+1)/10 // 10^6
+            res = largestMantissa // 10^6
             ind = ind + 1
           }
         } else if (is_midpoint_lt_even || is_inexact_gt_midpoint) &&
@@ -1170,7 +1160,7 @@ public extension IntegerDecimal {
       }
       return res
     }
-    return Self(RawDataFields(c))
+    return Self(RawData(c))
   }
   
   
@@ -1713,7 +1703,7 @@ public extension IntegerDecimal {
   /// reproduces the original table.
   static func intFrom(dpd: Int) -> Int {
     precondition(dpd >= 0 && dpd < 1024, "Illegal dpd decoding input")
-    func get(_ range: ClosedRange<Int>) -> Int { dpd.get(range: range) }
+    func get(_ range: IntRange) -> Int { dpd.get(range: range) }
     
     // decode the 10-bit dpd number
     let select = (dpd.get(bit:3), get(1...2), get(5...6))
@@ -1795,7 +1785,7 @@ public extension IntegerDecimal {
   }
 }
 
-extension IntegerDecimal {
+extension IntDecimal {
   
   ///////////////////////////////////////////////////////////////////////
   // MARK: - General-purpose comparison functions
@@ -1908,37 +1898,37 @@ extension IntegerDecimal {
   }
 }
 
-extension IntegerDecimal {
+extension IntDecimal {
   
   ///////////////////////////////////////////////////////////////////////
   // MARK: - General-purpose math functions
   static func add(_ x: Self, _ y: Self, rounding: Rounding) -> Self {
     let xb = x, yb = y
-    var (signX, exponentX, mantissaX, validX) = xb.unpack()
-    var (signY, exponentY, mantissaY, validY) = yb.unpack()
+    let (signX, exponentX, mantissaX, validX) = xb.unpack()
+    let (signY, exponentY, mantissaY, validY) = yb.unpack()
     
     // Deal with illegal numbers
     if !validX {
       if xb.isNaN {
         // if xb.isSNaN || yb.isSNaN { /* invalid Op */ }
-        mantissaX.clear(bit: Self.nanBitRange.lowerBound)
-        return Self(RawDataFields(mantissaX))
+        // mantissaX.clear(bit: nanBitRange.lowerBound)
+        return Self(RawData(mantissaX.clear(bitNR:nanBitRange.lowerBound)))
       }
       if xb.isInfinite {
         if yb.isNaNInf {
           if signX == signY {
-            return Self(RawDataFields(mantissaX))
+            return Self(RawData(mantissaX))
           } else {
-            return Self.nan(.plus, 0) // invalid Op
+            return Self.nan() // invalid Op
           }
         }
         if yb.isNaN {
           // if yb.isSNaN { /* invalid Op */ }
-          mantissaY.clear(bit: Self.nanBitRange.lowerBound)
-          return Self(RawDataFields(mantissaY))
+          // mantissaY.clear(bit: nanBitRange.lowerBound)
+          return Self(RawData(mantissaY.clear(bitNR:nanBitRange.lowerBound)))
         } else {
           // +/- infinity
-          return Self(RawDataFields(mantissaX))
+          return Self(RawData(mantissaX))
         }
       } else {
         // x = 0
@@ -1951,8 +1941,8 @@ extension IntegerDecimal {
     if !validY {
       if yb.isInfinite {
         // if yb.isSNaN { /* invalid Op */ }
-        mantissaY.clear(bit: Self.nanBitRange.lowerBound)
-        return Self(RawDataFields(mantissaY))
+        // mantissaY.clear(bit: nanBitRange.lowerBound)
+        return Self(RawData(mantissaY.clear(bitNR:nanBitRange.lowerBound)))
       }
       
       // y = 0
@@ -2078,7 +2068,7 @@ extension IntegerDecimal {
       } else {    // QNaN
         // return nan(x_sign, Int(C1))
       }
-      return Self(RawDataFields(C1))
+      return Self(RawData(C1))
     } else if x.isInfinite {
       return x
     }
@@ -2108,7 +2098,7 @@ extension IntegerDecimal {
             return Self(sign: .minus, exponent: exponentBias, mantissa: 1)
             //res = (zero+1) | SIGN_MASK64  // 0xb1c0000000000001
           } else {
-            return zero(.plus)
+            return zero()
           }
           //pfpsf.insert(.inexact)
         }
@@ -2345,7 +2335,7 @@ extension IntegerDecimal {
           if x_sign != .plus {
             return Self(sign: .minus, exponent: exponentBias, mantissa: 1)
           } else {
-            return zero(.plus)
+            return zero()
           }
           // pfpsf.insert(.inexact)
         }
@@ -2450,8 +2440,7 @@ extension IntegerDecimal {
    *  BID32 nextup
    **************************************************************************/
   static func nextup(_ x: Self) -> Self {
-    var largestBID = Self(sign: .plus, exponent: maximumExponent,
-                          mantissa: largestNumber)
+    var largestBID = Self.max()
     
     // check for NaNs and infinities
     if x.isNaN { // check for NaN
@@ -2492,7 +2481,7 @@ extension IntegerDecimal {
     } else { // x is not special and is not zero
       if x == largestBID { // LARGEST_BID {
         // x = +MAXFP = 9999999 * 10^emax
-        return Self.infinite(.plus) // INFINITY_MASK // +inf
+        return Self.infinite() // INFINITY_MASK // +inf
       } else if x == Self(sign:.minus, exponent:minimumExponent, mantissa:1) {
         // x = -MINFP = 1...99 * 10^emin
         return Self(sign: .minus, exponent: minimumExponent, mantissa: 0)
@@ -2524,7 +2513,7 @@ extension IntegerDecimal {
           // add 1 ulp (add 1 to the significand)
           C1 += 1
           if C1 == largestNumber+1 { // 10_000_000 { // if  C1 = 10^7
-            C1 = (largestNumber+1)/10 // C1 = 10^6
+            C1 = largestMantissa // C1 = 10^6
             x_exp += 1
           }
           // Ok, because MAXFP = 9999999 * 10^emax was caught already
@@ -2550,7 +2539,7 @@ extension IntegerDecimal {
     if !valid {
       // x is Inf. or NaN or 0
       if x.isInfinite {
-        var res = coefficient_x; res.clear(range: g6tog10Range)
+        let res = coefficient_x.clear(rangeNR: g6tog10Range)
         if x.isNaNInf && sign_x == .minus {
           return Self.nan(sign_x, 0)
           //status.insert(.invalidOperation)
@@ -2558,8 +2547,7 @@ extension IntegerDecimal {
 //        if isSNaN(x) {
 //          // status.insert(.invalidOperation)
 //        }
-        res.clear(bit: Self.nanBitRange.lowerBound)
-        return Self(RawDataFields(res))
+        return Self(RawData(res.clear(bitNR:nanBitRange.lowerBound)))
       }
       // x is 0
       exponent_x = (exponent_x + exponentBias) >> 1
@@ -2568,7 +2556,7 @@ extension IntegerDecimal {
     // x<0?
     if sign_x == .minus && coefficient_x != 0 {
       // status.insert(.invalidOperation)
-      return Self.nan(.plus, 0)
+      return Self.nan()
     }
     
     //--- get number of bits in the coefficient of x ---
@@ -2772,7 +2760,7 @@ internal func addDecimalPointAndExponent(_ ps:String, _ exponent:Int,
 // MARK: - Generic String Conversion functions
 
 /// Converts a decimal floating point number `x` into a string
-internal func string<T:IntegerDecimal>(from x: T) -> String {
+internal func string<T:IntDecimal>(from x: T) -> String {
   // unpack arguments, check for NaN or Infinity
   let (sign, exp, coeff, valid) = x.unpack()
   let s = sign == .minus ? "-" : ""
@@ -2801,7 +2789,7 @@ internal func string<T:IntegerDecimal>(from x: T) -> String {
 /// Converts a decimal number string of the form:
 /// `[+|-] digit {digit} [. digit {digit}] [e [+|-] digit {digit} ]`
 /// to a Decimal<n> number
-internal func numberFromString<T:IntegerDecimal>(_ s: String,
+internal func numberFromString<T:IntDecimal>(_ s: String,
                                                  round: Rounding) -> T? {
   // keep consistent character case for "infinity", "nan", etc.
   var ps = s.lowercased()
@@ -2823,7 +2811,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
   if c == eos || (c != "." && c != "-" && c != "+" && !c.isNumber) {
     // Infinity?
     if c == "i" && (ps.hasPrefix("nfinity") || ps.hasPrefix("nf")) {
-      return T.infinite(.plus)
+      return T.infinite()
     }
     // return sNaN
     if c == "s" && ps.hasPrefix("nan") {
@@ -2843,7 +2831,7 @@ internal func numberFromString<T:IntegerDecimal>(_ s: String,
     } else if c == "-" {
       return T.infinite(.minus)
     } else {
-      return T.nan(.plus, 0)
+      return T.nan()
     }
   }
   
