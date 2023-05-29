@@ -4856,22 +4856,20 @@ final class DecimalNumbersTests: XCTestCase {
             flag = t1.isZero ? 1 : 0
           }
           checkValues(test, UInt64(flag), state, "\(test.res) != \(flag)")
-        case "bid32_div", "bid32_mul":
-          break
-        case "bid32_add", "bid32_sub":
+        case "bid32_add", "bid32_sub", "bid32_mul", "bid32_div":
           let t1 = getNumber(test.istr)
           let t2 = getNumber(test.istr2)
           let res: Decimal32
           if test.id.hasSuffix("add") {
             res = t1 + t2
           } else if test.id.hasSuffix("sub") {
-//            if testID == 12 {
-//              print(t1, "-", t2)
-//            }
             res = t1 - t2
           } else if test.id.hasSuffix("mul") {
             res = t1 * t2
           } else {
+            if testID == 10 {
+              print(t1, "/", t2)
+            }
             res = t1 / t2
           }
           let dtest = Decimal32(bid: UInt32(test.res))
@@ -5011,10 +5009,12 @@ final class DecimalNumbersTests: XCTestCase {
     
     // let x2 = Decimal32(56.7)
       
-//    for i in 0...63 {
-//      let calc = ID32.bid_power10_index_binexp(i)
-//      let table = ID32.bid_power10_index_binexp[i]
-//      XCTAssert(calc == table, "\(i) -> Calculated (\(calc)) != Table (\(table))")
+//    for n in 0...1023 {
+//      for i in 0...1 {
+//        let calc = ID32.bid_factors(n, i)
+//        let table = Tables.bid_factors[n][i]
+//        XCTAssert(calc == table, "\(n),\(i) -> Calculated (\(calc)) != Table (\(table))")
+//      }
 //    }
     
 //    // int to dpd algorithm vs table

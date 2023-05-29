@@ -82,7 +82,7 @@ extension Decimal32 : AdditiveArithmetic {
   public mutating func negate() { self.bid.data.toggle(bit: ID.signBit) }
   
   public static func + (lhs: Self, rhs: Self) -> Self {
-    Self(bid: ID.add(lhs.bid, rhs.bid, rounding: .toNearestOrEven))
+    Self(bid: ID.add(lhs.bid, rhs.bid, rounding: Self.rounding))
   }
   
   public static var zero: Self { Self(bid: ID.zero(.plus)) }
@@ -214,13 +214,13 @@ extension Decimal32 : FloatingPoint {
   // MARK: - Floating-point basic operations
   
   public static func * (lhs: Self, rhs: Self) -> Self {
-    lhs // FIXME: -
+    Self(bid: ID.mul(lhs.bid, rhs.bid, Self.rounding))
   }
   
   public static func *= (lhs: inout Self, rhs: Self) { lhs = lhs * rhs }
   
   public static func / (lhs: Self, rhs: Self) -> Self {
-    lhs // FIXME: -
+    Self(bid: ID.div(lhs.bid, rhs.bid, Self.rounding))
   }
   
   public static func /= (lhs: inout Self, rhs: Self) { lhs = lhs / rhs }

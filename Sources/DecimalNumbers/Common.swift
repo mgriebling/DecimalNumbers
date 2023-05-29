@@ -1497,6 +1497,26 @@ public extension IntDecimal {
     [1, 1, 5, 7, 11, 12, 17, 21, 24, 27, 31, 34, 37, 41, 44, 47, 51, 54]
   }
   
+  static var recip_scale32 : [UInt8] {
+    [ 1, 33-32, 35-32, 39-32, 43-32, 46-32, 50-32, 53-32, 57-32 ]
+  }
+  
+  static func reciprocals10_32(_ i:Int) -> UInt64 {
+    if i == 0 { return 1 }
+    let twoPower = recip_scale32[i] + 32
+    return UInt64(UInt128(1) << twoPower / power10(i)) + 1
+  }
+//      1, //dummy,
+//      0x33333334,
+//      0x147AE148,
+//      0x20C49BA6,
+//      0x346DC5D7, //4
+//      0x29F16B12,
+//      0x431BDE83,
+//      0x35AFE536,
+//      0x55E63B89
+//  ]
+  
   // Values of 10^(-x) truncated to Ex bits beyond the binary point, and
   // in the right position to be compared with the fraction from C * kx,
   // 1 <= x <= 17; the fraction consists of the low Ex bits in C * kx
@@ -1630,6 +1650,30 @@ public extension IntDecimal {
      3, 6, 9, 13, 16, 19, 23, 26, 29, 33, 36, 39, 43, 46, 49, 53, 56, 59, 63,
      2, 5, 9, 12, 15, 19, 22, 25, 29, 32, 35, 38, 42, 45, 48, 52, 55, 58
    ]
+  }
+  
+  /// Table of division factors of 2 for `n+1` when `i` = 0, and factors of 5
+  /// for `n+1` when `i` = 1 where 0 ≤ `n` < 1024. When both are factors,
+  /// return divisors of both are combined.  For example when `n` = 19, `n+1`
+  /// or 20 is a factor of both 2 and 5, so the return for `i=0` is 2 (not 4),
+  /// and `i=1` is 1.  This function reproduces the contents of the table
+  /// `bid_factors` in the original.
+  static func bid_factors(_ n:Int, _ i:Int) -> Int {
+    var n = n + 1
+    if i == 0 && n.isMultiple(of: 2) {
+      var div2 = 1
+      n /= 2
+      while n.isMultiple(of: 5) { n /= 5 } // remove multiples of 5
+      while n.isMultiple(of: 2) { div2 += 1; n /= 2 }
+      return div2
+    } else if i == 1 && n.isMultiple(of: 5) {
+      var div5 = 1
+      n /= 5
+      while n.isMultiple(of: 2) { n >>= 1 }
+      while n.isMultiple(of: 5) { div5 += 1; n /= 5 }
+      return div5
+    }
+    return 0
   }
   
   // bid_maskhigh128[] contains the mask to apply to the top 128 bits of the
@@ -2048,6 +2092,427 @@ extension IntDecimal {
     return Self(Self.adjustOverflowUnderflow(signA, exponentB+extra_digits,
                                         Mantissa(Q), rounding))
   }
+  
+  static func mul (_ x:Self, _ y:Self, _ rmode:Rounding) -> Self  {
+    var (signX, exponentX, mantissaX, validX) = x.unpack()
+    let (signY, exponentY, mantissaY, validY) = y.unpack()
+    
+    // unpack arguments, check for NaN or Infinity
+    let sign = signX != signY ? Sign.minus : .plus
+    if !validX {
+//      if y.isSNaN {
+//        // y is sNaN
+//        status.insert(.invalidOperation)
+//      }
+      // x is Inf. or NaN
+      
+      // test if x is NaN
+      if x.isNaN {
+//        if x.isSNaN {   // sNaN
+//          status.insert(.invalidOperation)
+//          // __set_status_flags (pfpsf, BID_INVALID_EXCEPTION);
+//        }
+        return Self(RawData(mantissaX.clear(bitNR:nanBitRange.lowerBound)))
+      }
+      // x is Infinity?
+      if x.isInfinite {
+        // check if y is 0
+        if !y.isInfinite && mantissaY == 0 {
+          // status.insert(.invalidOperation)
+          // y==0 , return NaN
+          return Self.nan()
+        }
+        // check if y is NaN
+        if y.isNaN {
+          // y==NaN , return NaN
+          return Self(RawData(mantissaY.clear(bitNR:nanBitRange.lowerBound)))
+        }
+        // otherwise return +/-Inf
+        return Self.infinite(sign) // ((x ^ y) & SIGN_MASK32) | INFINITY_MASK32
+      }
+      // x is 0
+      if !y.isInfinite {
+//        if (y & SPECIAL_ENCODING_MASK32) == SPECIAL_ENCODING_MASK32 {
+//          exponentY = Int(UInt32(y >> 21)) & 0xff
+//        } else {
+//          exponentY = Int(UInt32(y >> 23)) & 0xff
+//        }
+//        sign_y = y & SIGN_MASK32
+        exponentX += exponentY - exponentBias
+        if exponentX > maximumExponent {
+          exponentX = maximumExponent
+        } else if exponentX < 0 {
+          exponentX = 0
+        }
+        return Self(sign: sign, exponent: exponentX, mantissa: 0) // UInt32(UInt64(sign_x ^ sign_y) | (UInt64(exponentX) << 23))
+      }
+    }
+    if !validY {
+      // y is Inf. or NaN
+      // test if y is NaN
+      if y.isNaN {
+//        if y.isSNaN {
+//          // sNaN
+//          status.insert(.invalidOperation)
+//        }
+        return Self(RawData(mantissaY.clear(bitNR:nanBitRange.lowerBound)))
+      }
+      // y is Infinity?
+      if y.isInfinite {
+        // check if x is 0
+        if mantissaX == 0 {
+          //status.insert(.invalidOperation)
+          // x==0, return NaN
+          return Self.nan()  // (NAN_MASK32);
+        }
+        // otherwise return +/-Inf
+        return Self.infinite(sign)  // ((x ^ y) & SIGN_MASK32) | INFINITY_MASK32
+      }
+      // y is 0
+      exponentX += exponentY - exponentBias //exponentBias
+      if exponentX > maximumExponent {
+        exponentX = maximumExponent
+      } else if exponentX < 0 {
+        exponentX = 0
+      }
+      return Self(sign: sign, exponent: exponentX, mantissa: 0) // UInt32(UInt64(sign_x ^ sign_y) | (UInt64(exponentX) << 23))
+    }
+    
+    var P = mantissaX * mantissaY
+    
+    //--- get number of bits in C64 ---
+    // version 2 (original)
+    let tempx = Double(P)
+    let bin_expon_p = tempx.exponent 
+    var n_digits = Int(estimateDecDigits(bin_expon_p))
+    if P >= power10(n_digits) {
+      n_digits+=1
+    }
+    
+    exponentX += exponentY - exponentBias
+    let extra_digits = (n_digits<=maximumDigits) ? 0 : n_digits-maximumDigits
+    exponentX += extra_digits
+    
+    if extra_digits == 0 {
+      return Self(Self.adjustOverflowUnderflow(sign, exponentX, P, rmode))
+    }
+    
+    var rmode1 = roundboundIndex(rmode, sign == .minus, 0)
+    if sign == .minus && UInt32(rmode1 - 1) < 2 {
+      rmode1 = 3 - rmode1
+    }
+    
+    if exponentX < 0 { rmode1 = 3 }  // RZ
+    
+    // add a constant to P, depending on rounding mode
+    // 0.5*10^(digits_p - 16) for round-to-nearest
+    P += Mantissa(bid_round_const_table(rmode1, extra_digits))
+    let Tmp = mul64x64to128(UInt64(P), reciprocals10(extra_digits))
+    
+    // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-64
+    let amount = shortReciprocalScale[extra_digits]
+    var Q = Mantissa(Tmp.components.high) >> amount
+    
+    // remainder
+    let R = P - Q * power10(extra_digits)
+    
+//    if R == bid_round_const_table[rmode1][extra_digits] {
+//      status = []
+//    } else {
+//      status.insert(.inexact)
+//    }
+    
+    // __set_status_flags (pfpsf, status);
+    if rmode1 == 0 {    //BID_ROUNDING_TO_NEAREST
+      if R == 0 {
+        Q.clear(bit: 0) // Q &= 0xffff_fffe
+      }
+    }
+    
+    if (exponentX == -1) && (Q == largestNumber) && (rmode != .towardZero) {
+      rmode1 = roundboundIndex(rmode, sign == .minus, 0)
+      if (sign == .minus) && UInt32(rmode1 - 1) < 2 {
+        rmode1 = 3 - rmode1
+      }
+      
+      if ((R != 0) && (rmode == .up)) ||
+         ((rmode1&3 == 0) && (R+R>=power10(extra_digits))) {
+        return Self(sign: sign, exponent:0, mantissa:1_000_000)
+      }
+    }
+    
+    return Self(adjustOverflowUnderflow(sign, exponentX, Q, rmode))
+    // return get_BID32_UF (sign_x^sign_y, Int(exponentX), Q, Int(R), rmode)
+  }
+  
+  /**
+   *  Division algorithm description:
+   * ```
+   *  if mantissaX < mantissaY
+   *    p = number_digits(mantissaY) - number_digits(mantissaX)
+   *    A = mantissaX*10^p
+   *    B = mantissaY
+   *    CA= A*10^(15+j), j=0 for A>=B, 1 otherwise
+   *    Q = 0
+   *  else
+   *    get Q=(int)(mantissaX/mantissaY)
+   *        (based on double precision divide)
+   *    check for exact divide case
+   *    Let R = mantissaX - Q*mantissaY
+   *    Let m=16-number_digits(Q)
+   *    CA=R*10^m, Q=Q*10^m
+   *    B = mantissaY
+   *  endif
+   *  if CA < 2^64
+   *    Q += CA/B  (64-bit unsigned divide)
+   *  else
+   *    get final Q using double precision divide, followed by 3 integer
+   *        iterations
+   *  if exact result, eliminate trailing zeros
+   *  check for underflow
+   *  round coefficient to nearest
+   * ```
+   */
+  static func div(_ x:Self, _ y:Self, _ rmode:Rounding) -> Self {
+    var (signX, exponentX, mantissaX, validX) = x.unpack()
+    let (signY, exponentY, mantissaY, validY) = y.unpack()
+    
+    // unpack arguments, check for NaN or Infinity
+    let sign = signX != signY ? Sign.minus : .plus
+    if !validX {
+      // x is Inf. or NaN
+      //          if (y & SNAN_MASK32) == SNAN_MASK32 {   // y is sNaN
+      //              status.insert(.invalidOperation)
+      //          }
+      
+      // test if x is NaN
+      if x.isNaN {
+        //              if (x & SNAN_MASK32) == SNAN_MASK32 {    // sNaN
+        //                  status.insert(.invalidOperation)
+        //              }
+        return Self(RawData(mantissaX.clear(bitNR:nanBitRange.lowerBound)))
+      }
+      
+      // x is Infinity?
+      if x.isInfinite {
+        // check if y is Inf or NaN
+        if y.isInfinite {
+          // y==Inf, return NaN
+          if y.isNaNInf {    // Inf/Inf
+            //status.insert(.invalidOperation)
+            return nan() // NAN_MASK32
+          }
+        } else {
+          // otherwise return +/-Inf
+          return infinite(sign) // ((x ^ y) & SIGN_MASK32) | INFINITY_MASK32
+        }
+      }
+      // x==0
+      if !y.isInfinite && mantissaY == 0 {
+        // y==0 , return NaN
+        //status.insert(.invalidOperation)
+        return nan()
+      }
+      if !y.isInfinite {
+//        if (y & SPECIAL_ENCODING_MASK32) == SPECIAL_ENCODING_MASK32 {
+//          exponentY = Int((UInt32(y >> 21)) & 0xff)
+//        } else {
+//          exponentY = Int((UInt32(y >> 23)) & 0xff)
+//          sign_y = y & SIGN_MASK32
+//        }
+        exponentX = exponentX - exponentY + exponentBias
+        if exponentX > maximumExponent {
+          exponentX = maximumExponent
+        } else if exponentX < 0 {
+          exponentX = 0
+        }
+        return Self(sign: sign, exponent: exponentX, mantissa: 0)
+        //  UInt32(sign_x ^ sign_y) | UInt32(exponentX) << 23
+      }
+      
+    }
+    if !validY {
+      // y is Inf. or NaN
+      // test if y is NaN
+      if y.isNaN {
+//        if (y & SNAN_MASK32) == SNAN_MASK32 {
+//          // sNaN
+//          status.insert(.invalidOperation)
+//        }
+        return Self(RawData(mantissaY.clear(bitNR:nanBitRange.lowerBound)))
+      }
+      
+      // y is Infinity?
+      if y.isInfinite {
+        // return +/-0
+        return Self(sign: sign, exponent: 0, mantissa: 0) //(x ^ y) & SIGN_MASK32
+      }
+      
+      // y is 0
+      // status.insert(.divisionByZero)
+      return infinite(sign)
+    }
+    var diff_expon = exponentX - exponentY + exponentBias
+    
+    var A, B, Q, R: Mantissa
+    var CA: UInt64
+    var ed1, ed2: Int
+    if mantissaX < mantissaY {
+      // get number of decimal digits for c_x, c_y
+      //--- get number of bits in the coefficients of x and y ---
+      let tempx = Float(mantissaX)
+      let tempy = Float(mantissaY)
+      let bin_index = Int((tempy.bitPattern - tempx.bitPattern) >> 23)
+      A = mantissaX * Mantissa(bid_power10_index_binexp(bin_index))
+      B = mantissaY
+      
+      // compare A, B
+      let DU = (A - B) >> 31
+      ed1 = 6 + Int(DU)
+      ed2 = estimateDecDigits(bin_index) + ed1
+      let T : UInt64 = power10(ed1)
+      CA = UInt64(A) * T
+      
+      Q = 0
+      diff_expon = diff_expon - ed2
+      
+    } else {
+      // get c_x/c_y
+      Q = mantissaX / mantissaY
+      
+      R = mantissaX - mantissaY * Q
+      
+      // will use to get number of dec. digits of Q
+      let tempq = Float(Q)
+      let bin_expon_cx = tempq.exponent
+      
+      // exact result ?
+      if R == 0 {
+        return Self(Self.adjustOverflowUnderflow(sign, diff_expon, Q, rmode))
+        //get_BID32 (sign_x ^ sign_y, diff_expon, Q, rmode)
+      }
+      // get decimal digits of Q
+      var DU = UInt32(bid_power10_index_binexp(bin_expon_cx)) - UInt32(Q) - 1
+      DU >>= 31
+      
+      ed2 = 7 - Int(estimateDecDigits(bin_expon_cx)) - Int(DU)
+      
+      CA = UInt64(R) * power10(ed2)
+      B = mantissaY
+      
+      Q *= power10(ed2)
+      diff_expon -= ed2
+    }
+    
+    let Q2 = Mantissa(CA / UInt64(B))
+    let B2 = B + B
+    let B4 = B2 + B2
+    R = Mantissa(UInt32(CA - UInt64(Q2) * UInt64(B)))
+    Q += Q2
+    
+    if R != 0 {
+      // set status flags
+      // status.insert(.inexact)
+    } else {
+      // eliminate trailing zeros
+      // check whether CX, CY are short
+      if mantissaX <= 1024 && mantissaY <= 1024 {
+        let i = Int(mantissaY) - 1
+        let j = Int(mantissaX) - 1
+        // difference in powers of 2 bid_factors for Y and X
+        var nzeros = ed2 - (bid_factors(i,0) + bid_factors(j,0))
+        // difference in powers of 5 bid_factors
+        let d5 = ed2 - (bid_factors(i,1) + bid_factors(j,1))
+        if d5 < nzeros {
+          nzeros = d5
+        }
+        
+        if nzeros != 0 {
+          var CT = UInt64(Q) * reciprocals10_32(nzeros)
+          CT >>= 32
+          
+          // now get P/10^extra_digits: shift C64 right by M[extra_digits]-128
+          let amount = recip_scale32[nzeros]
+          Q = Mantissa(CT >> amount)
+          
+          diff_expon += nzeros
+        }
+      } else {
+        var nzeros = 0
+        
+        // decompose digit
+        let PD = UInt64(Q) * 0x068DB8BB
+        var digit_h = Mantissa(PD >> 40)
+        let digit_low = Q - digit_h * 10000
+        
+        if digit_low == 0 {
+          nzeros += 4
+        } else {
+          digit_h = digit_low
+        }
+        
+        if digit_h.isMultiple(of: 2) {
+          if digit_h.isMultiple(of: 1000) { nzeros += 3 }
+          else if digit_h.isMultiple(of: 100) { nzeros += 2 }
+          else if digit_h.isMultiple(of: 10) { nzeros += 1 }
+//          nzeros += Int(3 & UInt32(
+//            bid_packed_10000_zeros[Int(digit_h >> 3)] >> (digit_h & 7)))
+//          nzeros += Int(3 & UInt32(bid_packed_10000_zeros[Int(digit_h >> 3)] >> (digit_h & 7)))
+        }
+        
+        if nzeros != 0 {
+          var CT = UInt64(Q) * reciprocals10_32(nzeros)
+          CT >>= 32
+          
+          // now get P/10^extra_digits: shift C64 right by M[extra_digits]-128
+          let amount = recip_scale32[nzeros]
+          Q = Mantissa(CT >> amount)
+        }
+        diff_expon += nzeros
+      }
+      if diff_expon >= 0 {
+        return Self(Self.adjustOverflowUnderflow(sign, diff_expon, Q, rmode))
+        //get_BID32 (sign, diff_expon, Q, rmode)
+      }
+    }
+    
+    if diff_expon >= 0 {
+      var rmode1 = roundboundIndex(rmode) >> 2
+      if sign == .minus && (UInt32(rmode1) &- 1) < 2 {
+        rmode1 = 3 - rmode1
+      }
+      var R = UInt32(R)
+      switch rmode1 {
+        case 0, 4:
+          // R*10
+          R += R
+          R = (R << 2) + R
+          let B5 = B4 + B
+          // compare 10*R to 5*B
+          R = UInt32(B5) &- R
+          // correction for (R==0 && (Q&1))
+          R -= UInt32((Int(Q) | (rmode1 >> 2)) & 1)
+          // R<0 ?
+          let D = UInt32(R >> 31)
+          Q += Mantissa(D)
+        case 1, 3:
+          break
+        default:    // rounding up (2)
+          Q+=1
+      }
+      return Self(Self.adjustOverflowUnderflow(sign, diff_expon, Q, rmode))
+      //get_BID32 (sign, diff_expon, Q, rmode)
+    } else {
+      // UF occurs
+//      if diff_expon + 7 < 0 {
+//        // set status flags
+//        status.insert(.inexact)
+//      }
+      return Self(Self.adjustOverflowUnderflow(sign, diff_expon, Q, rmode))
+      // return get_BID32_UF(sign, diff_expon, UInt64(Q), Int(R), rmode)
+    }
+  }
+
   
   static func round(_ x: Self, _ rmode: Rounding) -> Self {
     var res = Mantissa(0)
@@ -2535,11 +3000,11 @@ extension IntDecimal {
   
   static func sqrt(_ x: Self, _ rmode:Rounding) -> Self {
     // unpack arguments, check for NaN or Infinity
-    var (sign_x, exponent_x, coefficient_x, valid) = x.unpack()
+    var (sign_x, exponentX, mantissaX, valid) = x.unpack()
     if !valid {
       // x is Inf. or NaN or 0
       if x.isInfinite {
-        let res = coefficient_x.clear(rangeNR: g6tog10Range)
+        let res = mantissaX.clear(rangeNR: g6tog10Range)
         if x.isNaNInf && sign_x == .minus {
           return Self.nan(sign_x, 0)
           //status.insert(.invalidOperation)
@@ -2550,26 +3015,26 @@ extension IntDecimal {
         return Self(RawData(res.clear(bitNR:nanBitRange.lowerBound)))
       }
       // x is 0
-      exponent_x = (exponent_x + exponentBias) >> 1
-      return Self(sign: sign_x, exponent: exponent_x, mantissa: 0)
+      exponentX = (exponentX + exponentBias) >> 1
+      return Self(sign: sign_x, exponent: exponentX, mantissa: 0)
     }
     // x<0?
-    if sign_x == .minus && coefficient_x != 0 {
+    if sign_x == .minus && mantissaX != 0 {
       // status.insert(.invalidOperation)
       return Self.nan()
     }
     
     //--- get number of bits in the coefficient of x ---
-    let tempx = Float32(coefficient_x)
+    let tempx = Float32(mantissaX)
     let bin_expon_cx = Int(((tempx.bitPattern >> 23) & 0xff) - 0x7f)
     var digits_x = estimateDecDigits(bin_expon_cx)
     // add test for range
-    if coefficient_x >= bid_power10_index_binexp(bin_expon_cx) {
+    if mantissaX >= bid_power10_index_binexp(bin_expon_cx) {
       digits_x+=1
     }
     
-    var A10 = coefficient_x
-    if exponent_x & 1 == 0 {
+    var A10 = mantissaX
+    if exponentX & 1 == 0 {
       A10 = (A10 << 2) + A10;
       A10 += A10;
     }
@@ -2577,16 +3042,16 @@ extension IntDecimal {
     let dqe = Double(A10).squareRoot()
     let QE = UInt32(dqe)
     if QE * QE == A10 {
-      return Self(sign: .plus, exponent: (exponent_x + exponentBias) >> 1,
+      return Self(sign: .plus, exponent: (exponentX + exponentBias) >> 1,
                   mantissa: Mantissa(QE))
     }
     // if exponent is odd, scale coefficient by 10
     var scale = Int(13 - digits_x)
-    var exponent_q = exponent_x + exponentBias - scale
+    var exponent_q = exponentX + exponentBias - scale
     scale += (exponent_q & 1)   // exp. bias is even
     
     let CT = UInt128(power10(scale)).components.low
-    let CA = UInt64(coefficient_x) * CT
+    let CA = UInt64(mantissaX) * CT
     let dq = Double(CA).squareRoot()
     
     exponent_q = exponent_q >> 1  // square root of 10^x = 10^(x/2)
@@ -2722,36 +3187,36 @@ internal func addDecimalPointAndExponent(_ ps:String, _ exponent:Int,
                                          _ maxDigits:Int) -> String {
   var digits = ps.count
   var ps = ps
-  var exponent_x = exponent
-  if exponent_x == 0 {
-    ps.insert(".", at: ps.index(ps.startIndex, offsetBy: exponent_x+1))
-  } else if abs(exponent_x) > maxDigits {
+  var exponentX = exponent
+  if exponentX == 0 {
+    ps.insert(".", at: ps.index(ps.startIndex, offsetBy: exponentX+1))
+  } else if abs(exponentX) > maxDigits {
     if ps.count > 1 {
       ps.insert(".", at: ps.index(after: ps.startIndex))
     }
     ps += "e"
-    if exponent_x < 0 {
+    if exponentX < 0 {
       ps += "-"
-      exponent_x = -exponent_x
+      exponentX = -exponentX
     } else {
       ps += "+"
     }
-    ps += String(exponent_x)
-  } else if digits <= exponent_x {
+    ps += String(exponentX)
+  } else if digits <= exponentX {
     // format the number without an exponent
-    while digits <= exponent_x {
+    while digits <= exponentX {
       // pad the number with zeros
       ps += "0"; digits += 1
     }
-  } else if exponent_x < 0 {
-    while exponent_x < -1 {
+  } else if exponentX < 0 {
+    while exponentX < -1 {
       // insert leading zeros
-      ps = "0" + ps; exponent_x += 1
+      ps = "0" + ps; exponentX += 1
     }
     ps = "0." + ps
   } else {
     // insert the decimal point
-    ps.insert(".", at: ps.index(ps.startIndex, offsetBy: exponent_x+1))
+    ps.insert(".", at: ps.index(ps.startIndex, offsetBy: exponentX+1))
     if ps.hasSuffix(".") { ps.removeLast() }
   }
   return ps
@@ -2767,8 +3232,8 @@ internal func string<T:IntDecimal>(from x: T) -> String {
   if valid {
     // x is not special
     let ps = String(coeff)
-    let exponent_x = Int(exp) - T.exponentBias + (ps.count - 1)
-    return s + addDecimalPointAndExponent(ps, exponent_x, T.maximumDigits)
+    let exponentX = Int(exp) - T.exponentBias + (ps.count - 1)
+    return s + addDecimalPointAndExponent(ps, exponentX, T.maximumDigits)
   } else {
     // x is Inf. or NaN or 0
     var ps = s
@@ -2863,7 +3328,7 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
   }
   
   var rdx_pt_enc = false
-  var coefficient_x = T.Mantissa(0)
+  var mantissaX = T.Mantissa(0)
   
   // detect zero (and eliminate/ignore leading zeros)
   if c == "0" || c == "." {
@@ -2922,31 +3387,31 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
     
     ndigits+=1
     if ndigits <= 7 {
-      coefficient_x = (coefficient_x << 1) + (coefficient_x << 3);
-      coefficient_x += T.Mantissa(c.wholeNumberValue ?? 0)
+      mantissaX = (mantissaX << 1) + (mantissaX << 3);
+      mantissaX += T.Mantissa(c.wholeNumberValue ?? 0)
     } else if ndigits == 8 {
       // coefficient rounding
       switch round {
         case .toNearestOrEven:
-          midpoint = (c == "5" && (coefficient_x & 1 == 0)) ? 1 : 0;
+          midpoint = (c == "5" && (mantissaX & 1 == 0)) ? 1 : 0;
           // if coefficient is even and c is 5, prepare to round up if
           // subsequent digit is nonzero
           // if str[MAXDIG+1] > 5, we MUST round up
           // if str[MAXDIG+1] == 5 and coefficient is ODD, ROUND UP!
-          if c > "5" || (c == "5" && (coefficient_x & 1) != 0) {
-            coefficient_x += 1
+          if c > "5" || (c == "5" && (mantissaX & 1) != 0) {
+            mantissaX += 1
             rounded_up = 1
           }
         case .down:
-          if sign == .minus { coefficient_x+=1; rounded_up=1 }
+          if sign == .minus { mantissaX+=1; rounded_up=1 }
         case .up:
-          if sign != .minus { coefficient_x+=1; rounded_up=1 }
+          if sign != .minus { mantissaX+=1; rounded_up=1 }
         case .toNearestOrAwayFromZero:
-          if c >= "5" { coefficient_x+=1; rounded_up=1 }
+          if c >= "5" { mantissaX+=1; rounded_up=1 }
         default: break
       }
-      if coefficient_x == T.largestNumber+1 {
-        coefficient_x = (T.largestNumber+1)/10
+      if mantissaX == T.largestNumber+1 {
+        mantissaX = (T.largestNumber+1)/10
         add_expon = 1
       }
 //      if c > "0" {
@@ -2956,7 +3421,7 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
     } else { // ndigits > 8
       add_expon += 1
       if midpoint != 0 && c > "0" {
-        coefficient_x += 1
+        mantissaX += 1
         midpoint = 0
         rounded_up = 1
       }
@@ -2974,7 +3439,7 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
 //      T.state.insert(.inexact)
 //    }
     return T(sign: sign, exponent: add_expon+T.exponentBias,
-             mantissa: T.Mantissa(coefficient_x))
+             mantissa: T.Mantissa(mantissaX))
   }
   
   if c != "e" {
@@ -3018,12 +3483,12 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
   
   if expon_x < 0 {
     if rounded_up != 0 {
-      coefficient_x -= 1
+      mantissaX -= 1
     }
-    return T.handleRounding(sign, expon_x, Int(coefficient_x),
+    return T.handleRounding(sign, expon_x, Int(mantissaX),
                             rounded_up, round)
   }
-  let mant = T.Mantissa(coefficient_x)
+  let mant = T.Mantissa(mantissaX)
   // return T.handleRounding(sign, expon_x, Int(mant), 0, round)
   let result = T.adjustOverflowUnderflow(sign, expon_x, mant, round)
   return T(result)
