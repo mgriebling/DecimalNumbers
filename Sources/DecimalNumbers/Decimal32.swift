@@ -190,7 +190,7 @@ extension Decimal32 : FloatingPoint {
   
   public var ulp: Self               { nextUp - self }
   public var nextUp: Self            { Self(bid: ID.nextup(self.bid)) }
-  public var sign: Sign { bid.sign }
+  public var sign: Sign              { bid.sign }
   public var isNormal: Bool          { bid.isNormal }
   public var isSubnormal: Bool       { bid.isSubnormal }
   public var isFinite: Bool          { bid.isFinite }
@@ -226,11 +226,12 @@ extension Decimal32 : FloatingPoint {
   public static func /= (lhs: inout Self, rhs: Self) { lhs = lhs / rhs }
   
   public mutating func formRemainder(dividingBy other: Self) {
-    // FIXME: -
+    bid = ID.rem(self.bid, other.bid)
   }
   
   public mutating func formTruncatingRemainder(dividingBy other: Self) {
-    // FIXME: -
+    let q = (self/other).rounded(.towardZero)
+    self -= q * other
   }
   
   public mutating func formSquareRoot() {

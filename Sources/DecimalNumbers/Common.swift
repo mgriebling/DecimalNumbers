@@ -2144,7 +2144,7 @@ extension IntDecimal {
         } else if exponentX < 0 {
           exponentX = 0
         }
-        return Self(sign: sign, exponent: exponentX, mantissa: 0) // UInt32(UInt64(sign_x ^ sign_y) | (UInt64(exponentX) << 23))
+        return Self(sign: sign, exponent: exponentX, mantissa: 0) // UInt32(UInt64(signX ^ sign_y) | (UInt64(exponentX) << 23))
       }
     }
     if !validY {
@@ -2175,7 +2175,7 @@ extension IntDecimal {
       } else if exponentX < 0 {
         exponentX = 0
       }
-      return Self(sign: sign, exponent: exponentX, mantissa: 0) // UInt32(UInt64(sign_x ^ sign_y) | (UInt64(exponentX) << 23))
+      return Self(sign: sign, exponent: exponentX, mantissa: 0) // UInt32(UInt64(signX ^ sign_y) | (UInt64(exponentX) << 23))
     }
     
     var P = mantissaX * mantissaY
@@ -2242,7 +2242,7 @@ extension IntDecimal {
     }
     
     return Self(adjustOverflowUnderflow(sign, exponentX, Q, rmode))
-    // return get_BID32_UF (sign_x^sign_y, Int(exponentX), Q, Int(R), rmode)
+    // return get_BID32_UF (signX^sign_y, Int(exponentX), Q, Int(R), rmode)
   }
   
   /**
@@ -2327,7 +2327,7 @@ extension IntDecimal {
           exponentX = 0
         }
         return Self(sign: sign, exponent: exponentX, mantissa: 0)
-        //  UInt32(sign_x ^ sign_y) | UInt32(exponentX) << 23
+        //  UInt32(signX ^ sign_y) | UInt32(exponentX) << 23
       }
       
     }
@@ -2389,7 +2389,7 @@ extension IntDecimal {
       // exact result ?
       if R == 0 {
         return Self(Self.adjustOverflowUnderflow(sign, diff_expon, Q, rmode))
-        //get_BID32 (sign_x ^ sign_y, diff_expon, Q, rmode)
+        //get_BID32 (signX ^ sign_y, diff_expon, Q, rmode)
       }
       // get decimal digits of Q
       var DU = UInt32(bid_power10_index_binexp(bin_expon_cx)) - UInt32(Q) - 1
@@ -2513,6 +2513,144 @@ extension IntDecimal {
     }
   }
 
+  static func rem(_ x:Self, _ y:Self) -> Self {
+    var (signX, exponentX, mantissaX, validX) = x.unpack()
+    let (_, exponentY, mantissaY, validY) = y.unpack()
+    
+    // unpack arguments, check for NaN or Infinity
+    if !validX {
+      // x is Inf. or NaN or 0
+      //          if ((y & SNAN_MASK32) == SNAN_MASK32) {   // y is sNaN
+      //              pfpsf.insert(.invalidOperation)
+      //          }
+      
+      // test if x is NaN
+      if x.isNaN {
+        //              if (x & SNAN_MASK32) == SNAN_MASK32 {
+        //                  pfpsf.insert(.invalidOperation)
+        //              }
+        return Self(RawData(mantissaX.clear(bitNR:nanBitRange.lowerBound)))
+      }
+      // x is Infinity?
+      if x.isInfinite {
+        if !y.isNaN {
+          // pfpsf.insert(.invalidOperation)
+          // return NaN
+          return nan() // 0x7c000000
+        }
+      }
+      // x is 0
+      // return x if y != 0
+      if !y.isInfinite && mantissaY != 0 {
+//        if (y & 0x60000000) == 0x60000000 {
+//          exponentY = Int(y >> 21) & 0xff;
+//        } else {
+//          exponentY = Int(y >> 23) & 0xff;
+//        }
+//
+        if exponentY < exponentX {
+          exponentX = exponentY
+        }
+        
+//        var x = UInt32(exponentX)
+//        x <<= 23
+        return Self(sign: signX, exponent: exponentX, mantissa: 0)
+      }
+      
+    }
+    if !validY {
+      // y is Inf. or NaN
+      
+      // test if y is NaN
+      if y.isNaN {
+//        if (((y & SNAN_MASK32) == SNAN_MASK32)) {
+//          pfpsf.insert(.invalidOperation)
+//        }
+        return Self(RawData(mantissaY.clear(bitNR:nanBitRange.lowerBound)))
+      }
+      // y is Infinity?
+      if y.isInfinite {
+        return Self(sign: signX, exponent: exponentX, mantissa: mantissaX)
+        // (signX, exponentX, mantissaX)
+      }
+      // y is 0, return NaN
+      //pfpsf.insert(.invalidOperation)
+      return nan() // 0x7c000000
+    }
+    
+    
+    var diff_expon = exponentX - exponentY
+    if diff_expon <= 0 {
+      diff_expon = -diff_expon
+      
+      if (diff_expon > 7) {
+        // |x|<|y| in this case
+        return x
+      }
+      // set exponent of y to exponentX, scale mantissaY
+      let T : UInt64 = power10(diff_expon)
+      let CYL = UInt64(mantissaY) * T
+      if CYL > (UInt64(mantissaX) << 1) {
+        return x
+      }
+      
+      let CY = Mantissa(CYL)
+      let Q = mantissaX / CY
+      var R = mantissaX - Q * CY
+      
+      let R2 = R + R
+      if R2 > CY || (R2 == CY && (Q & 1) != 0) {
+        R = CY - R
+        signX = signX == .minus ? .plus : .minus
+        // signX ^= 0x80000000
+      }
+      
+      return Self(sign: signX, exponent: exponentX, mantissa: R)
+    }
+    
+    var CX = UInt64(mantissaX)
+    var Q64 = UInt64()
+    while diff_expon > 0 {
+      // get number of digits in coeff_x
+      let tempx = Float(CX)
+      let bin_expon = tempx.exponent
+      let digits_x = estimateDecDigits(bin_expon)
+      // will not use this test, dividend will have 18 or 19 digits
+      //if(CX >= bid_power10_table_128[digits_x].lo)
+      //      digits_x++;
+      
+      var e_scale = Int(18 - digits_x)
+      if (diff_expon >= e_scale) {
+        diff_expon -= e_scale;
+      } else {
+        e_scale = diff_expon;
+        diff_expon = 0;
+      }
+      
+      // scale dividend to 18 or 19 digits
+      CX *= power10(e_scale)
+      
+      // quotient
+      Q64 = CX / UInt64(mantissaY)
+      // remainder
+      CX -= Q64 * UInt64(mantissaY)
+      
+      // check for remainder == 0
+      if CX == 0 {
+        return Self(sign: signX, exponent: exponentY, mantissa: 0)
+      }
+    }
+    
+    mantissaX = Mantissa(CX)
+    let R2 = mantissaX + mantissaX
+    if R2 > mantissaY || (R2 == mantissaY && (Q64 & 1) != 0) {
+      mantissaX = mantissaY - mantissaX
+      signX = signX == .minus ? .plus : .minus // signX ^= 0x80000000
+    }
+    
+    return Self(sign: signX, exponent: exponentY, mantissa: mantissaX)
+  }
+  
   
   static func round(_ x: Self, _ rmode: Rounding) -> Self {
     var res = Mantissa(0)
@@ -3000,13 +3138,13 @@ extension IntDecimal {
   
   static func sqrt(_ x: Self, _ rmode:Rounding) -> Self {
     // unpack arguments, check for NaN or Infinity
-    var (sign_x, exponentX, mantissaX, valid) = x.unpack()
+    var (signX, exponentX, mantissaX, valid) = x.unpack()
     if !valid {
       // x is Inf. or NaN or 0
       if x.isInfinite {
         let res = mantissaX.clear(rangeNR: g6tog10Range)
-        if x.isNaNInf && sign_x == .minus {
-          return Self.nan(sign_x, 0)
+        if x.isNaNInf && signX == .minus {
+          return Self.nan(signX, 0)
           //status.insert(.invalidOperation)
         }
 //        if isSNaN(x) {
@@ -3016,10 +3154,10 @@ extension IntDecimal {
       }
       // x is 0
       exponentX = (exponentX + exponentBias) >> 1
-      return Self(sign: sign_x, exponent: exponentX, mantissa: 0)
+      return Self(sign: signX, exponent: exponentX, mantissa: 0)
     }
     // x<0?
-    if sign_x == .minus && mantissaX != 0 {
+    if signX == .minus && mantissaX != 0 {
       // status.insert(.invalidOperation)
       return Self.nan()
     }

@@ -4642,6 +4642,67 @@ final class DecimalNumbersTests: XCTestCase {
       TestCase("bid32_quiet_less_equal", 0, "Infinity", "-9.999999e96", 0, 0x00),
       TestCase("bid32_quiet_less_equal", 0, "Infinity", "9.999999e96", 0, 0x00),
       TestCase("bid32_quiet_less_equal", 0, "Infinity", "Inf", 1, 0x00),
+      
+      TestCase("bid32_rem", 0, "0x00000001", "1.0", 0x00000001, 0x00),
+      TestCase("bid32_rem", 0, "0x00000800", "0x80000207", 0x8000001c, 0x00),
+      TestCase("bid32_rem", 0, "0x00080001", "1.0", 0x00080001, 0x00),
+      TestCase("bid32_rem", 0, "0E+89", "1E-96", 0x02800000, 0x00),
+      TestCase("bid32_rem", 0, "0E+89", "9.999999E+96", 0x5f000000, 0x00),
+      TestCase("bid32_rem", 0, "0E+89", "Infinity", 0x5f000000, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "0x00000001", 0x00000000, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "0x00080001", 0x80032a8c, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "-1.0", 0x32000000, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "1.0", 0x32000000, 0x00),
+      TestCase("bid32_rem", 0, "-1.0", "1.0", 0xb2000000, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "-1.0e-96", 0x02000000, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "1.0e-96", 0x02000000, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "0x6098967f", 0x020f4240, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "0x60989680", 0x7c000000, 0x01),
+      TestCase("bid32_rem", 0, "1.0", "0x7c000000", 0x7c000000, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "0x7c8f423f", 0x7c0f423f, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "0x7c8f4240", 0x7c000000, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "0x7e100000", 0x7c000000, 0x01),
+      TestCase("bid32_rem", 0, "1.0", "0x7e100100", 0x7c000100, 0x01),
+      TestCase("bid32_rem", 0, "1.0", "0x7e8f423f", 0x7c0f423f, 0x01),
+      TestCase("bid32_rem", 0, "1.0", "0x7e8f4240", 0x7c000000, 0x01),
+      TestCase("bid32_rem", 0, "1.0", "0x80000001", 0x00000000, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "-9.999999e-95", 0x000003e8, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "9.999999e-95", 0x000003e8, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "-9.999999e96", 0x3200000a, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "9.999999e96", 0x3200000a, 0x00),
+      TestCase("bid32_rem", 0, "1.0e-96", "1.0", 0x0200000a, 0x00),
+      TestCase("bid32_rem", 0, "-1.0e-96", "1.0", 0x8200000a, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "0xfc100000", 0xfc000000, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "0xfc100100", 0xfc000100, 0x00),
+      TestCase("bid32_rem", 0, "1.0", "0xfe000000", 0xfc000000, 0x01),
+      TestCase("bid32_rem", 0, "1.234567E+95", "1E+90", 0xdf000003, 0x00),
+      TestCase("bid32_rem", 0, "1E+89", "1E+90", 0x5f000001, 0x00),
+      TestCase("bid32_rem", 0, "0x2f6bcdb3", "0xebf7fe2f", 0x2f6bcdb3, 0x00),
+      TestCase("bid32_rem", 0, "0x3c000000", "0x866d2bef", 0x06000000, 0x00),
+      TestCase("bid32_rem", 0, "0x6098967f", "1.0", 0x6098967f, 0x00),
+      TestCase("bid32_rem", 0, "0x60989680", "1.0", 0x02000000, 0x00),
+      TestCase("bid32_rem", 0, "0x78000000", "0x0796bd0c", 0x7c000000, 0x01),
+      TestCase("bid32_rem", 0, "0x7c000000", "1.0", 0x7c000000, 0x00),
+      TestCase("bid32_rem", 0, "0x7c8f423f", "1.0", 0x7c0f423f, 0x00),
+      TestCase("bid32_rem", 0, "0x7c8f423f", "0x7e100000", 0x7c0f423f, 0x01),
+      TestCase("bid32_rem", 0, "0x7c8f423f", "Infinity", 0x7c0f423f, 0x00),
+      TestCase("bid32_rem", 0, "0x7c8f4240", "1.0", 0x7c000000, 0x00),
+      TestCase("bid32_rem", 0, "0x7e100000", "1.0", 0x7c000000, 0x01),
+      TestCase("bid32_rem", 0, "0x7e100100", "1.0", 0x7c000100, 0x01),
+      TestCase("bid32_rem", 0, "0x7e8f423f", "1.0", 0x7c0f423f, 0x01),
+      TestCase("bid32_rem", 0, "0x7e8f4240", "1.0", 0x7c000000, 0x01),
+      TestCase("bid32_rem", 0, "0x80000001", "1.0", 0x80000001, 0x00),
+      TestCase("bid32_rem", 0, "9.999999e-95", "1.0", 0x6018967f, 0x00),
+      TestCase("bid32_rem", 0, "-9.999999e-95", "1.0", 0xe018967f, 0x00),
+      TestCase("bid32_rem", 0, "9.999999e96", "1.0", 0x32000000, 0x00),
+      TestCase("bid32_rem", 0, "-9.999999e96", "1.0", 0xb2000000, 0x00),
+      TestCase("bid32_rem", 0, "0xdb800000", "0x77f06aff", 0xdb800000, 0x00),
+      TestCase("bid32_rem", 0, "0xdebfe57f", "0xf8000000", 0xdebfe57f, 0x00),
+      TestCase("bid32_rem", 0, "0xfc100000", "1.0", 0xfc000000, 0x00),
+      TestCase("bid32_rem", 0, "0xfc100100", "1.0", 0xfc000100, 0x00),
+      TestCase("bid32_rem", 0, "0xfe000000", "1.0", 0xfc000000, 0x01),
+      TestCase("bid32_rem", 0, "Infinity", "0E+89", 0x7c000000, 0x01),
+      TestCase("bid32_rem", 0, "Infinity", "NaN", 0x7c000000, 0x00),
     ]
     
     var testID = 1
@@ -4856,20 +4917,22 @@ final class DecimalNumbersTests: XCTestCase {
             flag = t1.isZero ? 1 : 0
           }
           checkValues(test, UInt64(flag), state, "\(test.res) != \(flag)")
-        case "bid32_add", "bid32_sub", "bid32_mul", "bid32_div":
+        case "bid32_add", "bid32_sub", "bid32_mul", "bid32_div", "bid32_rem":
           let t1 = getNumber(test.istr)
           let t2 = getNumber(test.istr2)
-          let res: Decimal32
+          var res: Decimal32
           if test.id.hasSuffix("add") {
             res = t1 + t2
           } else if test.id.hasSuffix("sub") {
             res = t1 - t2
           } else if test.id.hasSuffix("mul") {
             res = t1 * t2
+          } else if test.id.hasSuffix("rem") {
+//            if testID == 39 {
+//              print(t1, "%", t2)
+//            }
+            res = t1; res.formRemainder(dividingBy: t2)
           } else {
-            if testID == 10 {
-              print(t1, "/", t2)
-            }
             res = t1 / t2
           }
           let dtest = Decimal32(bid: UInt32(test.res))
@@ -4999,9 +5062,9 @@ final class DecimalNumbersTests: XCTestCase {
     XCTAssert(Decimal32.infinity.description == "Inf")
     
     var a1 = Decimal32("8.625"); let b1 = Decimal32("0.75")
-//    let rem = a1.remainder(dividingBy: b1)
-//    print("\(a1).formRemainder(dividingBy: \(b1) = ", rem)
-//    XCTAssert(rem == Decimal32("-0.375"))
+    let rem = a1.remainder(dividingBy: b1)
+    print("\(a1).formRemainder(dividingBy: \(b1) = ", rem)
+    XCTAssert(rem == Decimal32("-0.375"))
     a1 = Decimal32("8.625")
     let q = (a1/b1).rounded(.towardZero); print(q)
     a1 = a1 - q * b1
