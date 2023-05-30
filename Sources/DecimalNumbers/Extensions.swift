@@ -59,7 +59,7 @@ extension FixedWidthInteger {
   }
   
   /// Non-mutating version of the above
-  public func clear(bitNR n: Int) -> Self {
+  public func clearing(bit n: Int) -> Self {
     precondition(n >= 0 && n < Self.bitWidth)
     return self & ~(1 << n)
   }
@@ -85,7 +85,7 @@ extension FixedWidthInteger {
   }
   
   /// Nonmutating version of the above
-  public func clear(rangeNR range: IntRange) -> Self {
+  public func clearing(range: IntRange) -> Self {
     precondition(range.lowerBound >= 0 && range.upperBound < Int.bitWidth)
     return self & ~(mask(range.count) << range.lowerBound)
   }

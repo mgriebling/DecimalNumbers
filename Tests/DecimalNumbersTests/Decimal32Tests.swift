@@ -4766,11 +4766,10 @@ final class DecimalNumbersTests: XCTestCase {
                              test.res, t1.bid.data)
           checkValues(test, UInt64(t1.bid.data), state, error)
         case "bid32_to_binary64":
-          break
-//          let t1 = getNumber(test.istr).double
-//          let d1 = Double(bitPattern: test.res)
-//          let error = "\(d1) != \(t1)"
-//          checkValues(test, t1.bid.data, state, error)
+          let t1 = getNumber(test.istr).double
+          let d1 = Double(bitPattern: test.res)
+          let error = "\(d1) != \(t1)"
+          checkValues(test, t1.bitPattern, state, error)
         case "bid32_to_binary32":
           // FIXME: - Problem in bid32_to_binary32() function
           break
@@ -4928,9 +4927,6 @@ final class DecimalNumbersTests: XCTestCase {
           } else if test.id.hasSuffix("mul") {
             res = t1 * t2
           } else if test.id.hasSuffix("rem") {
-//            if testID == 39 {
-//              print(t1, "%", t2)
-//            }
             res = t1; res.formRemainder(dividingBy: t2)
           } else {
             res = t1 / t2
@@ -4968,18 +4964,18 @@ final class DecimalNumbersTests: XCTestCase {
           let error = "\(expectedClass) != \(t1Class)"
           checkValues(test, UInt64(t1Index!), state, error)
         case "bid32_fma":
-          break
-//          let t1 = getNumber(test.istr)
-//          let t2 = getNumber(test.istr2)
-//          let t3 = getNumber(test.istr3)
-//          if testID == 8 {
-//            print("Failure")
-//          }
-//          let res = t3.addingProduct(t1, t2)
-//          let dtest = Decimal32(UInt32(test.res))
-//          let error = String(format:
-//              "Expected: 0x%08X[\(dtest)] != 0x%08X[\(res)]", test.res, res.bid.data)
-//          checkValues(test, UInt64(res.bid.data), state, error)
+          let t1 = getNumber(test.istr)
+          let t2 = getNumber(test.istr2)
+          let t3 = getNumber(test.istr3)
+          if testID == 113 {
+            print(t3, "+", t1, "*", t2)
+          }
+          let res = t3.addingProduct(t1, t2)
+          let dtest = Decimal32(bid:UInt32(test.res))
+          let error = String(format:
+                              "Expected: 0x%08X[\(dtest)] != 0x%08X[\(res)]",
+                             test.res, res.bid.data)
+          checkValues(test, UInt64(res.bid.data), state, error)
         case "bid32_fmod", "bid32_inf", "bid32_frexp":
           break
         default:

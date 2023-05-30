@@ -239,7 +239,7 @@ extension Decimal32 : FloatingPoint {
   }
   
   public mutating func addProduct(_ lhs: Self, _ rhs: Self) {
-    self += lhs * rhs // FIXME: -
+    bid = ID.fma(lhs.bid, rhs.bid, self.bid, Self.rounding)
   }
   
   public func isEqual(to other: Self) -> Bool  { self == other }
@@ -249,10 +249,7 @@ extension Decimal32 : FloatingPoint {
     isEqual(to: other) || isLess(than: other)
   }
   
-  public var magnitude: Self {
-    var data = bid.data; data.clear(bit: ID.signBit)
-    return Self(bid: data)
-  }
+  public var magnitude: Self { Self(bid: bid.data.clearing(bit: ID.signBit)) }
 }
 
 extension Decimal32 : DecimalFloatingPoint {
@@ -263,8 +260,10 @@ extension Decimal32 : DecimalFloatingPoint {
 
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for DecimalFloatingPoint
+  
   public init(bitPattern bits: RawSignificand, bidEncoding: Bool) {
     if bidEncoding {
+      // just assign the raw data bits
       bid.data = bits
     } else {
       // convert from dpd to bid
@@ -286,6 +285,7 @@ extension Decimal32 : DecimalFloatingPoint {
   public var dpd: UInt32                   { bid.dpd }
   public var int: Int64                    { bid.int(Self.rounding) }
   public var uint: UInt64                  { bid.uint(Self.rounding) }
+  public var double: Double                { bid.double(Self.rounding) }
   
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }
