@@ -193,7 +193,7 @@ public extension IntDecimal {
         }
         
         // determine the rounding table index
-        let roundIndex = roundboundIndex(rmode) >> 2
+        let roundIndex = rmode.raw
         
         // get digits to be shifted out
         let extraDigits = -exp
@@ -358,7 +358,8 @@ public extension IntDecimal {
       expRange2 = (upperExp2-1)...upperExp2
       high = dpd.get(range: upperExp1-2...upperExp1)
     }
-    exponent = dpd.get(range: expLower) + dpd.get(range: expRange2) << 6
+    exponent = dpd.get(range: expLower) +
+                    dpd.get(range: expRange2) << (exponentBits-2)
     trailing = Mantissa(dpd.get(range: 0...lowMan-1))
     return (sgn, exponent, high, trailing)
   }
@@ -370,7 +371,7 @@ public extension IntDecimal {
   ///////////////////////////////////////////////////////////////////////
   /// Special number definitions
   @inlinable static func infinite(_ s: Sign = .plus) -> Self {
-    Self(sign: s, exponent: infinitePattern<<3, mantissa: 0)
+    Self(sign: s, exponent: infinitePattern<<(exponentBits - 5), mantissa: 0)
   }
   
   @inlinable static func max(_ s: Sign = .plus) -> Self {
@@ -386,7 +387,7 @@ public extension IntDecimal {
   }
   
   @inlinable static var snan: Self {
-    Self(sign: .plus, exponent: snanPattern<<2, mantissa: 0)
+    Self(sign: .plus, exponent: snanPattern<<(exponentBits - 6), mantissa: 0)
   }
   
   @inlinable static func zero(_ sign: Sign = .plus) -> Self {
@@ -396,7 +397,7 @@ public extension IntDecimal {
   @inlinable
   static func nan(_ sign: Sign = .plus, _ payload: Int = 0) -> Self {
     let man = payload > largestNumber/10 ? 0 : Mantissa(payload)
-    return Self(sign:sign, exponent:nanPattern<<2, mantissa:man)
+    return Self(sign:sign, exponent:nanPattern<<(exponentBits-6), mantissa:man)
   }
   
   ///////////////////////////////////////////////////////////////////////
@@ -554,12 +555,12 @@ public extension IntDecimal {
       let expUpper = signBit-4...signBit-3
       let manUpper = signBit-5...signBit-5
       res.set(range: Self.specialBits, with: Self.specialPattern)
-      res.set(range: expUpper, with: exp >> 6)          // upper exponent bits
+      res.set(range: expUpper, with: exp >> (Self.exponentBits-2)) // upper exponent bits
       res.set(range: manUpper, with: Int(mantissa) & 1) // upper mantisa bits
     } else {
       let expUpper = signBit-2...signBit-1
       let manUpper = signBit-5...signBit-3
-      res.set(range: expUpper, with: exp >> 6)      // upper exponent bits
+      res.set(range: expUpper, with: exp >> (Self.exponentBits-2)) // upper exponent bits
       res.set(range: manUpper, with: Int(mantissa)) // upper mantisa bits
     }
     res.set(bit: signBit, with: sign == .minus ? 1 : 0)
@@ -703,7 +704,7 @@ public extension IntDecimal {
     // Round using round-sticky words
     // If we spill over into the next decade, correct
     // Flag underflow where it may be needed even for |result| = SNN
-    let ind = roundboundIndex(rndMode, s == .minus, Int(c_prov))
+    let ind = rndMode.index(negative:s == .minus, lsb:Int(c_prov))
     if bid_roundbound_128[ind] < UInt128(high: z.w[4], low: z.w[3]) {
       c_prov += 1
       let max = largestNumber+1
@@ -1113,7 +1114,7 @@ public extension IntDecimal {
       }
       
       // determine the rounding table index
-      let roundIndex = roundboundIndex(r) >> 2
+      let roundIndex = r.index()
       
       // 10*coeff
       var c = (c << 3) + (c << 1)
@@ -1536,8 +1537,10 @@ public extension IntDecimal {
     switch rnd {
       case 0, 4: return 5 * power10(i-1)
       case 2: return power10(i-1)-1
-      default: return 0 // covers rnd = 1, 3
+      case 1, 3: return 0
+      default: assertionFailure("Illegal rounding mode")
     }
+    return 0
   }
   
   static var coefflimits: [UInt64] {
@@ -1693,6 +1696,21 @@ public extension IntDecimal {
 //      P256.w[3] = Phh + CY2
   }
   
+  static func mul128x128Full(_ Qh:inout UInt128, _ Ql:inout UInt128,
+                             _ A:UInt128, _ B:UInt128) {
+    let A = A.components, B = B.components
+    let ALBH = mul64x64to128(A.low, B.high)
+    let AHBL = mul64x64to128(B.low, A.high)
+    let ALBL = mul64x64to128(A.low, B.low)
+    let AHBH = mul64x64to128(A.high, B.high)
+    
+    let QM = add_128_128(ALBH, AHBL)
+    // Ql.components.low = ALBL.components.low
+    let QM2 = add_128_64(QM, ALBL.components.high)
+    Qh = add_128_64(AHBH, QM2.components.high)
+    Ql.components = (QM2.components.low, ALBL.components.low)
+  }
+  
   // 128x256->384 bit multiplication (missing from existing macros)
   // I derived this by propagating (A).w[2] = 0 in __mul_192x256_to_448
   static internal func mul128x256to384(_  P: inout UInt384, _ A:UInt128,
@@ -1717,6 +1735,17 @@ public extension IntDecimal {
       R64H += 1
     }
     return UInt128(high: R64H, low: R128low)
+  }
+  
+  // add 128-bit value to 128-bit
+  // assume no carry-out
+  static func add_128_128(_ A128:UInt128, _ B128:UInt128) -> UInt128 {
+    var hi = A128.components.high &+ B128.components.high
+    let lo = B128.components.low  &+ A128.components.low
+    if lo < B128.components.low {
+      hi &+= 1
+    }
+    return UInt128(high: hi, low: lo)
   }
   
   // bid_shiftright128[] contains the right shift count to obtain C2* from
@@ -2143,7 +2172,7 @@ extension IntDecimal {
     
     let extra_digits = n_digits - maximumDigits
     
-    var irmode = roundboundIndex(rounding) >> 2
+    var irmode = rounding.raw
     if signA == .minus && (UInt(irmode) &- 1) < 2 {
       irmode = 3 - irmode
     }
@@ -2261,6 +2290,7 @@ extension IntDecimal {
       return Self(sign: sign, exponent: exponentX, mantissa: 0) // UInt32(UInt64(signX ^ sign_y) | (UInt64(exponentX) << 23))
     }
     
+    // multiplication
     var P = mantissaX * mantissaY
     
     //--- get number of bits in C64 ---
@@ -2280,8 +2310,8 @@ extension IntDecimal {
       return Self(Self.adjustOverflowUnderflow(sign, exponentX, P, rmode))
     }
     
-    var rmode1 = roundboundIndex(rmode, sign == .minus, 0)
-    if sign == .minus && UInt32(rmode1 - 1) < 2 {
+    var rmode1 = rmode.index(negative: sign == .minus, lsb: 0)
+    if sign == .minus && (UInt32(rmode1) &- 1) < 2 {
       rmode1 = 3 - rmode1
     }
     
@@ -2312,15 +2342,15 @@ extension IntDecimal {
       }
     }
     
-    if (exponentX == -1) && (Q == largestNumber) && (rmode != .towardZero) {
-      rmode1 = roundboundIndex(rmode, sign == .minus, 0)
-      if (sign == .minus) && UInt32(rmode1 - 1) < 2 {
+    if exponentX == -1 && Q == largestNumber && rmode != .towardZero {
+      rmode1 = rmode.index(negative: sign == .minus, lsb: 0)
+      if sign == .minus && (UInt32(rmode1) &- 1) < 2 {
         rmode1 = 3 - rmode1
       }
       
-      if ((R != 0) && (rmode == .up)) ||
+      if ((R != 0) && (rmode1 == 2)) ||
          ((rmode1&3 == 0) && (R+R>=power10(extra_digits))) {
-        return Self(sign: sign, exponent:0, mantissa:1_000_000)
+        return Self(sign: sign, exponent:0, mantissa:largestMantissa)
       }
     }
     
@@ -2560,7 +2590,7 @@ extension IntDecimal {
     }
     
     if diff_expon >= 0 {
-      var rmode1 = roundboundIndex(rmode) >> 2
+      var rmode1 = rmode.raw
       if sign == .minus && (UInt32(rmode1) &- 1) < 2 {
         rmode1 = 3 - rmode1
       }
@@ -2880,6 +2910,7 @@ extension IntDecimal {
       }
     }
     
+    // multiplication
     let P0 = UInt64(mantissaX) * UInt64(mantissaY)
     exponent_x += exponent_y - exponentBias
     
@@ -2907,7 +2938,7 @@ extension IntDecimal {
     // var inexact = false
     if diff_dec_expon > 17 {
       let tempx = Double(coefficient_a)
-      let bin_expon = tempx.exponent //Int((tempx.bitPattern & BINARY_EXPONENT_MASK) >> 52) - exponentBias
+      let bin_expon = tempx.exponent
       let scale_ca = Int(estimateDecDigits(bin_expon))
       
       let d2 = 31 - scale_ca
@@ -2927,8 +2958,8 @@ extension IntDecimal {
     
     // let Tmp = mul64x128(coefficient_a,
     let Tmp = mul64x128Low(coefficient_a, power10(diff_dec_expon))
-    var P = Tmp &+ CB
-    // __add_128_128(&P, Tmp, CB)
+    // var P = Tmp &+ CB
+    var P = add_128_128(Tmp, CB)
     if Int64(bitPattern: P.components.high) < 0 {
       sign_a = sign_a == .minus ? .plus : .minus
       var Phigh = 0 &- P.components.high
@@ -2941,7 +2972,7 @@ extension IntDecimal {
     let PC = P.components
     if PC.high != 0 {
       let tempx = Double(PC.high)
-      bin_expon = tempx.exponent + 64 // Int((tempx.bitPattern & BINARY_EXPONENT_MASK) >> 52) - BINARY_exponentBias + 64
+      bin_expon = tempx.exponent + 64
       n_digits = estimateDecDigits(bin_expon)
       if P >= power10(n_digits) {
         n_digits += 1
@@ -2949,7 +2980,7 @@ extension IntDecimal {
     } else {
       if PC.low != 0 {
         let tempx = Double(PC.low)
-        bin_expon = tempx.exponent // Int((tempx.bitPattern & BINARY_EXPONENT_MASK) >> 52) - BINARY_exponentBias
+        bin_expon = tempx.exponent
         n_digits = estimateDecDigits(bin_expon)
         if PC.low >= power10(n_digits) {
           n_digits += 1
@@ -2969,24 +3000,23 @@ extension IntDecimal {
     }
     
     let extra_digits = n_digits - maximumDigits
-    var rmode1 = roundboundIndex(rmode, sign_a == .minus, 0) // rnd_mode;
+    var rmode1 = rmode.raw // rnd_mode;
     if exponent_b+extra_digits < 0 { rmode1=3 }  // RZ
     
     // add a constant to P, depending on rounding mode
     // 0.5*10^(digits_p - 16) for round-to-nearest
     var Stemp = UInt128()
     if extra_digits <= 18 {
-      P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits))
-      //__add_128_64(&P, P, bid_round_const_table(rmode1, extra_digits))
+      // P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits))
+      P = add_128_64(P, bid_round_const_table(rmode1, extra_digits))
     } else {
-      Stemp.components = bid_round_const_table(rmode1, 18)
-                            .multipliedFullWidth(by: power10(extra_digits-18))
-      //__mul_64x64_to_128(&Stemp, bid_round_const_table(rmode1, 18), power10(extra_digits-18).low)
-      P += Stemp
-      // __add_128_128 (&P, P, Stemp)
+      // Stemp = bid_round_const_table(rmode1, 18).multipliedFullWidth(by: power10(extra_digits-18))
+      Stemp = mul64x64to128(bid_round_const_table(rmode1, 18), power10(extra_digits-18))
+      // P += Stemp
+      P = add_128_128(P, Stemp)
       if rmode == .up {
-        P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits-18))
-        //__add_128_64(&P, P, bid_round_const_table(rmode1, extra_digits-18))
+        // P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits-18))
+        P = add_128_64(P, bid_round_const_table(rmode1, extra_digits-18))
       }
     }
     
@@ -3057,18 +3087,12 @@ extension IntDecimal {
 //        }
       default:
         // round up
-        var carry = 0
+        var carry = UInt64(), CY:UInt64
         var (high, low) = Stemp.components
-        var over = false
         let recip = UInt128(reciprocals10(extra_digits)).components
         let Qlow = Q_low.components
-        (low, over) = Qlow.low.addingReportingOverflow(recip.low)
-        if over {
-          high = Qlow.high &+ 1
-        }
-        (high, over) = high.addingReportingOverflow(recip.high)
-        if over { carry = 1 }
-        
+        (low, CY) = add_carry_out(Qlow.low, recip.low)
+        (high, carry) = add_carry_in_out(Qlow.high, recip.high, CY)
 //        addCarryOut(&low, &CY, Q_low.components.low,
 //                        reciprocals10(extra_digits))
 //        __add_carry_in_out(&high, &carry, Q_low.components.high,
@@ -3081,7 +3105,7 @@ extension IntDecimal {
 //            }
 //          }
         } else {
-          rem_l += UInt64(carry)
+          rem_l += carry
           remainder_h >>= (128 - amount)
           if carry != 0 && rem_l == 0 { remainder_h += 1 }
 //          if remainder_h >= (UInt64(1) << (amount-64)) && !inexact {
@@ -3096,41 +3120,53 @@ extension IntDecimal {
     
     if (UInt32(C64) == largestNumber) && (exponent_b+extra_digits == -1) &&
         (rmode != .towardZero) {
-      rmode1 = roundboundIndex(rmode, sign_a == .minus, 0)
-      //                if (sign_a && (unsigned) (rmode - 1) < 2) {
-      //                    rmode = 3 - rmode;
-      //                }
+      rmode1 = rmode.raw
+      if sign_a == .minus && (UInt32(rmode1) &- 1) < 2 {
+        rmode1 = 3 - rmode1
+      }
       if extra_digits <= 18 {
-        P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits))
-        //__add_128_64 (&P, P, bid_round_const_table(rmode1, extra_digits));
+        // P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits))
+        P = add_128_64(P, bid_round_const_table(rmode1, extra_digits))
       } else {
-        Stemp.components = bid_round_const_table(rmode1, 18)
-                           .multipliedFullWidth(by: power10(extra_digits-18))
-        P += Stemp
-        //Stemp = mul64x64to128(bid_round_const_table(rmode1, 18), power10(extra_digits-18).low);
-        //__add_128_128(&P, P, Stemp)
+//        Stemp.components = bid_round_const_table(rmode1, 18)
+//                           .multipliedFullWidth(by: power10(extra_digits-18))
+//        P += Stemp
+        Stemp = mul64x64to128(bid_round_const_table(rmode1, 18), power10(extra_digits-18))
+        P = add_128_128(P, Stemp)
         if rmode == .up {
-          P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits-18))
-          //__add_128_64(&P, P, bid_round_const_table(rmode1, extra_digits-18))
+          // P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits-18))
+          P = add_128_64(P, bid_round_const_table(rmode1, extra_digits-18))
         }
       }
       
       // get P*(2^M[extra_digits])/10^extra_digits
-      (Q_high, Q_low) = P.multipliedFullWidth(by: reciprocals10(extra_digits))
-      // mul128x128full(&Q_high, &Q_low, P, reciprocals10(extra_digits))
+      // (Q_high, Q_low) = P.multipliedFullWidth(by: reciprocals10(extra_digits))
+      mul128x128Full(&Q_high, &Q_low, P, reciprocals10(extra_digits))
       // now get P/10^extra_digits: shift Q_high right by M(extra_digits)-128
       amount = Int(reciprocalScale[extra_digits])
       C128 = Q_high >> amount
       
       C64 = C128.components.low
       if C64 == largestNumber+1 {
-        return Self(sign: sign_a, exponent: exponentBias,
-                    mantissa: largestMantissa)
+        return Self(sign: sign_a, exponent: 0, mantissa: largestMantissa)
       }
     }
     return Self(adjustOverflowUnderflow(sign_a, exponent_b+extra_digits,
                                         Mantissa(C64), rmode))
     // return bid32Underflow(sign_a, exponent_b+extra_digits, C64, R, rmode)
+  }
+  
+  @inlinable static func add_carry_out(_ X:UInt64, _ Y:UInt64) ->
+                                                      (S:UInt64, CY:UInt64) {
+      let S = X &+ Y
+      return (S, S < X ? 1 : 0)  // allow overflow
+  }
+
+  @inlinable static func add_carry_in_out(_ X:UInt64, _ Y:UInt64, _ CI:UInt64)
+                                            -> (S:UInt64, CY:UInt64) {
+      let X1 = X &+ CI
+      let S = X1 &+ Y
+      return (S, ((S<X1) || (X1<CI)) ? 1 : 0)
   }
   
   //////////////////////////////////////////////////////////////////////////
@@ -3205,11 +3241,11 @@ extension IntDecimal {
     
     // Round using round-sticky words
     // If we spill into the next binade, correct
-    let rind = roundboundIndex(rmode, s == .minus, c_prov)
+    let rind = rmode.index(negative:s == .minus, lsb:c_prov)
     if Self.bid_roundbound_128[rind] < UInt128(high: z.w[4], low: z.w[3]) {
-      c_prov = c_prov + 1;
+      c_prov = c_prov + 1
     }
-    c_prov = c_prov & ((1 << 52) - 1);
+    c_prov = c_prov & ((1 << 52) - 1)
     
     // Set the inexact and underflow flag as appropriate
     //      if (z.w[4] != 0) || (z.w[3] != 0) {
@@ -3764,9 +3800,9 @@ extension IntDecimal {
     
 //    status.insert(.inexact)
 
-    let rndMode = roundboundIndex(rmode) >> 2
+    let rndMode = rmode.raw
     var Q:UInt32
-    if ((rndMode) & 3) == 0 {
+    if rndMode & 3 == 0 {
       Q = UInt32(dq+0.5)
     } else {
       Q = UInt32(dq)
@@ -3803,19 +3839,36 @@ struct UInt192 { var w = [UInt64](repeating: 0, count: 3) }
 // Some of the shortcuts below in "underflow after rounding" also use
 // the concrete values.
 //
-// So we add a directive here to double-check that this is the case
-internal func roundboundIndex(_ round:Rounding, _ negative:Bool=false,
-                            _ lsb:Int=0) -> Int {
-  var index = (lsb & 1) + (negative ? 2 : 0)
-  switch round {
-    case .toNearestOrEven: index += 0
-    case .down: index += 4
-    case .up: index += 8
-    case .towardZero: index += 12
-    default: index += 16
+extension Rounding {
+  public var raw:Int {
+    switch self {
+      case .toNearestOrEven        : return 0x00000
+      case .down                   : return 0x00001
+      case .up                     : return 0x00002
+      case .towardZero             : return 0x00003
+      case .toNearestOrAwayFromZero: return 0x00004
+      default: assertionFailure("Illegal rounding mode"); return 0
+    }
   }
-  return index
+  
+  public func index(negative:Bool=false, lsb:Int=0) -> Int {
+    return self.raw << 2 + (lsb & 1) + (negative ? 2 : 0)
+  }
 }
+
+// So we add a directive here to double-check that this is the case
+//internal func roundboundIndex(_ round:Rounding, _ negative:Bool=false,
+//                              _ lsb:Int=0) -> Int {
+//  var index = (lsb & 1) + (negative ? 2 : 0)
+//  switch round {
+//    case .toNearestOrEven: index += 0
+//    case .down: index += 4
+//    case .up: index += 8
+//    case .towardZero: index += 12
+//    default: index += 16
+//  }
+//  return index
+//}
 
 public struct Status: OptionSet, CustomStringConvertible {
   
@@ -4092,10 +4145,10 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
     if rdx_pt_enc { dec_expon_scale += 1 }
     
     ndigits+=1
-    if ndigits <= 7 {
+    if ndigits <= T.maximumDigits {
       mantissaX = (mantissaX << 1) + (mantissaX << 3);
       mantissaX += T.Mantissa(c.wholeNumberValue ?? 0)
-    } else if ndigits == 8 {
+    } else if ndigits == T.maximumDigits+1 {
       // coefficient rounding
       switch round {
         case .toNearestOrEven:
