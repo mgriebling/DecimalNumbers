@@ -171,9 +171,9 @@ extension Decimal128 : FloatingPoint {
   @inlinable public static var exponentBias: Int          {ID.exponentBias}
   @inlinable public static var significandDigitCount: Int {ID.maximumDigits}
   
-  @inlinable public static var nan: Self          {Self(bid:ID.nan(.plus,0))}
-  @inlinable public static var signalingNaN: Self {Self(bid:ID.snan)}
-  @inlinable public static var infinity: Self     {Self(bid:ID.infinite())}
+  @inlinable public static var nan: Self          { Self(bid:ID.nan()) }
+  @inlinable public static var signalingNaN: Self { Self(bid:ID.snan) }
+  @inlinable public static var infinity: Self     { Self(bid:ID.infinite()) }
   
   @inlinable public static var greatestFiniteMagnitude: Self {
     Self(bid:ID(exponent:ID.maximumExponent, mantissa:ID.largestNumber))

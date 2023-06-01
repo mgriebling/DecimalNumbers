@@ -99,7 +99,10 @@ public protocol IntDecimal : Codable, Hashable {
 /// Free functionality when complying with IntegerDecimalField
 public extension IntDecimal {
   
-  static var highMantissaBit: Int { 1 << exponentLMBits.lowerBound }
+  static var highMantissaBit: Mantissa {
+    Mantissa(1) << exponentLMBits.lowerBound
+  }
+  
   static var largestMantissa: Mantissa { (largestNumber+1)/10 }
   
   /// These bit fields can be predetermined just from the size of
@@ -148,13 +151,13 @@ public extension IntDecimal {
   
   @inlinable var exponent: Int {
     let range = isSmallMantissa ? Self.exponentSMBits : Self.exponentLMBits
-    return data.get(range: range)
+    return data.getInt(range: range)
   }
   
   @inlinable var mantissa: Mantissa {
     let range = isSmallMantissa ?Self.smallMantissaBits: Self.largeMantissaBits
     if isSmallMantissa {
-      return Mantissa(data.get(range:range) + Self.highMantissaBit)
+      return Mantissa(data.get(range:range)) + Mantissa(Self.highMantissaBit)
     } else {
       return Mantissa(data.get(range:range))
     }
@@ -253,12 +256,12 @@ public extension IntDecimal {
     if mantissa < Self.highMantissaBit {
       // large mantissa
       data.set(range: Self.exponentLMBits, with: exponent)
-      data.set(range: Self.largeMantissaBits, with: Int(mantissa))
+      data.set(range: Self.largeMantissaBits, with: mantissa)
     } else {
       // small mantissa
       data.set(range: Self.exponentSMBits, with: exponent)
       data.set(range: Self.smallMantissaBits,
-               with:Int(mantissa)-Self.highMantissaBit)
+               with:mantissa-Self.Mantissa(Self.highMantissaBit))
       data.set(range: Self.specialBits, with: Self.specialPattern)
     }
   }
@@ -278,14 +281,14 @@ public extension IntDecimal {
         return (self.sign, 0, mantissa, false)
       }
       // small mantissa
-      exponent = data.get(range: Self.exponentSMBits)
-      mantissa = Mantissa(data.get(range: Self.smallMantissaBits) +
-                          Self.highMantissaBit)
+      exponent = data.getInt(range: Self.exponentSMBits)
+      mantissa = Mantissa(data.get(range: Self.smallMantissaBits)) +
+                          Mantissa(Self.highMantissaBit)
       if mantissa > Self.largestNumber { mantissa = 0 }
       return (self.sign, exponent, mantissa, mantissa != 0)
     } else {
       // large mantissa
-      exponent = data.get(range: Self.exponentLMBits)
+      exponent = data.getInt(range: Self.exponentLMBits)
       mantissa = Mantissa(data.get(range: Self.largeMantissaBits))
       return (self.sign, exponent, mantissa, mantissa != 0)
     }
@@ -356,10 +359,10 @@ public extension IntDecimal {
     } else {
       // large mantissa
       expRange2 = (upperExp2-1)...upperExp2
-      high = dpd.get(range: upperExp1-2...upperExp1)
+      high = dpd.getInt(range: upperExp1-2...upperExp1)
     }
-    exponent = dpd.get(range: expLower) +
-                    dpd.get(range: expRange2) << (exponentBits-2)
+    exponent = dpd.getInt(range: expLower) +
+                    dpd.getInt(range: expRange2) << (exponentBits-2)
     trailing = Mantissa(dpd.get(range: 0...lowMan-1))
     return (sgn, exponent, high, trailing)
   }
@@ -387,7 +390,7 @@ public extension IntDecimal {
   }
   
   @inlinable static var snan: Self {
-    Self(sign: .plus, exponent: snanPattern<<(exponentBits - 6), mantissa: 0)
+    Self(sign: .plus, exponent: snanPattern<<(exponentBits-6), mantissa: 0)
   }
   
   @inlinable static func zero(_ sign: Sign = .plus) -> Self {
@@ -402,7 +405,7 @@ public extension IntDecimal {
   
   ///////////////////////////////////////////////////////////////////////
   // MARK: - Handy routines for testing different aspects of the number
-  @inlinable var nanBits: Int { data.get(range: Self.nanBitRange) }
+  @inlinable var nanBits: Int { data.getInt(range: Self.nanBitRange) }
   
   var isSmallMantissa: Bool { isSpecial }
   var isNaN: Bool           { nanBits & Self.nanPattern == Self.nanPattern }
@@ -410,7 +413,7 @@ public extension IntDecimal {
   
   var isFinite: Bool {
     let infinite = Self.infinitePattern
-    let data = data.get(range: Self.signBit-5...Self.signBit-1)
+    let data = data.getInt(range: Self.signBit-5...Self.signBit-1)
     return (data & infinite != infinite)
   }
   
@@ -424,7 +427,7 @@ public extension IntDecimal {
   
   var isInfinite: Bool {
     let infinite = Self.infinitePattern
-    let data = data.get(range: Self.signBit-5...Self.signBit-1)
+    let data = data.getInt(range: Self.signBit-5...Self.signBit-1)
     return (data & infinite == infinite) 
   }
   
@@ -496,7 +499,7 @@ public extension IntDecimal {
   /// Create a new BID number from the `dpd` DPD number.
   init(dpd: RawData) {
     
-    func getNan() -> Int { dpd.get(range: Self.nanBitRange) }
+    func getNan() -> Int { dpd.getInt(range: Self.nanBitRange) }
     
     // Convert the dpd number to a bid number
     var (sign, exp, high, trailing) = Self.unpack(dpd: dpd)

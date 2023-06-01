@@ -11,7 +11,7 @@ extension UInt128 {
   typealias IntegerLiteralType = StaticBigInt
   public init(integerLiteral value: StaticBigInt) {
     precondition(value.signum() >= 0, "UInt128 literal cannot be negative")
-    precondition(value.bitWidth <= Self.bitWidth,
+    precondition(value.bitWidth <= Self.bitWidth+1,
                  "\(value.bitWidth)-bit literal too large for UInt128")
     precondition(Low.bitWidth == 64, "Expecting 64-bit UInt")
     self.init(high: High(value[1]), low: Low(value[0]))
@@ -32,8 +32,14 @@ extension FixedWidthInteger {
   
   /// Returns the bits in the `range` of the current number where
   /// `range.lowerBound` ≥ 0 and the `range.upperBound` < Self.bitWidth
-  public func get(range: IntRange) -> Int {
+  public func get(range: IntRange) -> Self {
     precondition(range.lowerBound >= 0 && range.upperBound < Self.bitWidth)
+    return (self >> range.lowerBound) & mask(range.count)
+  }
+  
+  public func getInt(range: IntRange) -> Int {
+    precondition(range.lowerBound >= 0 && range.upperBound < Self.bitWidth)
+    precondition(range.count <= Int.bitWidth)
     return Int((self >> range.lowerBound) & mask(range.count))
   }
   
@@ -80,19 +86,19 @@ extension FixedWidthInteger {
   /// Sets to `0` the bits in the `range` of the current number where
   /// `range.lowerBound` ≥ 0 and the `range.upperBound` < Self.bitWidth
   public mutating func clear(range: IntRange) {
-    precondition(range.lowerBound >= 0 && range.upperBound < Int.bitWidth)
+    precondition(range.lowerBound >= 0 && range.upperBound < Self.bitWidth)
     self &= ~(mask(range.count) << range.lowerBound)
   }
   
   /// Nonmutating version of the above
   public func clearing(range: IntRange) -> Self {
-    precondition(range.lowerBound >= 0 && range.upperBound < Int.bitWidth)
+    precondition(range.lowerBound >= 0 && range.upperBound < Self.bitWidth)
     return self & ~(mask(range.count) << range.lowerBound)
   }
   
   /// Replaces the bits in the `range` of the current number where
   /// `range.lowerBound` ≥ 0 and the `range.upperBound` < Self.bitWidth
-  public mutating func set(range: IntRange, with value: Int) {
+  public mutating func set<T:FixedWidthInteger>(range:IntRange, with value:T) {
     self.clear(range: range)
     self |= (Self(value) & mask(range.count)) << range.lowerBound
   }

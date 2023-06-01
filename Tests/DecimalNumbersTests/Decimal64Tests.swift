@@ -9,7 +9,7 @@ import XCTest
 @testable import DecimalNumbers
 @testable import UInt128
 
-final class Decimal64NumbersTest: XCTestCase {
+final class Decimal64Tests: XCTestCase {
   
   func testDecimal64() throws {
     let s = "123456789012345678"
