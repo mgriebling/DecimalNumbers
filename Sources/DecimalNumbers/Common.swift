@@ -145,8 +145,8 @@ public extension IntDecimal {
   static var trailingPattern: Int { 0x3ff }
   
   @inlinable var sign: Sign {
-    get { data.get(bit: Self.signBit) == 0 ? .plus : .minus }
-    set { data.set(bit: Self.signBit, with: newValue == .minus ? 1 : 0) }
+    get { Sign(rawValue: data.get(bit: Self.signBit))! }
+    set { data.set(bit: Self.signBit, with: newValue.rawValue) }
   }
   
   @inlinable var exponent: Int {
@@ -157,7 +157,7 @@ public extension IntDecimal {
   @inlinable var mantissa: Mantissa {
     let range = isSmallMantissa ?Self.smallMantissaBits: Self.largeMantissaBits
     if isSmallMantissa {
-      return Mantissa(data.get(range:range)) + Mantissa(Self.highMantissaBit)
+      return Mantissa(data.get(range:range)) + Self.highMantissaBit
     } else {
       return Mantissa(data.get(range:range))
     }
@@ -178,15 +178,12 @@ public extension IntDecimal {
         if exp + maximumDigits < 0 {
           // underflow & inexact
           if rmode == .down && sign == .minus {
-            raw.set(bit: signBit); raw.set(range: manLower, with: 1)
-            return raw
+            return raw.setting(bit:signBit).setting(range: manLower, with: 1)
           }
           if rmode == .up && sign == .plus {
-            raw.set(range: manLower, with: 1)
-            return raw
+            return raw.setting(range: manLower, with: 1)
           }
-          raw.set(bit: signBit, with: sign == .minus ? 1 : 0)
-          return raw
+          return raw.setting(bit: signBit, with: sign.rawValue)
         }
         
         // swap up & down round modes when negative
@@ -218,10 +215,7 @@ public extension IntDecimal {
             }
           }
         }
-        
-        raw = RawData(C64)
-        raw.set(bit: signBit, with: sign == .minus ? 1 : 0)
-        return raw
+        return RawData(C64).setting(bit:signBit, with:sign.rawValue)
       }
       
       if mant == 0 {
@@ -237,11 +231,10 @@ public extension IntDecimal {
           case .down:
             if sign == .plus { raw = largestBID.data }
           case .towardZero:
-            raw = largestBID.data; raw.set(bit: signBit)
+            raw = largestBID.data.setting(bit:signBit)
           case .up:
             if sign == .minus {
-              raw = largestBID.data
-              raw.set(bit: signBit, with: sign == .minus ? 1 : 0)
+              raw = largestBID.data.setting(bit:signBit, with:sign.rawValue)
             }
           default: break
         }
@@ -259,10 +252,9 @@ public extension IntDecimal {
       data.set(range: Self.largeMantissaBits, with: mantissa)
     } else {
       // small mantissa
-      data.set(range: Self.exponentSMBits, with: exponent)
-      data.set(range: Self.smallMantissaBits,
-               with:mantissa-Self.Mantissa(Self.highMantissaBit))
-      data.set(range: Self.specialBits, with: Self.specialPattern)
+      data.set(range:Self.exponentSMBits, with: exponent)
+      data.set(range:Self.smallMantissaBits,with:mantissa-Self.highMantissaBit)
+      data.set(range:Self.specialBits, with: Self.specialPattern)
     }
   }
 
@@ -283,7 +275,7 @@ public extension IntDecimal {
       // small mantissa
       exponent = data.getInt(range: Self.exponentSMBits)
       mantissa = Mantissa(data.get(range: Self.smallMantissaBits)) +
-                          Mantissa(Self.highMantissaBit)
+                          Self.highMantissaBit
       if mantissa > Self.largestNumber { mantissa = 0 }
       return (self.sign, exponent, mantissa, mantissa != 0)
     } else {
@@ -566,7 +558,7 @@ public extension IntDecimal {
       res.set(range: expUpper, with: exp >> (Self.exponentBits-2)) // upper exponent bits
       res.set(range: manUpper, with: Int(mantissa)) // upper mantisa bits
     }
-    res.set(bit: signBit, with: sign == .minus ? 1 : 0)
+    res.set(bit: signBit, with: sign.rawValue)
     res.set(range: expLower, with: exp)
     res.set(range: manLower, with: dmant)
     if nanb { res.set(range: Self.nanBitRange, with: Self.nanPattern) }
@@ -3206,7 +3198,7 @@ extension IntDecimal {
     // Correct to 2^112 <= c < 2^113 with corresponding exponent adding 113-24=89
     // In fact shift a further 6 places ready for reciprocal multiplication
     // Thus (113-24)+6=95, a shift of 31 given that we've already upacked in c.hi
-    let c = UInt128(high: high << 31, low: 0)
+    let c = UInt128(high: UInt64(high) << 31, low: 0)
     k = k + 89
     
     // Check for "trivial" overflow, when 10^e * 1 > 2^{sci_emax+1}, just to

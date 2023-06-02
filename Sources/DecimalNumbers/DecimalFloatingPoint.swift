@@ -269,9 +269,8 @@ extension DecimalFloatingPoint {
       if exponent > exemplar.exponent {
         return (isMinus ? -.infinity : .infinity, false)
       }
-      exponentBitPattern = exponent < 0
-      ? (1 as Self).exponentBitPattern - Self.RawExponent(-exponent)
-      : (1 as Self).exponentBitPattern + Self.RawExponent(exponent)
+      exponentBitPattern = RawExponent(exponent +
+                                       Source.Exponent(Self.exponentBias))
     }
     
     let value = Self(
@@ -293,9 +292,10 @@ extension DecimalFloatingPoint {
   /// If two representable values are equally close, the result is the value
   /// with more trailing zeros in its significand bit pattern.
   ///
-  /// - Parameter value: A floating-point value to be converted.
-  @inlinable public init<Source:DecimalFloatingPoint>(_ value: Source) {
-    self = Self(value)
+  /// - Parameter value: A decimal floating-point value to be converted.
+  @inlinable public init<S:DecimalFloatingPoint>(_ value: S) {
+//    let (value, _) = Self._convert(from: value)
+    self = Self._convert(from: value).value
   }
   
   /// Creates a new instance from the given value, if it can be represented
@@ -307,27 +307,9 @@ extension DecimalFloatingPoint {
   /// - Parameter value: A floating-point value to be converted.
   public init?<Source:DecimalFloatingPoint>(exactly value: Source) {
     if value.isNaN { return nil }
-    
-    if (Source.exponentBitCount > Self.exponentBitCount ||
-        Source.significandDigitCount > Self.significandDigitCount) &&
-        value.isFinite && !value.isZero {
-      let exponent = value.exponent
-      if exponent < Self.leastNormalMagnitude.exponent {
-        if exponent < Self.leastNonzeroMagnitude.exponent { return nil }
-        if value.significandDigitCount >
-          Int(Self.Exponent(exponent) - Self.leastNonzeroMagnitude.exponent) {
-          return nil
-        }
-      } else {
-        if exponent > Self.greatestFiniteMagnitude.exponent { return nil }
-        if value.significandDigitCount >
-            Self.greatestFiniteMagnitude.significandDigitCount {
-          return nil
-        }
-      }
-    }
-    
-    self = Self(value)
+    let (value, exact) = Self._convert(from: value)
+    if exact { self = value }
+    return nil
   }
   
   /// Returns a Boolean value indicating whether this instance should precede

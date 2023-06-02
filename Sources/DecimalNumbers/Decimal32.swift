@@ -66,6 +66,10 @@ import UInt128
   public init(bid: UInt32) { self.bid.data = bid }
   public init(bid: ID)     { self.bid = bid }
   
+//  public init(_ dec32: Decimal32)   { bid = dec32.bid }
+//  public init(_ dec64: Decimal64)   { bid = ID(0) } // dec64.bid }
+//  public init(_ dec128: Decimal128) { bid = ID(0) } //dec128.bid }
+  
   public init?(_ s: String) {
     if let n: ID = numberFromString(s, round: Self.rounding) { bid = n }
     return nil
@@ -188,21 +192,18 @@ extension Decimal32 : FloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Instance properties and attributes
   
-  public var ulp: Self               { nextUp - self }
-  public var nextUp: Self            { Self(bid: ID.nextup(self.bid)) }
-  public var sign: Sign              { bid.sign }
-  public var isNormal: Bool          { bid.isNormal }
-  public var isSubnormal: Bool       { bid.isSubnormal }
-  public var isFinite: Bool          { bid.isFinite }
-  public var isZero: Bool            { bid.isZero }
-  public var isInfinite: Bool        { bid.isInfinite && !bid.isNaN }
-  public var isNaN: Bool             { bid.isNaN }
-  public var isSignalingNaN: Bool    { bid.isSNaN }
-  public var isCanonical: Bool       { bid.isCanonical }
-  
-  public var exponent: Int {
-    bid.exponent - ID.exponentBias + ID.maximumDigits - 1
-  }
+  public var ulp: Self            { nextUp - self }
+  public var nextUp: Self         { Self(bid: ID.nextup(self.bid)) }
+  public var sign: Sign           { bid.sign }
+  public var isNormal: Bool       { bid.isNormal }
+  public var isSubnormal: Bool    { bid.isSubnormal }
+  public var isFinite: Bool       { bid.isFinite }
+  public var isZero: Bool         { bid.isZero }
+  public var isInfinite: Bool     { bid.isInfinite && !bid.isNaN }
+  public var isNaN: Bool          { bid.isNaN }
+  public var isSignalingNaN: Bool { bid.isSNaN }
+  public var isCanonical: Bool    { bid.isCanonical }
+  public var exponent: Int        { bid.exponent - ID.exponentBias }
   
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()

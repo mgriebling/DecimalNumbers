@@ -73,6 +73,10 @@ import UInt128
   public init(bid: UInt128) { self.bid.data = bid }
   public init(bid: ID)      { self.bid = bid }
   
+//  public init(_ dec32: Decimal32)   { bid = ID(0) }
+//  public init(_ dec64: Decimal64)   { bid = ID(0) } // dec64.bid }
+//  public init(_ dec128: Decimal128) { bid = dec128.bid }
+  
   public init?(_ s: String) {
     if let n: ID = numberFromString(s, round: Self.rounding) { bid = n }
     return nil
@@ -207,10 +211,7 @@ extension Decimal128 : FloatingPoint {
   public var isNaN: Bool          { bid.isNaN }
   public var isSignalingNaN: Bool { bid.isSNaN }
   public var isCanonical: Bool    { bid.isCanonical }
-  
-  public var exponent: Int {
-    bid.exponent - ID.exponentBias + ID.maximumDigits - 1
-  }
+  public var exponent: Int        { bid.exponent - ID.exponentBias }
   
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()

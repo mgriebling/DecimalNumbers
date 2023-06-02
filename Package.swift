@@ -5,9 +5,6 @@ import PackageDescription
 
 let package = Package(
     name: "DecimalNumbers",
-//    platforms: [
-//      .macOS(.v13), .iOS(.v16), .macCatalyst(.v16), .tvOS(.v16), .watchOS(.v9),
-//    ],
     platforms: [
         .macOS("13.3"), .iOS("16.4"), .macCatalyst(.v16), .tvOS("16.4"),
         .watchOS("9.4")

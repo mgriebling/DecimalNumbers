@@ -57,6 +57,12 @@ extension FixedWidthInteger {
     self ^= 1 << n
   }
   
+  /// Non-mutating version of the `toggle(bit:)` method.
+  public func toggling(bit n: Int) -> Self {
+    precondition(n >= 0 && n < Self.bitWidth)
+    return self ^ (1 << n)
+  }
+  
   /// Sets to `0` the `n`th bit of the current number where
   /// 0 ≤ `n` < Self.bitWidth
   public mutating func clear(bit n: Int) {
@@ -64,7 +70,7 @@ extension FixedWidthInteger {
     self &= ~(1 << n)
   }
   
-  /// Non-mutating version of the above
+  /// Non-mutating version of the `clear(bit:)` method
   public func clearing(bit n: Int) -> Self {
     precondition(n >= 0 && n < Self.bitWidth)
     return self & ~(1 << n)
@@ -77,10 +83,21 @@ extension FixedWidthInteger {
     self |= 1 << n
   }
   
+  /// Non-mutating version of the `set(bit:)` method.
+  public func setting(bit n: Int) -> Self {
+    precondition(n >= 0 && n < Self.bitWidth)
+    return self | (1 << n)
+  }
+  
   /// Replaces the `n`th bit of the current number with `value` where
   /// 0 ≤ `n` < Self.bitWidth
   public mutating func set(bit n: Int, with value: Int) {
     value.isMultiple(of: 2) ? self.clear(bit: n) : self.set(bit: n)
+  }
+  
+  /// Non-mutating version of the `set(bit:value:)` method.
+  public func setting(bit n: Int, with value: Int) -> Self {
+    value.isMultiple(of: 2) ? self.clearing(bit: n) : self.setting(bit: n)
   }
   
   /// Sets to `0` the bits in the `range` of the current number where
@@ -90,7 +107,7 @@ extension FixedWidthInteger {
     self &= ~(mask(range.count) << range.lowerBound)
   }
   
-  /// Nonmutating version of the above
+  /// Nonmutating version of the `clear(range:)` method.
   public func clearing(range: IntRange) -> Self {
     precondition(range.lowerBound >= 0 && range.upperBound < Self.bitWidth)
     return self & ~(mask(range.count) << range.lowerBound)
@@ -101,5 +118,11 @@ extension FixedWidthInteger {
   public mutating func set<T:FixedWidthInteger>(range:IntRange, with value:T) {
     self.clear(range: range)
     self |= (Self(value) & mask(range.count)) << range.lowerBound
+  }
+  
+  /// Nonmutating version of the `set(range:)` method.
+  public func setting<T:FixedWidthInteger>(range:IntRange,with value:T)->Self {
+    let x = self.clearing(range: range)
+    return x | (Self(value) & mask(range.count)) << range.lowerBound
   }
 }

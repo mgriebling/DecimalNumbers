@@ -33,6 +33,11 @@ final class Decimal64Tests: XCTestCase {
     let a = Decimal64(bitPattern: n, bidEncoding: false)
     XCTAssert(a.description == "-7.50")
     print(a, a.dpd == n ? "a = n" : "a != n"); XCTAssert(a.dpd == n)
+    
+    let d32 = Decimal32("1000.1234"); print(d32, String(d32.bid.data, radix: 16))
+    let d64 = Decimal64(d32); print(d64, String(d64.bid.data, radix: 16))
+    let d128 = Decimal128(d32); print(d128, String(d128.bid.data, radix: 16))
+    let d128a = Decimal128(d64); print(d128a, String(d128a.bid.data, radix: 16))
   }
   
 }
