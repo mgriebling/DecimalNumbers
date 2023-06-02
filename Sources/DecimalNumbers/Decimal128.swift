@@ -13,48 +13,44 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 import UInt128
-
-
 
 /// Definition of the data storage for the Decimal128 floating-point data type.
 /// the `IntDecimal` protocol defines many supporting operations
 /// including packing and unpacking of the Decimal128 sign, exponent, and
-/// mantissa fields. By specifying some key bit positions, it is possible
+/// significand fields. By specifying some key bit positions, it is possible
 /// to completely define many of the Decimal128 operations. The `data` word
 /// holds all 128 bits of the Decimal128 data type.
-@frozen public struct IntegerDecimal128 : IntDecimal {
+struct IntDecimal128 : IntDecimal {
     
-  public typealias RawData = UInt128
-  public typealias Mantissa = UInt128
+  typealias RawData = UInt128
+  typealias Significand = UInt128
   
-  public var data: RawData = 0
+  var data: RawData = 0
   
-  public init(_ word: RawData) {
+  init(_ word: RawData) {
     self.data = word
   }
   
-  public init(sign:Sign = .plus, exponent:Int=0, mantissa:Mantissa) {
+  init(sign:Sign = .plus, exponent:Int=0, significand:Significand) {
     self.sign = sign
-    self.set(exponent: exponent, mantissa: mantissa)
+    self.set(exponent: exponent, significand: significand)
   }
   
   // Define the fields and required parameters
-  public static var exponentBias:    Int {  6176 }
-  public static var maximumExponent: Int { 12287 } // unbiased
-  public static var minimumExponent: Int {     0 } // unbiased
-  public static var maximumDigits:   Int {    34 }
-  public static var exponentBits:    Int {    14 }
+  static var exponentBias:    Int {  6176 }
+  static var maxBiasedExponent: Int { 12287 } // unbiased
+  static var minBiasedExponent: Int {     0 } // unbiased
+  static var maximumDigits:   Int {    34 }
+  static var exponentBits:    Int {    14 }
   
-  public static var largestNumber: Mantissa {
-    let x = StaticBigInt(9_999_999_999_999_999_999_999_999_999_999_999)
-    return Mantissa(integerLiteral: x)
+  static var largestNumber: Significand {
+    Significand(9_999_999_999_999_999_999_999_999_999_999_999)
   }
   
-  // Two mantissa sizes must be supported
-  public static var largeMantissaBits: IntRange { 0...112 }
-  public static var smallMantissaBits: IntRange { 0...110 }
+  // Two significand sizes must be supported
+  static var largeSignificandBits: IntRange { 0...112 }
+  static var smallSignificandBits: IntRange { 0...110 }
 }
 
 /// Implementation of the 128-bit Decimal128 floating-point operations from
@@ -66,16 +62,12 @@ import UInt128
 /// the binary encoding format for decimal floating-point values, but the
 /// decimal encoding format is supported too in the library, by means of
 /// conversion functions between the two encoding formats.
-@frozen public struct Decimal128 : Codable, Hashable {
-  public typealias ID = IntegerDecimal128
+public struct Decimal128 : Codable, Hashable {
+  typealias ID = IntDecimal128
   var bid: ID = ID.zero(.plus)
   
   public init(bid: UInt128) { self.bid.data = bid }
-  public init(bid: ID)      { self.bid = bid }
-  
-//  public init(_ dec32: Decimal32)   { bid = ID(0) }
-//  public init(_ dec64: Decimal64)   { bid = ID(0) } // dec64.bid }
-//  public init(_ dec128: Decimal128) { bid = dec128.bid }
+  init(bid: ID)             { self.bid = bid }
   
   public init?(_ s: String) {
     if let n: ID = numberFromString(s, round: Self.rounding) { bid = n }
@@ -161,7 +153,7 @@ extension Decimal128 : FloatingPoint {
   
   public init(sign: Sign, exponent: Int, significand: Self) {
     self.bid = ID(sign: sign, exponent: exponent+Self.exponentBias,
-                    mantissa: significand.bid.unpack().mantissa)
+                    significand: significand.bid.unpack().significand)
   }
   
   public mutating func round(_ rule: Rounding) {
@@ -171,30 +163,30 @@ extension Decimal128 : FloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - DecimalFloatingPoint properties and attributes
   
-  @inlinable public static var exponentBitCount: Int      {ID.exponentBits}
-  @inlinable public static var exponentBias: Int          {ID.exponentBias}
-  @inlinable public static var significandDigitCount: Int {ID.maximumDigits}
+  public static var exponentBitCount: Int      {ID.exponentBits}
+  public static var exponentBias: Int          {ID.exponentBias}
+  public static var significandDigitCount: Int {ID.maximumDigits}
   
-  @inlinable public static var nan: Self          { Self(bid:ID.nan()) }
-  @inlinable public static var signalingNaN: Self { Self(bid:ID.snan) }
-  @inlinable public static var infinity: Self     { Self(bid:ID.infinite()) }
+  public static var nan: Self          { Self(bid:ID.nan()) }
+  public static var signalingNaN: Self { Self(bid:ID.snan) }
+  public static var infinity: Self     { Self(bid:ID.infinite()) }
   
-  @inlinable public static var greatestFiniteMagnitude: Self {
-    Self(bid:ID(exponent:ID.maximumExponent, mantissa:ID.largestNumber))
+  public static var greatestFiniteMagnitude: Self {
+    Self(bid:ID(exponent:ID.maxBiasedExponent, significand:ID.largestNumber))
   }
   
-  @inlinable public static var leastNormalMagnitude: Self {
-    Self(bid:ID(exponent:ID.minimumExponent, mantissa:ID.largestNumber))
+  public static var leastNormalMagnitude: Self {
+    Self(bid:ID(exponent:ID.minBiasedExponent, significand:ID.largestNumber))
   }
   
-  @inlinable public static var leastNonzeroMagnitude: Self {
-    Self(bid: ID(exponent: ID.minimumExponent, mantissa: 1))
+  public static var leastNonzeroMagnitude: Self {
+    Self(bid: ID(exponent: ID.minBiasedExponent, significand: 1))
   }
   
-  @inlinable public static var pi: Self {
-    let ip = StaticBigInt(3_141_592_653_589_793_238_462_643_383_279_503)
-    return Self(bid: ID(exponent: ID.exponentBias-ID.maximumDigits+1,
-                        mantissa: ID.Mantissa(integerLiteral:ip)))
+  public static var pi: Self {
+    // let ip = ID.Significand(3_141_592_653_589_793_238_462_643_383_279_503)
+    Self(bid: ID(exponent: ID.exponentBias-ID.maximumDigits+1,
+    significand:ID.Significand(3_141_592_653_589_793_238_462_643_383_279_503)))
   }
   
   ///////////////////////////////////////////////////////////////////////////
@@ -216,7 +208,7 @@ extension Decimal128 : FloatingPoint {
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()
     if !valid { return self }
-    return Self(bid: ID(exponent: Int(exponentBitPattern), mantissa: man))
+    return Self(bid: ID(exponent: Int(exponentBitPattern), significand: man))
   }
 
   ///////////////////////////////////////////////////////////////////////////
@@ -283,13 +275,13 @@ extension Decimal128 : DecimalFloatingPoint {
   public init(sign: Sign, exponentBitPattern: RawExponent,
               significandBitPattern significantBitPattern: RawSignificand) {
     bid = ID(sign: sign, exponent: Int(exponentBitPattern),
-             mantissa: ID.Mantissa(significantBitPattern))
+             significand: ID.Significand(significantBitPattern))
   }
   
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Instance properties and attributes
   
-  public var significandBitPattern: UInt128 { UInt128(bid.mantissa) }
+  public var significandBitPattern: UInt128 { UInt128(bid.significand) }
   public var exponentBitPattern: UInt       { UInt(bid.exponent) }
   public var dpd: UInt128                   { bid.dpd }
   public var int: Int64                     { bid.int(Self.rounding) }
@@ -297,11 +289,11 @@ extension Decimal128 : DecimalFloatingPoint {
   
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }
-    return ID.digitsIn(bid.mantissa)
+    return ID.digitsIn(bid.significand)
   }
   
   public var decade: Self {
     guard bid.isValid else { return self } // For infinity, Nan, sNaN
-    return Self(bid: ID(exponent: bid.exponent, mantissa: 1))
+    return Self(bid: ID(exponent: bid.exponent, significand: 1))
   }
 }

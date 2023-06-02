@@ -17,35 +17,34 @@ limitations under the License.
 /// Definition of the data storage for the Decimal64 floating-point data type.
 /// the `IntDecimal` protocol defines many supporting operations
 /// including packing and unpacking of the Decimal64 sign, exponent, and
-/// mantissa fields.  By specifying some key bit positions, it is possible
+/// significand fields.  By specifying some key bit positions, it is possible
 /// to completely define many of the Decimal64 operations.  The `data` word
 /// holds all 64 bits of the Decimal64 data type.
-@frozen public struct IntegerDecimal64 : IntDecimal {
-
-  public typealias RawData = UInt64
-  public typealias Mantissa = UInt64
+struct IntDecimal64 : IntDecimal {
+  typealias RawData = UInt64
+  typealias Significand = UInt64
   
   public var data: RawData = 0
   
   public init(_ word: RawData) { self.data = word }
   
-  public init(sign:Sign = .plus, exponent:Int=0, mantissa:Mantissa) {
+  public init(sign:Sign = .plus, exponent:Int=0, significand:Significand) {
     self.sign = sign
-    self.set(exponent: exponent, mantissa: mantissa)
+    self.set(exponent: exponent, significand: significand)
   }
   
   // Define the fields and required parameters
-  public static var exponentBias:    Int {  398 }
-  public static var maximumExponent: Int {  767 } // unbiased
-  public static var minimumExponent: Int {    0 } // unbiased
-  public static var maximumDigits:   Int {   16 }
-  public static var exponentBits:    Int {   10 }
+  static var exponentBias:      Int {  398 }
+  static var maxBiasedExponent: Int {  767 } // unbiased
+  static var minBiasedExponent: Int {    0 } // unbiased
+  static var maximumDigits:     Int {   16 }
+  static var exponentBits:      Int {   10 }
   
-  public static var largestNumber: Mantissa { 9_999_999_999_999_999 }
+  public static var largestNumber: Significand { 9_999_999_999_999_999 }
   
-  // Two mantissa sizes must be supported
-  public static var largeMantissaBits: IntRange { 0...52 }
-  public static var smallMantissaBits: IntRange { 0...50 }
+  // Two significand sizes must be supported
+  public static var largeSignificandBits: IntRange { 0...52 }
+  public static var smallSignificandBits: IntRange { 0...50 }
 }
 
 /// Implementation of the 64-bit Decimal64 floating-point operations from
@@ -57,16 +56,12 @@ limitations under the License.
 /// the binary encoding format for decimal floating-point values, but the
 /// decimal encoding format is supported too in the library, by means of
 /// conversion functions between the two encoding formats.
-@frozen public struct Decimal64 : Codable, Hashable {
-  public typealias ID = IntegerDecimal64
+public struct Decimal64 : Codable, Hashable {
+  typealias ID = IntDecimal64
   var bid: ID = ID.zero(.plus)
   
   public init(bid: UInt64) { self.bid.data = bid }
-  public init(bid: ID)     { self.bid = bid }
-  
-//  public init(_ dec32: Decimal32)   { bid = ID(0) }
-//  public init(_ dec64: Decimal64)   { bid = dec64.bid }
-//  public init(_ dec128: Decimal128) { bid = ID(0) } //dec128.bid }
+  init(bid: ID)            { self.bid = bid }
   
   public init?(_ s: String) {
     if let n: ID = numberFromString(s, round: Self.rounding) { bid = n }
@@ -152,7 +147,7 @@ extension Decimal64 : FloatingPoint {
   
   public init(sign: Sign, exponent: Int, significand: Self) {
     self.bid = ID(sign: sign, exponent: exponent+Self.exponentBias,
-                    mantissa: significand.bid.unpack().mantissa)
+                    significand: significand.bid.unpack().significand)
   }
   
   public mutating func round(_ rule: Rounding) {
@@ -162,29 +157,29 @@ extension Decimal64 : FloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - DecimalFloatingPoint properties and attributes
   
-  @inlinable public static var exponentBitCount: Int      {ID.exponentBits}
-  @inlinable public static var exponentBias: Int          {ID.exponentBias}
-  @inlinable public static var significandDigitCount: Int {ID.maximumDigits}
+  public static var exponentBitCount: Int      {ID.exponentBits}
+  public static var exponentBias: Int          {ID.exponentBias}
+  public static var significandDigitCount: Int {ID.maximumDigits}
   
-  @inlinable public static var nan: Self          { Self(bid:ID.nan()) }
-  @inlinable public static var signalingNaN: Self { Self(bid:ID.snan) }
-  @inlinable public static var infinity: Self     { Self(bid:ID.infinite()) }
+  public static var nan: Self          { Self(bid:ID.nan()) }
+  public static var signalingNaN: Self { Self(bid:ID.snan) }
+  public static var infinity: Self     { Self(bid:ID.infinite()) }
   
-  @inlinable public static var greatestFiniteMagnitude: Self {
-    Self(bid:ID(exponent:ID.maximumExponent, mantissa:ID.largestNumber))
+  public static var greatestFiniteMagnitude: Self {
+    Self(bid:ID(exponent:ID.maxBiasedExponent, significand:ID.largestNumber))
   }
   
-  @inlinable public static var leastNormalMagnitude: Self {
-    Self(bid:ID(exponent:ID.minimumExponent, mantissa:ID.largestNumber))
+  public static var leastNormalMagnitude: Self {
+    Self(bid:ID(exponent:ID.minBiasedExponent, significand:ID.largestNumber))
   }
   
-  @inlinable public static var leastNonzeroMagnitude: Self {
-    Self(bid: ID(exponent: ID.minimumExponent, mantissa: 1))
+  public static var leastNonzeroMagnitude: Self {
+    Self(bid: ID(exponent: ID.minBiasedExponent, significand: 1))
   }
   
-  @inlinable public static var pi: Self {
+  public static var pi: Self {
     Self(bid: ID(exponent: ID.exponentBias-ID.maximumDigits+1,
-                   mantissa: 3_141_592_653_589_793))
+                   significand: 3_141_592_653_589_793))
   }
   
   ///////////////////////////////////////////////////////////////////////////
@@ -206,7 +201,7 @@ extension Decimal64 : FloatingPoint {
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()
     if !valid { return self }
-    return Self(bid: ID(exponent: Int(exponentBitPattern), mantissa: man))
+    return Self(bid: ID(exponent: Int(exponentBitPattern), significand: man))
   }
 
   ///////////////////////////////////////////////////////////////////////////
@@ -273,13 +268,13 @@ extension Decimal64 : DecimalFloatingPoint {
   public init(sign: Sign, exponentBitPattern: RawExponent,
               significandBitPattern significantBitPattern: RawSignificand) {
     bid = ID(sign: sign, exponent: Int(exponentBitPattern),
-             mantissa: ID.Mantissa(significantBitPattern))
+             significand: ID.Significand(significantBitPattern))
   }
   
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Instance properties and attributes
   
-  public var significandBitPattern: UInt64 { UInt64(bid.mantissa) }
+  public var significandBitPattern: UInt64 { UInt64(bid.significand) }
   public var exponentBitPattern: UInt      { UInt(bid.exponent) }
   public var dpd: UInt64                   { bid.dpd }
   public var int: Int64                    { bid.int(Self.rounding) }
@@ -287,11 +282,11 @@ extension Decimal64 : DecimalFloatingPoint {
   
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }
-    return ID.digitsIn(bid.mantissa)
+    return ID.digitsIn(bid.significand)
   }
   
   public var decade: Self {
     guard bid.isValid else { return self } // For infinity, Nan, sNaN
-    return Self(bid: ID(exponent: bid.exponent, mantissa: 1))
+    return Self(bid: ID(exponent: bid.exponent, significand: 1))
   }
 }

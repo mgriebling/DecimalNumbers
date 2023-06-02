@@ -47,8 +47,8 @@ public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
   ///   - sign: The sign of the new value.
   ///   - exponentBitPattern: The bit pattern to use for the exponent field of
   ///     the new value.
-  ///   - significandBitPattern: Bit pattern to use for the mantissa field of
-  ///     the new value.
+  ///   - significandBitPattern: Bit pattern to use for the significand field
+  ///     of the new value.
   init(sign: Sign, exponentBitPattern: RawExponent,
        significandBitPattern: RawSignificand)
   
@@ -411,7 +411,7 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     
     //  We now have a non-zero value; convert it to a strictly positive value
     //  by taking the magnitude.
-    // need a x10ⁿ exponent & mantissa digits
+    // need a x10ⁿ exponent & significand digits
     let expMag = _decimalLogarithm(source.magnitude)
     
     //  If the exponent would be larger than the largest representable

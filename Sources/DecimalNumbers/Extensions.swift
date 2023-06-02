@@ -8,21 +8,8 @@
 import UInt128
 
 extension UInt128 {
-  typealias IntegerLiteralType = StaticBigInt
-  public init(integerLiteral value: StaticBigInt) {
-    precondition(value.signum() >= 0, "UInt128 literal cannot be negative")
-    precondition(value.bitWidth <= Self.bitWidth+1,
-                 "\(value.bitWidth)-bit literal too large for UInt128")
-    precondition(Low.bitWidth == 64, "Expecting 64-bit UInt")
-    self.init(high: High(value[1]), low: Low(value[0]))
-  }
-}
-
-extension UInt128 {
   public init(w: [UInt64]) {
-    let high = UInt128.High(w[1])
-    let low  = UInt128.Low(w[0])
-    self.init(high: high, low: low)
+    self.init((UInt128.High(w[1]), UInt128.Low(w[0])))
   }
 }
 

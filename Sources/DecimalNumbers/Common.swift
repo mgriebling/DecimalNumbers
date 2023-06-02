@@ -20,16 +20,16 @@ import UInt128
 /// Groups together algorithms that can be used by all Decimalxx variants
 ///
 
-// MARK: - Generic Integer Decimal Type
+// MARK: - Generic Integer Decimal Field type
 
 public typealias Sign = FloatingPointSign
 public typealias Rounding = FloatingPointRoundingRule
 public typealias IntRange = ClosedRange<Int>
 
-public protocol IntDecimal : Codable, Hashable {
+protocol IntDecimal : Codable, Hashable {
   
   associatedtype RawData : UnsignedInteger & FixedWidthInteger
-  associatedtype Mantissa : UnsignedInteger & FixedWidthInteger
+  associatedtype Significand : UnsignedInteger & FixedWidthInteger
   
   var data: RawData { get set }
   
@@ -39,8 +39,8 @@ public protocol IntDecimal : Codable, Hashable {
   /// Initialize with a raw data word
   init(_ word: RawData)
   
-  /// Initialize with sign, biased exponent, and unsigned mantissa
-  init(sign: Sign, exponent: Int, mantissa: Mantissa)
+  /// Initialize with sign, biased exponent, and unsigned significand
+  init(sign: Sign, exponent: Int, significand: Significand)
   
   //////////////////////////////////////////////////////////////////
   /// Conversions from/to densely packed decimal numbers
@@ -57,12 +57,12 @@ public protocol IntDecimal : Codable, Hashable {
   /// Unbiased signed exponent of the number
   var exponent: Int { get }
   
-  /// Unsigned mantissa integer
-  var mantissa: Mantissa { get }
+  /// Unsigned significand integer
+  var significand: Significand { get }
   
-  /// Setting requires both the mantissa and exponent so that a
-  /// decision can be made on whether the mantissa is small or large.
-  mutating func set(exponent: Int, mantissa: Mantissa)
+  /// Setting requires both the significand and exponent so that a
+  /// decision can be made on whether the significand is small or large.
+  mutating func set(exponent: Int, significand: Significand)
   
   //////////////////////////////////////////////////////////////////
   /// Special number definitions
@@ -80,30 +80,30 @@ public protocol IntDecimal : Codable, Hashable {
   
   static var exponentBias: Int    { get }
   static var exponentBits: Int    { get }
-  static var maximumExponent: Int { get } // unbiased & normal
-  static var minimumExponent: Int { get } // unbiased & normal
+  static var maxBiasedExponent: Int { get } // unbiased & normal
+  static var minBiasedExponent: Int { get } // unbiased & normal
   static var maximumDigits:  Int  { get }
 
-  static var largestNumber: Mantissa { get }
+  static var largestNumber: Significand { get }
   
-  // For large mantissa
+  // For large significand
   static var exponentLMBits: IntRange { get }
-  static var largeMantissaBits: IntRange { get }
+  static var largeSignificandBits: IntRange { get }
   
-  // For small mantissa
+  // For small significand
   static var exponentSMBits: IntRange { get }
-  static var smallMantissaBits: IntRange { get }
+  static var smallSignificandBits: IntRange { get }
 }
 
 ///
 /// Free functionality when complying with IntegerDecimalField
-public extension IntDecimal {
+extension IntDecimal {
   
-  static var highMantissaBit: Mantissa {
-    Mantissa(1) << exponentLMBits.lowerBound
+  static var highSignificandBit: Significand {
+    Significand(1) << exponentLMBits.lowerBound
   }
   
-  static var largestMantissa: Mantissa { (largestNumber+1)/10 }
+  static var largestSignificand: Significand { (largestNumber+1)/10 }
   
   /// These bit fields can be predetermined just from the size of
   /// the number type `RawDataFields` `bitWidth`
@@ -123,12 +123,12 @@ public extension IntDecimal {
   static var sNanRange: IntRange      { 0 ... maxBit-6 }
   static var sInfinityRange: IntRange { 0 ... maxBit-5 }
   
-  static func nanQuiet(_ x:Mantissa) -> Self {
+  static func nanQuiet(_ x:Significand) -> Self {
     Self(RawData(x.clearing(bit:nanBitRange.lowerBound)))
   }
   
   /// bit field definitions for DPD numbers
-  static var lowMan: Int    { smallMantissaBits.upperBound }
+  static var lowMan: Int    { smallSignificandBits.upperBound }
   static var upperExp1: Int { exponentSMBits.upperBound }
   static var upperExp2: Int { exponentLMBits.upperBound }
   
@@ -150,30 +150,30 @@ public extension IntDecimal {
   }
   
   @inlinable var exponent: Int {
-    let range = isSmallMantissa ? Self.exponentSMBits : Self.exponentLMBits
+    let range = isSmallSignificand ? Self.exponentSMBits : Self.exponentLMBits
     return data.getInt(range: range)
   }
   
-  @inlinable var mantissa: Mantissa {
-    let range = isSmallMantissa ?Self.smallMantissaBits: Self.largeMantissaBits
-    if isSmallMantissa {
-      return Mantissa(data.get(range:range)) + Self.highMantissaBit
+  @inlinable var significand: Significand {
+    let range = isSmallSignificand ?Self.smallSignificandBits: Self.largeSignificandBits
+    if isSmallSignificand {
+      return Significand(data.get(range:range)) + Self.highSignificandBit
     } else {
-      return Mantissa(data.get(range:range))
+      return Significand(data.get(range:range))
     }
   }
   
   static func adjustOverflowUnderflow(_ sign: Sign, _ exp: Int,
-                            _ mant: Mantissa, _ rmode: Rounding) -> RawData {
+                            _ mant: Significand, _ rmode: Rounding) -> RawData {
     var exp = exp, mant = mant, rmode = rmode
     var raw = RawData(0)
     if mant > largestNumber {
-      exp += 1; mant = largestMantissa
+      exp += 1; mant = largestSignificand
     }
     
     // check for possible underflow/overflow
-    if exp > maximumExponent || exp < minimumExponent {
-      if exp < minimumExponent {
+    if exp > maxBiasedExponent || exp < minBiasedExponent {
+      if exp < minBiasedExponent {
         // deal with an underflow situation
         if exp + maximumDigits < 0 {
           // underflow & inexact
@@ -197,7 +197,7 @@ public extension IntDecimal {
         
         // get digits to be shifted out
         let extraDigits = -exp
-        mant += Mantissa(bid_round_const_table(roundIndex, extraDigits))
+        mant += Significand(bid_round_const_table(roundIndex, extraDigits))
         
         let Q = mul64x64to128(UInt64(mant), reciprocals10(extraDigits))
         let amount = shortReciprocalScale[extraDigits]
@@ -219,13 +219,13 @@ public extension IntDecimal {
       }
       
       if mant == 0 {
-        if exp > maximumExponent { exp = maximumExponent }
+        if exp > maxBiasedExponent { exp = maxBiasedExponent }
       }
-      while mant < largestMantissa && exp > maximumExponent {
+      while mant < largestSignificand && exp > maxBiasedExponent {
         mant = (mant << 3) + (mant << 1)  // times 10
         exp -= 1
       }
-      if exp > maximumExponent {
+      if exp > maxBiasedExponent {
         raw = infinite(sign).data
         switch rmode {
           case .down:
@@ -241,48 +241,48 @@ public extension IntDecimal {
         return raw
       }
     }
-    return Self(sign:sign, exponent:exp, mantissa: mant).data
+    return Self(sign:sign, exponent:exp, significand: mant).data
   }
   
   /// Note: `exponent` is assumed to be biased
-  mutating func set(exponent: Int, mantissa: Mantissa) {
-    if mantissa < Self.highMantissaBit {
-      // large mantissa
+  mutating func set(exponent: Int, significand: Significand) {
+    if significand < Self.highSignificandBit {
+      // large significand
       data.set(range: Self.exponentLMBits, with: exponent)
-      data.set(range: Self.largeMantissaBits, with: mantissa)
+      data.set(range: Self.largeSignificandBits, with: significand)
     } else {
-      // small mantissa
+      // small significand
       data.set(range:Self.exponentSMBits, with: exponent)
-      data.set(range:Self.smallMantissaBits,with:mantissa-Self.highMantissaBit)
+      data.set(range:Self.smallSignificandBits,with:significand-Self.highSignificandBit)
       data.set(range:Self.specialBits, with: Self.specialPattern)
     }
   }
 
   /// Return `self's` pieces all at once with biased exponent
-  func unpack() -> (sign:Sign, exponent:Int, mantissa:Mantissa, valid:Bool) {
-    var exponent: Int, mantissa: Mantissa
+  func unpack() -> (sign:Sign, exponent:Int, significand:Significand, valid:Bool) {
+    var exponent: Int, significand: Significand
     if isSpecial {
       if isInfinite {
-        mantissa = Mantissa(data).clearing(range:Self.g6tog10Range)
-        if data.get(range: Self.manLower) >= Self.largestMantissa {
-          mantissa = Mantissa(data).clearing(range: Self.sNanRange)
+        significand = Significand(data).clearing(range:Self.g6tog10Range)
+        if data.get(range: Self.manLower) >= Self.largestSignificand {
+          significand = Significand(data).clearing(range: Self.sNanRange)
         }
         if isNaNInf {
-          mantissa = Mantissa(data).clearing(range: Self.sInfinityRange)
+          significand = Significand(data).clearing(range: Self.sInfinityRange)
         }
-        return (self.sign, 0, mantissa, false)
+        return (self.sign, 0, significand, false)
       }
-      // small mantissa
+      // small significand
       exponent = data.getInt(range: Self.exponentSMBits)
-      mantissa = Mantissa(data.get(range: Self.smallMantissaBits)) +
-                          Self.highMantissaBit
-      if mantissa > Self.largestNumber { mantissa = 0 }
-      return (self.sign, exponent, mantissa, mantissa != 0)
+      significand = Significand(data.get(range: Self.smallSignificandBits)) +
+                          Self.highSignificandBit
+      if significand > Self.largestNumber { significand = 0 }
+      return (self.sign, exponent, significand, significand != 0)
     } else {
-      // large mantissa
+      // large significand
       exponent = data.getInt(range: Self.exponentLMBits)
-      mantissa = Mantissa(data.get(range: Self.largeMantissaBits))
-      return (self.sign, exponent, mantissa, mantissa != 0)
+      significand = Significand(data.get(range: Self.largeSignificandBits))
+      return (self.sign, exponent, significand, significand != 0)
     }
   }
   
@@ -310,14 +310,14 @@ public extension IntDecimal {
         return (s, e, k, c, Self.double_nan(s, high, 0))
       }
       // e = Int((x >> 21) & ((UInt32(1)<<8)-1)) - exponentBias
-      c = UInt64(self.mantissa) // UInt64((UInt32(1)<<23) + (x & ((UInt32(1)<<21)-1)))
+      c = UInt64(self.significand) // UInt64((UInt32(1)<<23) + (x & ((UInt32(1)<<21)-1)))
       if UInt(c) > Self.largestNumber {
         return (s, e, k, c, Self.double_zero(s))
       }
       k = 0
     } else {
       // e = Int((x >> 23) & ((UInt32(1)<<8)-1)) - exponentBias
-      c = UInt64(self.mantissa) // UInt64(x) & (UInt64(1)<<23 - 1)
+      c = UInt64(self.significand) // UInt64(x) & (UInt64(1)<<23 - 1)
       if c == 0 { return (s, e, k, c, Self.double_zero(s)) }
       k = UInt32(c).leadingZeroBitCount - 8
       c = c << k
@@ -339,38 +339,38 @@ public extension IntDecimal {
   
   /// Return `dpd` pieces all at once
   static func unpack(dpd: RawData) ->
-                  (sign: Sign, exponent: Int, high: Int, trailing: Mantissa) {
+                  (sign: Sign, exponent: Int, high: Int, trailing: Significand) {
     let sgn = dpd.get(bit: signBit) == 1 ? Sign.minus : .plus
-    var exponent, high: Int, trailing: Mantissa
+    var exponent, high: Int, trailing: Significand
     let expRange2: IntRange
     
     if dpd.get(range: specialBits) == specialPattern {
-      // small mantissa
+      // small significand
       expRange2 = (upperExp1-1)...upperExp1
       high = dpd.get(bit: upperExp1-2) + 8
     } else {
-      // large mantissa
+      // large significand
       expRange2 = (upperExp2-1)...upperExp2
       high = dpd.getInt(range: upperExp1-2...upperExp1)
     }
     exponent = dpd.getInt(range: expLower) +
                     dpd.getInt(range: expRange2) << (exponentBits-2)
-    trailing = Mantissa(dpd.get(range: 0...lowMan-1))
+    trailing = Significand(dpd.get(range: 0...lowMan-1))
     return (sgn, exponent, high, trailing)
   }
   
-  @inlinable func nanQuiet() -> Mantissa {
-    Mantissa(data.clearing(bit:Self.nanBitRange.lowerBound))
+  @inlinable func nanQuiet() -> Significand {
+    Significand(data.clearing(bit:Self.nanBitRange.lowerBound))
   }
   
   ///////////////////////////////////////////////////////////////////////
   /// Special number definitions
   @inlinable static func infinite(_ s: Sign = .plus) -> Self {
-    Self(sign: s, exponent: infinitePattern<<(exponentBits - 5), mantissa: 0)
+    Self(sign: s, exponent: infinitePattern<<(exponentBits - 5), significand: 0)
   }
   
   @inlinable static func max(_ s: Sign = .plus) -> Self {
-    Self(sign:s, exponent:maximumExponent, mantissa:largestNumber)
+    Self(sign:s, exponent:maxBiasedExponent, significand:largestNumber)
   }
   
   static func overflow(_ sign: Sign, rndMode: Rounding) -> Self {
@@ -382,24 +382,24 @@ public extension IntDecimal {
   }
   
   @inlinable static var snan: Self {
-    Self(sign: .plus, exponent: snanPattern<<(exponentBits-6), mantissa: 0)
+    Self(sign: .plus, exponent: snanPattern<<(exponentBits-6), significand: 0)
   }
   
   @inlinable static func zero(_ sign: Sign = .plus) -> Self {
-    Self(sign: sign, exponent: exponentBias, mantissa: 0)
+    Self(sign: sign, exponent: exponentBias, significand: 0)
   }
   
   @inlinable
   static func nan(_ sign: Sign = .plus, _ payload: Int = 0) -> Self {
-    let man = payload > largestNumber/10 ? 0 : Mantissa(payload)
-    return Self(sign:sign, exponent:nanPattern<<(exponentBits-6), mantissa:man)
+    let man = payload > largestNumber/10 ? 0 : Significand(payload)
+    return Self(sign:sign, exponent:nanPattern<<(exponentBits-6), significand:man)
   }
   
   ///////////////////////////////////////////////////////////////////////
   // MARK: - Handy routines for testing different aspects of the number
   @inlinable var nanBits: Int { data.getInt(range: Self.nanBitRange) }
   
-  var isSmallMantissa: Bool { isSpecial }
+  var isSmallSignificand: Bool { isSpecial }
   var isNaN: Bool           { nanBits & Self.nanPattern == Self.nanPattern }
   var isSNaN: Bool          { nanBits & Self.snanPattern == Self.snanPattern }
   
@@ -427,9 +427,9 @@ public extension IntDecimal {
     if isNaN { return false }
     if isSpecial {
       if isInfinite { return false }
-      if mantissa > Self.largestNumber || mantissa == 0 { return false }
+      if significand > Self.largestNumber || significand == 0 { return false }
     } else {
-      if mantissa == 0 { return false }
+      if significand == 0 { return false }
     }
     return true
   }
@@ -447,16 +447,16 @@ public extension IntDecimal {
     } else if isInfinite {
       return data.get(range:0...Self.exponentLMBits.lowerBound+2) == 0
     } else if isSpecial {
-      return mantissa <= Self.largestNumber
+      return significand <= Self.largestNumber
     } else {
       return true
     }
   }
   
-  private func checkNormalScale(_ exp: Int, _ mant: Mantissa) -> Bool {
+  private func checkNormalScale(_ exp: Int, _ mant: Significand) -> Bool {
     // if exponent is less than -95, the number may be subnormal
     // let exp = exp - Self.exponentBias
-    if exp < Self.minimumExponent+Self.maximumDigits-1 {
+    if exp < Self.minBiasedExponent+Self.maximumDigits-1 {
       let tenPower = power(UInt64(10), to: exp)
       let mantPrime = UInt64(mant) * tenPower
       return mantPrime > Self.largestNumber/10 // normal test
@@ -479,9 +479,9 @@ public extension IntDecimal {
   var isZero: Bool {
     if isInfinite { return false }
     if isSpecial {
-      return mantissa > Self.largestNumber
+      return significand > Self.largestNumber
     } else {
-      return mantissa == 0
+      return significand == 0
     }
   }
   
@@ -506,21 +506,21 @@ public extension IntDecimal {
     let mask = Self.trailingPattern
     let mils = ((Self.maximumDigits - 1) / 3) - 1
     let shift = mask.bitWidth - mask.leadingZeroBitCount
-    var mant = Mantissa(high)
+    var mant = Significand(high)
     for i in stride(from: shift*mils, through: 0, by: -shift) {
       mant *= 1000
-      mant += Mantissa(Self.intFrom(dpd: Int(trailing >> i) & mask))
+      mant += Significand(Self.intFrom(dpd: Int(trailing >> i) & mask))
     }
     
     if nan { self = Self.nan(sign, Int(mant)) }
-    else { self.init(sign: sign, exponent: exp, mantissa: mant) }
+    else { self.init(sign: sign, exponent: exp, significand: mant) }
   }
   
   /// Convert `self` to a DPD number.
   var dpd: RawData {
     var res : RawData = 0
-    var (sign, exp, mantissa, _) = unpack()
-    var trailing = mantissa.get(range: Self.manLower) // & 0xfffff
+    var (sign, exp, significand, _) = unpack()
+    var trailing = significand.get(range: Self.manLower) // & 0xfffff
     var nanb = false
     
     if self.isNaNInf {
@@ -529,34 +529,34 @@ public extension IntDecimal {
       if trailing > Self.largestNumber/10 {
         trailing = 0
       }
-      mantissa = Self.Mantissa(trailing); exp = 0; nanb = true
+      significand = Self.Significand(trailing); exp = 0; nanb = true
     } else {
-      if mantissa > Self.largestNumber { mantissa = 0 }
+      if significand > Self.largestNumber { significand = 0 }
     }
     
     let mils = ((Self.maximumDigits - 1) / 3) - 1
     let shift = 10
     var dmant = 0
     for i in stride(from: 0, through: shift*mils, by: shift) {
-      dmant |= Self.intToDPD(Int(mantissa) % 1000) << i
-      mantissa /= 1000
+      dmant |= Self.intToDPD(Int(significand) % 1000) << i
+      significand /= 1000
     }
     
     let signBit = Self.signBit
-    let expLower = Self.smallMantissaBits.upperBound...signBit-6
-    let manLower = 0...Self.smallMantissaBits.upperBound-1
+    let expLower = Self.smallSignificandBits.upperBound...signBit-6
+    let manLower = 0...Self.smallSignificandBits.upperBound-1
     
-    if mantissa >= 8 {
+    if significand >= 8 {
       let expUpper = signBit-4...signBit-3
       let manUpper = signBit-5...signBit-5
       res.set(range: Self.specialBits, with: Self.specialPattern)
       res.set(range: expUpper, with: exp >> (Self.exponentBits-2)) // upper exponent bits
-      res.set(range: manUpper, with: Int(mantissa) & 1) // upper mantisa bits
+      res.set(range: manUpper, with: Int(significand) & 1) // upper mantisa bits
     } else {
       let expUpper = signBit-2...signBit-1
       let manUpper = signBit-5...signBit-3
       res.set(range: expUpper, with: exp >> (Self.exponentBits-2)) // upper exponent bits
-      res.set(range: manUpper, with: Int(mantissa)) // upper mantisa bits
+      res.set(range: manUpper, with: Int(significand)) // upper mantisa bits
     }
     res.set(bit: signBit, with: sign.rawValue)
     res.set(range: expLower, with: exp)
@@ -643,7 +643,7 @@ public extension IntDecimal {
         cint = cint >> -e
         if cint < largestNumber+1 {
           return Self(sign: s, exponent: exponentBias,
-                      mantissa: Mantissa(cint._lowWord))
+                      significand: Significand(cint._lowWord))
         }
       } else if a <= 48 {
         var pow5 = Self.coefflimitsBID32(a)
@@ -653,7 +653,7 @@ public extension IntDecimal {
           pow5 = power5(a)
           cc = mul128x128Low(cc, pow5)
           return Self(sign: s, exponent: exponentBias-a,
-                      mantissa: Mantissa(cc._lowWord))
+                      significand: Significand(cc._lowWord))
         }
       }
     }
@@ -684,7 +684,7 @@ public extension IntDecimal {
     // Do the reciprocal multiplication
     var z=UInt384()
     Self.mul128x256to384(&z, c, r)
-    var c_prov = Mantissa(z.w[5])
+    var c_prov = Significand(z.w[5])
     
     // Test inexactness and underflow (when testing tininess before rounding)
     //    if ((z.w[4] != 0) || (z.w[3] != 0)) {
@@ -731,7 +731,7 @@ public extension IntDecimal {
     //    }
     
     // Package up the result
-    return Self(sign: s, exponent: e_out+exponentBias, mantissa: c_prov)
+    return Self(sign: s, exponent: e_out+exponentBias, significand: c_prov)
   }
   
   func int(_ rmode:Rounding) -> Int64 {
@@ -1012,7 +1012,7 @@ public extension IntDecimal {
   static func bid(from x:UInt64, _ rndMode:Rounding) -> Self {
     // Get BID from a 64-bit unsigned integer
     if x <= Self.largestNumber { // x <= 10^7-1 and the result is exact
-      return Self(sign: .plus, exponent: exponentBias, mantissa: Mantissa(x))
+      return Self(sign: .plus, exponent: exponentBias, significand: Significand(x))
     } else { // x >= 10^7 and the result may be inexact
       // smallest x is 10^7 which has 8 decimal digits
       // largest x is 0xffffffffffffffff = 18446744073709551615 w/ 20 digits
@@ -1038,19 +1038,19 @@ public extension IntDecimal {
       var is_midpoint_lt_even = false, is_midpoint_gt_even = false
       var is_inexact_lt_midpoint = false, is_inexact_gt_midpoint = false
       var res64 = UInt64(), res128 = UInt128(), incr_exp = 0
-      var res: Mantissa
+      var res: Significand
       if q <= 19 {
         bid_round64_2_18 ( // would work for 20 digits too if x fits in 64 bits
           q, ind, x, &res64, &incr_exp,
           &is_midpoint_lt_even, &is_midpoint_gt_even,
           &is_inexact_lt_midpoint, &is_inexact_gt_midpoint)
-        res = Mantissa(res64)
+        res = Significand(res64)
       } else { // q = 20
         let x128 = UInt128(high: 0, low:x)
         bid_round128_19_38 (q, ind, x128, &res128, &incr_exp,
                             &is_midpoint_lt_even, &is_midpoint_gt_even,
                             &is_inexact_lt_midpoint, &is_inexact_gt_midpoint)
-        res = Mantissa(res128._lowWord) // res.w[1] is 0
+        res = Significand(res128._lowWord) // res.w[1] is 0
       }
       if incr_exp != 0 {
         ind += 1
@@ -1066,7 +1066,7 @@ public extension IntDecimal {
              && is_midpoint_gt_even)) {
           res = res + 1
           if res == largestNumber+1 { // res = 10^7 => rounding overflow
-            res = largestMantissa // 10^6
+            res = largestSignificand // 10^6
             ind = ind + 1
           }
         } else if (is_midpoint_lt_even || is_inexact_gt_midpoint) &&
@@ -1081,7 +1081,7 @@ public extension IntDecimal {
           // exact, the result is already correct
         }
       }
-      return Self(sign: .plus, exponent: ind, mantissa: Mantissa(res))
+      return Self(sign: .plus, exponent: ind, significand: Significand(res))
     }
   }
   
@@ -1093,13 +1093,13 @@ public extension IntDecimal {
         //fpsc.formUnion([.underflow, .inexact])
         if r == .down && s != .plus {
           // 0x8000_0001
-          return Self(sign: .minus, exponent: exponentBias, mantissa: 1)
+          return Self(sign: .minus, exponent: exponentBias, significand: 1)
         }
         if r == .up && s == .plus {
-          return Self(sign: .plus, exponent: exponentBias, mantissa: 1)
+          return Self(sign: .plus, exponent: exponentBias, significand: 1)
         }
-        if exp < 0 { return Self(sign: s, exponent: 0, mantissa: 0) }
-        return Self(sign: s, exponent: exponentBias, mantissa: 0)
+        if exp < 0 { return Self(sign: s, exponent: 0, significand: 0) }
+        return Self(sign: s, exponent: exponentBias, significand: 0)
       }
       
       // swap round modes when negative
@@ -1182,15 +1182,15 @@ public extension IntDecimal {
 //          fpsc.formUnion(status)
 //        }
 //      }
-      return Self(sign: s, exponent: exponentBias, mantissa: Mantissa(_C64))
+      return Self(sign: s, exponent: exponentBias, significand: Significand(_C64))
     }
     var exp = exp, c = c
-    if c == 0 { if exp > maximumExponent { exp = maximumExponent } }
-    while c < (Self.largestNumber+1)/10 && exp > maximumExponent {
+    if c == 0 { if exp > maxBiasedExponent { exp = maxBiasedExponent } }
+    while c < (Self.largestNumber+1)/10 && exp > maxBiasedExponent {
       c = (c << 3) + (c << 1)
       exp -= 1
     }
-    if UInt32(exp) > maximumExponent {
+    if UInt32(exp) > maxBiasedExponent {
       // let s = (Word(s) << signBit)
       // fpsc.formUnion([.overflow, .inexact])
       // overflow
@@ -2021,7 +2021,7 @@ extension IntDecimal {
     // opposite signs
     if xsign != ysign { return ysign == .plus } // x < y if y > 0
     
-    // check if both mantissa and exponents and bigger or smaller
+    // check if both significand and exponents and bigger or smaller
     if xman > yman && xexp >= yexp { return xsign == .minus }
     if xman < yman && xexp <= yexp { return xsign == .plus }
     
@@ -2032,16 +2032,16 @@ extension IntDecimal {
     // if exp_x is 6 less than exp_y, no need for compensation
     if yexp - xexp > Self.maximumDigits-1 { return xsign == .plus }
     
-    // need to compensate the mantissa
-    var manPrime: Self.Mantissa
+    // need to compensate the significand
+    var manPrime: Self.Significand
     if xexp > yexp {
-      manPrime = xman * power(Self.Mantissa(10), to: xexp - yexp)
+      manPrime = xman * power(Self.Significand(10), to: xexp - yexp)
       if manPrime == yman { return false }
       return (manPrime < yman) != (xsign == .minus)
     }
     
-    // adjust y mantissa upwards
-    manPrime = yman * power(Self.Mantissa(10), to: yexp - xexp)
+    // adjust y significand upwards
+    manPrime = yman * power(Self.Significand(10), to: yexp - xexp)
     if manPrime == xman { return false }
     
     // if positive, return whichever abs number is smaller
@@ -2055,35 +2055,35 @@ extension IntDecimal {
   // MARK: - General-purpose math functions
   static func add(_ x: Self, _ y: Self, rounding: Rounding) -> Self {
     let xb = x, yb = y
-    let (signX, exponentX, mantissaX, validX) = xb.unpack()
-    let (signY, exponentY, mantissaY, validY) = yb.unpack()
+    let (signX, exponentX, significandX, validX) = xb.unpack()
+    let (signY, exponentY, significandY, validY) = yb.unpack()
     
     // Deal with illegal numbers
     if !validX {
       if xb.isNaN {
         // if xb.isSNaN || yb.isSNaN { /* invalid Op */ }
-        // mantissaX.clear(bit: nanBitRange.lowerBound)
-        return Self.nanQuiet(mantissaX)
+        // significandX.clear(bit: nanBitRange.lowerBound)
+        return Self.nanQuiet(significandX)
       }
       if xb.isInfinite {
         if yb.isNaNInf {
           if signX == signY {
-            return Self(RawData(mantissaX))
+            return Self(RawData(significandX))
           } else {
             return Self.nan() // invalid Op
           }
         }
         if yb.isNaN {
           // if yb.isSNaN { /* invalid Op */ }
-          // mantissaY.clear(bit: nanBitRange.lowerBound)
-          return Self.nanQuiet(mantissaY)
+          // significandY.clear(bit: nanBitRange.lowerBound)
+          return Self.nanQuiet(significandY)
         } else {
           // +/- infinity
-          return Self(RawData(mantissaX))
+          return Self(RawData(significandX))
         }
       } else {
         // x = 0
-        if !yb.isInfinite && mantissaY != 0 {
+        if !yb.isInfinite && significandY != 0 {
           if exponentY <= exponentX { return y }
         }
       }
@@ -2092,12 +2092,12 @@ extension IntDecimal {
     if !validY {
       if yb.isInfinite {
         // if yb.isSNaN { /* invalid Op */ }
-        // mantissaY.clear(bit: nanBitRange.lowerBound)
-        return Self.nanQuiet(mantissaY)
+        // significandY.clear(bit: nanBitRange.lowerBound)
+        return Self.nanQuiet(significandY)
       }
       
       // y = 0
-      if mantissaX == 0 {
+      if significandX == 0 {
         // x also 0
         let exp: Int
         var sign = Sign.plus
@@ -2108,25 +2108,25 @@ extension IntDecimal {
         }
         if signX == signY { sign = signX }
         if rounding == .down && signX != signY { sign = .minus }
-        return Self(sign: sign, exponent: exp, mantissa: 0)
+        return Self(sign: sign, exponent: exp, significand: 0)
       } else if exponentY >= exponentX {
         return x
       }
     }
     
     // sort arguments by exponent
-    var (signA, exponentA, mantissaA) = (signY, exponentY, mantissaY)
-    var (signB, exponentB, mantissaB) = (signX, exponentX, mantissaX)
+    var (signA, exponentA, significandA) = (signY, exponentY, significandY)
+    var (signB, exponentB, significandB) = (signX, exponentX, significandX)
     if exponentX >= exponentY {
       swap(&signA, &signB)
       swap(&exponentA, &exponentB)
-      swap(&mantissaA, &mantissaB)
+      swap(&significandA, &significandB)
     }
     
     // exponent difference
     var exponentDiff = exponentA - exponentB
     if exponentDiff > maximumDigits {
-      let binExpon = Double(mantissaA).exponent
+      let binExpon = Double(significandA).exponent
       let scaleCA = estimateDecDigits(binExpon)
       let d2 = 16 - scaleCA
       if exponentDiff > d2 {
@@ -2136,9 +2136,9 @@ extension IntDecimal {
     }
     
     let signAB = signA != signB ? Int64(-1) : 0
-    let CB = UInt64(bitPattern: (Int64(mantissaB) + signAB) ^ signAB)
+    let CB = UInt64(bitPattern: (Int64(significandB) + signAB) ^ signAB)
     
-    let SU = UInt64(mantissaA) * power10(exponentDiff)
+    let SU = UInt64(significandA) * power10(exponentDiff)
     var S = Int64(bitPattern: SU &+ CB)
     
     if S < 0 {
@@ -2150,7 +2150,7 @@ extension IntDecimal {
     if P == 0 {
       signA = .plus
       if rounding == .down { signA = .minus }
-      if mantissaA == 0 { signA = signX }
+      if significandA == 0 { signA = signX }
       n_digits=0
     } else {
       let tempx = Double(P)
@@ -2162,7 +2162,7 @@ extension IntDecimal {
     }
     
     if n_digits <= maximumDigits {
-      return Self(sign: signA, exponent: exponentB, mantissa: Mantissa(P))
+      return Self(sign: signA, exponent: exponentB, significand: Significand(P))
     }
     
     let extra_digits = n_digits - maximumDigits
@@ -2197,12 +2197,12 @@ extension IntDecimal {
       }
     }
     return Self(Self.adjustOverflowUnderflow(signA, exponentB+extra_digits,
-                                        Mantissa(Q), rounding))
+                                        Significand(Q), rounding))
   }
   
   static func mul (_ x:Self, _ y:Self, _ rmode:Rounding) -> Self  {
-    var (signX, exponentX, mantissaX, validX) = x.unpack()
-    let (signY, exponentY, mantissaY, validY) = y.unpack()
+    var (signX, exponentX, significandX, validX) = x.unpack()
+    let (signY, exponentY, significandY, validY) = y.unpack()
     
     // unpack arguments, check for NaN or Infinity
     let sign = signX != signY ? Sign.minus : .plus
@@ -2219,12 +2219,12 @@ extension IntDecimal {
 //          status.insert(.invalidOperation)
 //          // __set_status_flags (pfpsf, BID_INVALID_EXCEPTION);
 //        }
-        return Self.nanQuiet(mantissaX)
+        return Self.nanQuiet(significandX)
       }
       // x is Infinity?
       if x.isInfinite {
         // check if y is 0
-        if !y.isInfinite && mantissaY == 0 {
+        if !y.isInfinite && significandY == 0 {
           // status.insert(.invalidOperation)
           // y==0 , return NaN
           return Self.nan()
@@ -2232,7 +2232,7 @@ extension IntDecimal {
         // check if y is NaN
         if y.isNaN {
           // y==NaN , return NaN
-          return Self.nanQuiet(mantissaY)
+          return Self.nanQuiet(significandY)
         }
         // otherwise return +/-Inf
         return Self.infinite(sign) // ((x ^ y) & SIGN_MASK32) | INFINITY_MASK32
@@ -2246,12 +2246,12 @@ extension IntDecimal {
 //        }
 //        sign_y = y & SIGN_MASK32
         exponentX += exponentY - exponentBias
-        if exponentX > maximumExponent {
-          exponentX = maximumExponent
+        if exponentX > maxBiasedExponent {
+          exponentX = maxBiasedExponent
         } else if exponentX < 0 {
           exponentX = 0
         }
-        return Self(sign: sign, exponent: exponentX, mantissa: 0) // UInt32(UInt64(signX ^ sign_y) | (UInt64(exponentX) << 23))
+        return Self(sign: sign, exponent: exponentX, significand: 0) // UInt32(UInt64(signX ^ sign_y) | (UInt64(exponentX) << 23))
       }
     }
     if !validY {
@@ -2262,12 +2262,12 @@ extension IntDecimal {
 //          // sNaN
 //          status.insert(.invalidOperation)
 //        }
-        return Self.nanQuiet(mantissaY)
+        return Self.nanQuiet(significandY)
       }
       // y is Infinity?
       if y.isInfinite {
         // check if x is 0
-        if mantissaX == 0 {
+        if significandX == 0 {
           //status.insert(.invalidOperation)
           // x==0, return NaN
           return Self.nan()  // (NAN_MASK32);
@@ -2277,16 +2277,16 @@ extension IntDecimal {
       }
       // y is 0
       exponentX += exponentY - exponentBias //exponentBias
-      if exponentX > maximumExponent {
-        exponentX = maximumExponent
+      if exponentX > maxBiasedExponent {
+        exponentX = maxBiasedExponent
       } else if exponentX < 0 {
         exponentX = 0
       }
-      return Self(sign: sign, exponent: exponentX, mantissa: 0) // UInt32(UInt64(signX ^ sign_y) | (UInt64(exponentX) << 23))
+      return Self(sign: sign, exponent: exponentX, significand: 0) // UInt32(UInt64(signX ^ sign_y) | (UInt64(exponentX) << 23))
     }
     
     // multiplication
-    var P = mantissaX * mantissaY
+    var P = significandX * significandY
     
     //--- get number of bits in C64 ---
     // version 2 (original)
@@ -2314,12 +2314,12 @@ extension IntDecimal {
     
     // add a constant to P, depending on rounding mode
     // 0.5*10^(digits_p - 16) for round-to-nearest
-    P += Mantissa(bid_round_const_table(rmode1, extra_digits))
+    P += Significand(bid_round_const_table(rmode1, extra_digits))
     let Tmp = mul64x64to128(UInt64(P), reciprocals10(extra_digits))
     
     // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-64
     let amount = shortReciprocalScale[extra_digits]
-    var Q = Mantissa(Tmp.components.high) >> amount
+    var Q = Significand(Tmp.components.high) >> amount
     
     // remainder
     let R = P - Q * power10(extra_digits)
@@ -2345,7 +2345,7 @@ extension IntDecimal {
       
       if ((R != 0) && (rmode1 == 2)) ||
          ((rmode1&3 == 0) && (R+R>=power10(extra_digits))) {
-        return Self(sign: sign, exponent:0, mantissa:largestMantissa)
+        return Self(sign: sign, exponent:0, significand:largestSignificand)
       }
     }
     
@@ -2356,20 +2356,20 @@ extension IntDecimal {
   /**
    *  Division algorithm description:
    * ```
-   *  if mantissaX < mantissaY
-   *    p = number_digits(mantissaY) - number_digits(mantissaX)
-   *    A = mantissaX*10^p
-   *    B = mantissaY
+   *  if significandX < significandY
+   *    p = number_digits(significandY) - number_digits(significandX)
+   *    A = significandX*10^p
+   *    B = significandY
    *    CA= A*10^(15+j), j=0 for A>=B, 1 otherwise
    *    Q = 0
    *  else
-   *    get Q=(int)(mantissaX/mantissaY)
+   *    get Q=(int)(significandX/significandY)
    *        (based on double precision divide)
    *    check for exact divide case
-   *    Let R = mantissaX - Q*mantissaY
+   *    Let R = significandX - Q*significandY
    *    Let m=16-number_digits(Q)
    *    CA=R*10^m, Q=Q*10^m
-   *    B = mantissaY
+   *    B = significandY
    *  endif
    *  if CA < 2^64
    *    Q += CA/B  (64-bit unsigned divide)
@@ -2382,8 +2382,8 @@ extension IntDecimal {
    * ```
    */
   static func div(_ x:Self, _ y:Self, _ rmode:Rounding) -> Self {
-    var (signX, exponentX, mantissaX, validX) = x.unpack()
-    let (signY, exponentY, mantissaY, validY) = y.unpack()
+    var (signX, exponentX, significandX, validX) = x.unpack()
+    let (signY, exponentY, significandY, validY) = y.unpack()
     
     // unpack arguments, check for NaN or Infinity
     let sign = signX != signY ? Sign.minus : .plus
@@ -2398,7 +2398,7 @@ extension IntDecimal {
         //              if (x & SNAN_MASK32) == SNAN_MASK32 {    // sNaN
         //                  status.insert(.invalidOperation)
         //              }
-        return Self.nanQuiet(mantissaX)
+        return Self.nanQuiet(significandX)
       }
       
       // x is Infinity?
@@ -2416,7 +2416,7 @@ extension IntDecimal {
         }
       }
       // x==0
-      if !y.isInfinite && mantissaY == 0 {
+      if !y.isInfinite && significandY == 0 {
         // y==0 , return NaN
         //status.insert(.invalidOperation)
         return nan()
@@ -2429,12 +2429,12 @@ extension IntDecimal {
 //          sign_y = y & SIGN_MASK32
 //        }
         exponentX = exponentX - exponentY + exponentBias
-        if exponentX > maximumExponent {
-          exponentX = maximumExponent
+        if exponentX > maxBiasedExponent {
+          exponentX = maxBiasedExponent
         } else if exponentX < 0 {
           exponentX = 0
         }
-        return Self(sign: sign, exponent: exponentX, mantissa: 0)
+        return Self(sign: sign, exponent: exponentX, significand: 0)
         //  UInt32(signX ^ sign_y) | UInt32(exponentX) << 23
       }
       
@@ -2447,13 +2447,13 @@ extension IntDecimal {
 //          // sNaN
 //          status.insert(.invalidOperation)
 //        }
-        return Self.nanQuiet(mantissaY)
+        return Self.nanQuiet(significandY)
       }
       
       // y is Infinity?
       if y.isInfinite {
         // return +/-0
-        return Self(sign: sign, exponent: 0, mantissa: 0) //(x ^ y) & SIGN_MASK32
+        return Self(sign: sign, exponent: 0, significand: 0) //(x ^ y) & SIGN_MASK32
       }
       
       // y is 0
@@ -2462,17 +2462,17 @@ extension IntDecimal {
     }
     var diff_expon = exponentX - exponentY + exponentBias
     
-    var A, B, Q, R: Mantissa
+    var A, B, Q, R: Significand
     var CA: UInt64
     var ed1, ed2: Int
-    if mantissaX < mantissaY {
+    if significandX < significandY {
       // get number of decimal digits for c_x, c_y
       //--- get number of bits in the coefficients of x and y ---
-      let tempx = Float(mantissaX)
-      let tempy = Float(mantissaY)
+      let tempx = Float(significandX)
+      let tempy = Float(significandY)
       let bin_index = Int((tempy.bitPattern - tempx.bitPattern) >> 23)
-      A = mantissaX * Mantissa(bid_power10_index_binexp(bin_index))
-      B = mantissaY
+      A = significandX * Significand(bid_power10_index_binexp(bin_index))
+      B = significandY
       
       // compare A, B
       let DU = (A - B) >> 31
@@ -2486,9 +2486,9 @@ extension IntDecimal {
       
     } else {
       // get c_x/c_y
-      Q = mantissaX / mantissaY
+      Q = significandX / significandY
       
-      R = mantissaX - mantissaY * Q
+      R = significandX - significandY * Q
       
       // will use to get number of dec. digits of Q
       let tempq = Float(Q)
@@ -2506,16 +2506,16 @@ extension IntDecimal {
       ed2 = 7 - Int(estimateDecDigits(bin_expon_cx)) - Int(DU)
       
       CA = UInt64(R) * power10(ed2)
-      B = mantissaY
+      B = significandY
       
       Q *= power10(ed2)
       diff_expon -= ed2
     }
     
-    let Q2 = Mantissa(CA / UInt64(B))
+    let Q2 = Significand(CA / UInt64(B))
     let B2 = B + B
     let B4 = B2 + B2
-    R = Mantissa(UInt32(CA - UInt64(Q2) * UInt64(B)))
+    R = Significand(UInt32(CA - UInt64(Q2) * UInt64(B)))
     Q += Q2
     
     if R != 0 {
@@ -2524,9 +2524,9 @@ extension IntDecimal {
     } else {
       // eliminate trailing zeros
       // check whether CX, CY are short
-      if mantissaX <= 1024 && mantissaY <= 1024 {
-        let i = Int(mantissaY) - 1
-        let j = Int(mantissaX) - 1
+      if significandX <= 1024 && significandY <= 1024 {
+        let i = Int(significandY) - 1
+        let j = Int(significandX) - 1
         // difference in powers of 2 bid_factors for Y and X
         var nzeros = ed2 - (bid_factors(i,0) + bid_factors(j,0))
         // difference in powers of 5 bid_factors
@@ -2541,7 +2541,7 @@ extension IntDecimal {
           
           // now get P/10^extra_digits: shift C64 right by M[extra_digits]-128
           let amount = recip_scale32[nzeros]
-          Q = Mantissa(CT >> amount)
+          Q = Significand(CT >> amount)
           
           diff_expon += nzeros
         }
@@ -2550,7 +2550,7 @@ extension IntDecimal {
         
         // decompose digit
         let PD = UInt64(Q) * 0x068DB8BB
-        var digit_h = Mantissa(PD >> 40)
+        var digit_h = Significand(PD >> 40)
         let digit_low = Q - digit_h * 10000
         
         if digit_low == 0 {
@@ -2574,7 +2574,7 @@ extension IntDecimal {
           
           // now get P/10^extra_digits: shift C64 right by M[extra_digits]-128
           let amount = recip_scale32[nzeros]
-          Q = Mantissa(CT >> amount)
+          Q = Significand(CT >> amount)
         }
         diff_expon += nzeros
       }
@@ -2602,7 +2602,7 @@ extension IntDecimal {
           R -= UInt32((Int(Q) | (rmode1 >> 2)) & 1)
           // R<0 ?
           let D = UInt32(R >> 31)
-          Q += Mantissa(D)
+          Q += Significand(D)
         case 1, 3:
           break
         default:    // rounding up (2)
@@ -2622,8 +2622,8 @@ extension IntDecimal {
   }
 
   static func rem(_ x:Self, _ y:Self) -> Self {
-    var (signX, exponentX, mantissaX, validX) = x.unpack()
-    let (_, exponentY, mantissaY, validY) = y.unpack()
+    var (signX, exponentX, significandX, validX) = x.unpack()
+    let (_, exponentY, significandY, validY) = y.unpack()
     
     // unpack arguments, check for NaN or Infinity
     if !validX {
@@ -2637,7 +2637,7 @@ extension IntDecimal {
         //              if (x & SNAN_MASK32) == SNAN_MASK32 {
         //                  pfpsf.insert(.invalidOperation)
         //              }
-        return Self.nanQuiet(mantissaX)
+        return Self.nanQuiet(significandX)
       }
       // x is Infinity?
       if x.isInfinite {
@@ -2649,7 +2649,7 @@ extension IntDecimal {
       }
       // x is 0
       // return x if y != 0
-      if !y.isInfinite && mantissaY != 0 {
+      if !y.isInfinite && significandY != 0 {
 //        if (y & 0x60000000) == 0x60000000 {
 //          exponentY = Int(y >> 21) & 0xff;
 //        } else {
@@ -2662,7 +2662,7 @@ extension IntDecimal {
         
 //        var x = UInt32(exponentX)
 //        x <<= 23
-        return Self(sign: signX, exponent: exponentX, mantissa: 0)
+        return Self(sign: signX, exponent: exponentX, significand: 0)
       }
       
     }
@@ -2674,12 +2674,12 @@ extension IntDecimal {
 //        if (((y & SNAN_MASK32) == SNAN_MASK32)) {
 //          pfpsf.insert(.invalidOperation)
 //        }
-        return Self.nanQuiet(mantissaY)
+        return Self.nanQuiet(significandY)
       }
       // y is Infinity?
       if y.isInfinite {
-        return Self(sign: signX, exponent: exponentX, mantissa: mantissaX)
-        // (signX, exponentX, mantissaX)
+        return Self(sign: signX, exponent: exponentX, significand: significandX)
+        // (signX, exponentX, significandX)
       }
       // y is 0, return NaN
       //pfpsf.insert(.invalidOperation)
@@ -2695,16 +2695,16 @@ extension IntDecimal {
         // |x|<|y| in this case
         return x
       }
-      // set exponent of y to exponentX, scale mantissaY
+      // set exponent of y to exponentX, scale significandY
       let T : UInt64 = power10(diff_expon)
-      let CYL = UInt64(mantissaY) * T
-      if CYL > (UInt64(mantissaX) << 1) {
+      let CYL = UInt64(significandY) * T
+      if CYL > (UInt64(significandX) << 1) {
         return x
       }
       
-      let CY = Mantissa(CYL)
-      let Q = mantissaX / CY
-      var R = mantissaX - Q * CY
+      let CY = Significand(CYL)
+      let Q = significandX / CY
+      var R = significandX - Q * CY
       
       let R2 = R + R
       if R2 > CY || (R2 == CY && (Q & 1) != 0) {
@@ -2713,10 +2713,10 @@ extension IntDecimal {
         // signX ^= 0x80000000
       }
       
-      return Self(sign: signX, exponent: exponentX, mantissa: R)
+      return Self(sign: signX, exponent: exponentX, significand: R)
     }
     
-    var CX = UInt64(mantissaX)
+    var CX = UInt64(significandX)
     var Q64 = UInt64()
     while diff_expon > 0 {
       // get number of digits in coeff_x
@@ -2739,24 +2739,24 @@ extension IntDecimal {
       CX *= power10(e_scale)
       
       // quotient
-      Q64 = CX / UInt64(mantissaY)
+      Q64 = CX / UInt64(significandY)
       // remainder
-      CX -= Q64 * UInt64(mantissaY)
+      CX -= Q64 * UInt64(significandY)
       
       // check for remainder == 0
       if CX == 0 {
-        return Self(sign: signX, exponent: exponentY, mantissa: 0)
+        return Self(sign: signX, exponent: exponentY, significand: 0)
       }
     }
     
-    mantissaX = Mantissa(CX)
-    let R2 = mantissaX + mantissaX
-    if R2 > mantissaY || (R2 == mantissaY && (Q64 & 1) != 0) {
-      mantissaX = mantissaY - mantissaX
+    significandX = Significand(CX)
+    let R2 = significandX + significandX
+    if R2 > significandY || (R2 == significandY && (Q64 & 1) != 0) {
+      significandX = significandY - significandX
       signX = signX == .minus ? .plus : .minus // signX ^= 0x80000000
     }
     
-    return Self(sign: signX, exponent: exponentY, mantissa: mantissaX)
+    return Self(sign: signX, exponent: exponentY, significand: significandX)
   }
   
   /***************************************************************************
@@ -2768,15 +2768,15 @@ extension IntDecimal {
    *  if multiplication is guaranteed exact (short coefficients)
    *     call the unpacked arg. equivalent of bid32_add(x*y, z)
    *  else
-   *     get full mantissaX*mantissaY product
+   *     get full significandX*significandY product
    *     call subroutine to perform addition of 32-bit argument
    *                                         to 128-bit product
    *
    **************************************************************************/
   static func fma(_ x:Self, _ y:Self, _ z:Self, _ rmode:Rounding) -> Self {
-    var (sign_x, exponent_x, mantissaX, valid_x) = x.unpack()
-    var (sign_y, exponent_y, mantissaY, valid_y) = y.unpack()
-    var (sign_z, exponent_z, mantissaZ, valid_z) = z.unpack()
+    var (sign_x, exponent_x, significandX, valid_x) = x.unpack()
+    var (sign_y, exponent_y, significandY, valid_y) = y.unpack()
+    var (sign_z, exponent_z, significandZ, valid_z) = z.unpack()
 
     // unpack arguments, check for NaN, Infinity, or 0
     let signxy = sign_x != sign_y ? Sign.minus : .plus
@@ -2785,19 +2785,19 @@ extension IntDecimal {
 //        if isSNaN(x) || isSNaN(y) || isSNaN(z) { // sNaN
 //          pfpsf.insert(.invalidOperation)
 //        }
-        return Self.nanQuiet(mantissaY)
+        return Self.nanQuiet(significandY)
       }
       if z.isNaN {
 //        if isSNaN(x) || isSNaN(z) {
 //          pfpsf.insert(.invalidOperation)
 //        }
-        return Self.nanQuiet(mantissaZ)
+        return Self.nanQuiet(significandZ)
       }
       if x.isNaN {
 //        if isSNaN(x) {
 //          pfpsf.insert(.invalidOperation)
 //        }
-        return Self.nanQuiet(mantissaX)
+        return Self.nanQuiet(significandX)
       }
       
       if !valid_x {
@@ -2805,7 +2805,7 @@ extension IntDecimal {
         // x is Infinity?
         if x.isInfinite {
           // check if y is 0
-          if mantissaY == 0 {
+          if significandY == 0 {
             // y==0, return NaN
 //            if (z & SNAN_MASK) != NAN_MASK {
 //              pfpsf.insert(.invalidOperation)
@@ -2823,7 +2823,7 @@ extension IntDecimal {
         }
         // x is 0
         if !y.isInfinite && !z.isInfinite {
-          if mantissaZ != 0 {
+          if significandZ != 0 {
             exponent_y = exponent_x - exponentBias + exponent_y
             
             // let sign_z = z & SIGN_MASK
@@ -2831,7 +2831,7 @@ extension IntDecimal {
             if exponent_y >= exponent_z {
               return z
             }
-            return addZero(exponent_y, sign_z, exponent_z, mantissaZ, rmode)
+            return addZero(exponent_y, sign_z, exponent_z, significandZ, rmode)
           }
         }
       }
@@ -2839,7 +2839,7 @@ extension IntDecimal {
         // y is Infinity?
         if y.isInfinite {
           // check if x is 0
-          if mantissaX == 0 {
+          if significandX == 0 {
             // y==0, return NaN
   //          pfpsf.insert(.invalidOperation)
             return nan() // NAN_MASK
@@ -2855,7 +2855,7 @@ extension IntDecimal {
         }
         // y is 0
         if !z.isInfinite {
-          if mantissaZ != 0 {
+          if significandZ != 0 {
             exponent_y += exponent_x - exponentBias
             
             // let sign_z = z & SIGN_MASK
@@ -2863,7 +2863,7 @@ extension IntDecimal {
             if exponent_y >= exponent_z {
               return z
             }
-            return addZero(exponent_y, sign_z, exponent_z, mantissaZ, rmode)
+            return addZero(exponent_y, sign_z, exponent_z, significandZ, rmode)
           }
         }
       }
@@ -2873,16 +2873,16 @@ extension IntDecimal {
         
         // test if y is NaN/Inf
         if z.isInfinite {
-          return Self.nanQuiet(mantissaZ)
+          return Self.nanQuiet(significandZ)
         }
         // z is 0, return x*y
-        if (mantissaX == 0) || (mantissaY == 0) {
+        if (significandX == 0) || (significandY == 0) {
           //0+/-0
           let exp: Int
           var sign = Sign.plus
           exponent_x += exponent_y - exponentBias
-          if exponent_x > maximumExponent {
-            exponent_x = maximumExponent
+          if exponent_x > maxBiasedExponent {
+            exponent_x = maxBiasedExponent
           } else if exponent_x < 0 {
             exponent_x = 0
           }
@@ -2896,7 +2896,7 @@ extension IntDecimal {
           } else if rmode == .down {
             sign = .minus
           }
-          return Self(sign: sign, exponent: exp, mantissa: 0)
+          return Self(sign: sign, exponent: exp, significand: 0)
         }
         let d2 = exponent_x + exponent_y - exponentBias
         if exponent_z > d2 {
@@ -2906,7 +2906,7 @@ extension IntDecimal {
     }
     
     // multiplication
-    let P0 = UInt64(mantissaX) * UInt64(mantissaY)
+    let P0 = UInt64(significandX) * UInt64(significandY)
     exponent_x += exponent_y - exponentBias
     
     // sort arguments by exponent
@@ -2915,7 +2915,7 @@ extension IntDecimal {
     if exponent_x < exponent_z {
       sign_a = sign_z
       exponent_a = exponent_z
-      coefficient_a = UInt64(mantissaZ)
+      coefficient_a = UInt64(significandZ)
       sign_b = signxy
       exponent_b = exponent_x
       coefficient_b = P0
@@ -2925,7 +2925,7 @@ extension IntDecimal {
       coefficient_a = P0
       sign_b = sign_z
       exponent_b = exponent_z
-      coefficient_b = UInt64(mantissaZ)
+      coefficient_b = UInt64(significandZ)
     }
     
     // exponent difference
@@ -2990,7 +2990,7 @@ extension IntDecimal {
     
     if n_digits <= maximumDigits {
       return Self(
-        adjustOverflowUnderflow(sign_a, exponent_b, Mantissa(PC.low), rmode))
+        adjustOverflowUnderflow(sign_a, exponent_b, Significand(PC.low), rmode))
       //bid32Underflow(sign_a, exponent_b, PC.low, 0, rmode)
     }
     
@@ -3143,11 +3143,11 @@ extension IntDecimal {
       
       C64 = C128.components.low
       if C64 == largestNumber+1 {
-        return Self(sign: sign_a, exponent: 0, mantissa: largestMantissa)
+        return Self(sign: sign_a, exponent: 0, significand: largestSignificand)
       }
     }
     return Self(adjustOverflowUnderflow(sign_a, exponent_b+extra_digits,
-                                        Mantissa(C64), rmode))
+                                        Significand(C64), rmode))
     // return bid32Underflow(sign_a, exponent_b+extra_digits, C64, R, rmode)
   }
   
@@ -3169,7 +3169,7 @@ extension IntDecimal {
   //    0*10^ey + cz*10^ez,   ey<ez
   //
   //////////////////////////////////////////////////////////////////////////
-  static func addZero(_ ey:Int, _ sz:Sign, _ ez:Int, _ cz:Mantissa,
+  static func addZero(_ ey:Int, _ sz:Sign, _ ez:Int, _ cz:Significand,
                       _ r:Rounding) -> Self {
     let diff_expon = ez - ey
     var cz = cz
@@ -3252,7 +3252,7 @@ extension IntDecimal {
 
   
   static func round(_ x: Self, _ rmode: Rounding) -> Self {
-    var res = Mantissa(0)
+    var res = Significand(0)
     var (x_sign, exp, C1, _) = x.unpack()
     
     // check for NaNs and infinities
@@ -3282,7 +3282,7 @@ extension IntDecimal {
       if exp < 0 {
         exp = 0
       }
-      return Self(sign:x_sign, exponent:exp+exponentBias, mantissa: 0)
+      return Self(sign:x_sign, exponent:exp+exponentBias, significand: 0)
     }
     // x is a finite non-zero number (not 0, non-canonical, or special)
     switch rmode {
@@ -3297,7 +3297,7 @@ extension IntDecimal {
         // return 0 if (exp <= -p)
         if exp <= -maximumDigits {
           if x_sign != .plus {
-            return Self(sign: .minus, exponent: exponentBias, mantissa: 1)
+            return Self(sign: .minus, exponent: exponentBias, significand: 1)
             //res = (zero+1) | SIGN_MASK64  // 0xb1c0000000000001
           } else {
             return zero()
@@ -3310,7 +3310,7 @@ extension IntDecimal {
           if x_sign != .plus {
             return zero(.minus) // res = zero | SIGN_MASK64  // 0xb1c0000000000000
           } else {
-            return Self(sign: .plus, exponent: exponentBias, mantissa: 1) // res = zero+1
+            return Self(sign: .plus, exponent: exponentBias, significand: 1) // res = zero+1
           }
           //pfpsf.insert(.inexact)
         }
@@ -3341,7 +3341,7 @@ extension IntDecimal {
           // chop off ind digits from the lower part of C1
           // C1 = C1 + 1/2 * 10^x where the result C1 fits in 64 bits
           // FOR ROUND_TO_NEAREST, WE ADD 1/2 ULP(y) then truncate
-          C1 = C1 + Mantissa(bid_midpoint64(ind - 1))
+          C1 = C1 + Significand(bid_midpoint64(ind - 1))
           // calculate C* and f*
           // C* is actually floor(C*) in this case
           // C* and f* need shifting and masking, as shown by
@@ -3363,12 +3363,12 @@ extension IntDecimal {
           // n = C* * 10^(e+x)
           
           if ind - 1 <= 2 {    // 0 <= ind - 1 <= 2 => shift = 0
-            res = Mantissa(P128.high)
+            res = Significand(P128.high)
             fstar.high = 0
             fstar.low = P128.low
           } else if ind - 1 <= 21 { // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
             let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
-            res = Mantissa((P128.high >> shift))
+            res = Significand((P128.high >> shift))
             fstar.high = P128.high & bid_maskhigh128(ind - 1)
             fstar.low = P128.low
           }
@@ -3411,7 +3411,7 @@ extension IntDecimal {
           // set exponent to zero as it was negative before.
           // res = x_sign | zero | res;
           return Self(sign: x_sign, exponent: exponentBias,
-                      mantissa: Mantissa(res))
+                      significand: Significand(res))
         } else {    // if exp < 0 and q + exp < 0
           // the result is +0 or -0
           return zero(x_sign)
@@ -3424,7 +3424,7 @@ extension IntDecimal {
           // chop off ind digits from the lower part of C1
           // C1 = C1 + 1/2 * 10^x where the result C1 fits in 64 bits
           // FOR ROUND_TO_NEAREST, WE ADD 1/2 ULP(y) then truncate
-          C1 = C1 + Mantissa(bid_midpoint64(ind - 1))
+          C1 = C1 + Significand(bid_midpoint64(ind - 1))
           // calculate C* and f*
           // C* is actually floor(C*) in this case
           // C* and f* need shifting and masking, as shown by
@@ -3444,12 +3444,12 @@ extension IntDecimal {
           // n = C* * 10^(e+x)
           
           if ind - 1 <= 2 {    // 0 <= ind - 1 <= 2 => shift = 0
-            res = Mantissa(P128.high)
+            res = Significand(P128.high)
             fstar.high = 0
             fstar.low = P128.low
           } else if ind - 1 <= 21 {  // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
             let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
-            res = Self.Mantissa((P128.high >> shift))
+            res = Self.Significand((P128.high >> shift))
             fstar.high = P128.high & bid_maskhigh128(ind - 1)
             fstar.low = P128.low
           }
@@ -3485,7 +3485,7 @@ extension IntDecimal {
 //            }
 //          }
           // set exponent to zero as it was negative before.
-          return Self(sign: x_sign, exponent: exponentBias, mantissa: res)
+          return Self(sign: x_sign, exponent: exponentBias, significand: res)
         } else {    // if exp < 0 and q + exp < 0
           // the result is +0 or -0
           return zero(x_sign)
@@ -3512,12 +3512,12 @@ extension IntDecimal {
           // n = C* * 10^(e+x)
           
           if ind - 1 <= 2 {    // 0 <= ind - 1 <= 2 => shift = 0
-            res = Mantissa(P128.high)
+            res = Significand(P128.high)
             fstar.high = 0
             fstar.low = P128.low
           } else if ind - 1 <= 21 {    // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
             let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
-            res = Mantissa(P128.high >> shift)
+            res = Significand(P128.high >> shift)
             fstar.high = P128.high & bid_maskhigh128(ind - 1)
             fstar.low = P128.low
           }
@@ -3531,11 +3531,11 @@ extension IntDecimal {
           }
           // set exponent to zero as it was negative before.
           return Self(sign: x_sign, exponent: exponentBias,
-                      mantissa: Mantissa(res))
+                      significand: Significand(res))
         } else {    // if exp < 0 and q + exp <= 0
           // the result is +0 or -1
           if x_sign != .plus {
-            return Self(sign: .minus, exponent: exponentBias, mantissa: 1)
+            return Self(sign: .minus, exponent: exponentBias, significand: 1)
           } else {
             return zero()
           }
@@ -3563,12 +3563,12 @@ extension IntDecimal {
           // n = C* * 10^(e+x)
           
           if ind - 1 <= 2 {    // 0 <= ind - 1 <= 2 => shift = 0
-            res = Mantissa(P128.high)
+            res = Significand(P128.high)
             fstar.high = 0
             fstar.low = P128.low
           } else if ind - 1 <= 21 {  // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
             let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
-            res = Mantissa((P128.high >> shift))
+            res = Significand((P128.high >> shift))
             fstar.high = P128.high & bid_maskhigh128(ind - 1)
             fstar.low = P128.low
           }
@@ -3581,13 +3581,13 @@ extension IntDecimal {
             //pfpsf.insert(.inexact)
           }
           // set exponent to zero as it was negative before.
-          return Self(sign: x_sign, exponent: exponentBias, mantissa: res)
+          return Self(sign: x_sign, exponent: exponentBias, significand: res)
         } else {    // if exp < 0 and q + exp <= 0
           // the result is -0 or +1
           if x_sign != .plus {
             return zero(.minus)
           } else {
-            return Self(sign: .plus, exponent: exponentBias, mantissa: 1)
+            return Self(sign: .plus, exponent: exponentBias, significand: 1)
           }
         }
       case .towardZero:
@@ -3612,12 +3612,12 @@ extension IntDecimal {
           // n = C* * 10^(e+x)
           
           if ind - 1 <= 2 {    // 0 <= ind - 1 <= 2 => shift = 0
-            res = Mantissa(P128.high)
+            res = Significand(P128.high)
             fstar.high = 0
             fstar.low = P128.low
           } else if ind - 1 <= 21 {  // 3 <= ind - 1 <= 21 => 3 <= shift <= 63
             let shift = bid_shiftright128[ind - 1]    // 3 <= shift <= 63
-            res = Mantissa((P128.high >> shift))
+            res = Significand((P128.high >> shift))
             fstar.high = P128.high & bid_maskhigh128(ind - 1)
             fstar.low = P128.low
           }
@@ -3627,7 +3627,7 @@ extension IntDecimal {
 //          }
           // set exponent to zero as it was negative before.
           return Self(sign: x_sign, exponent: exponentBias,
-                      mantissa: Mantissa(res))
+                      significand: Significand(res))
         } else {    // if exp < 0 and q + exp < 0
           // the result is +0 or -0
           return zero(x_sign)
@@ -3635,7 +3635,7 @@ extension IntDecimal {
         }
       default: break
     }    // end switch ()
-    return Self(sign: x_sign, exponent: exp+exponentBias, mantissa: res)
+    return Self(sign: x_sign, exponent: exp+exponentBias, significand: res)
   }
   
   /***************************************************************************
@@ -3679,14 +3679,14 @@ extension IntDecimal {
     // check for zeros (possibly from non-canonical values)
     if C1 == 0 || (x.isSpecial && C1 > Self.largestNumber) {
       // x is 0: MINFP = 1 * 10^emin
-      return Self(sign: .plus, exponent: minimumExponent, mantissa: 1)
+      return Self(sign: .plus, exponent: minBiasedExponent, significand: 1)
     } else { // x is not special and is not zero
       if x == largestBID { // LARGEST_BID {
         // x = +MAXFP = 9999999 * 10^emax
         return Self.infinite() // INFINITY_MASK // +inf
-      } else if x == Self(sign:.minus, exponent:minimumExponent, mantissa:1) {
+      } else if x == Self(sign:.minus, exponent:minBiasedExponent, significand:1) {
         // x = -MINFP = 1...99 * 10^emin
-        return Self(sign: .minus, exponent: minimumExponent, mantissa: 0)
+        return Self(sign: .minus, exponent: minBiasedExponent, significand: 0)
       } else {
         // -MAXFP <= x <= -MINFP - 1 ulp OR MINFP <= x <= MAXFP - 1 ulp
         // can add/subtract 1 ulp to the significand
@@ -3708,14 +3708,14 @@ extension IntDecimal {
           } else { // pad with zeros until the exponent reaches emin
             ind = x_exp
             C1 = C1 * bid_ten2k64(ind)
-            x_exp = minimumExponent // MIN_EXPON
+            x_exp = minBiasedExponent // MIN_EXPON
           }
         }
         if x_sign == .plus {    // x > 0
           // add 1 ulp (add 1 to the significand)
           C1 += 1
           if C1 == largestNumber+1 { // 10_000_000 { // if  C1 = 10^7
-            C1 = largestMantissa // C1 = 10^6
+            C1 = largestSignificand // C1 = 10^6
             x_exp += 1
           }
           // Ok, because MAXFP = 9999999 * 10^emax was caught already
@@ -3729,7 +3729,7 @@ extension IntDecimal {
         }
         // assemble the result
         // if significand has 24 bits
-        return Self(sign: x_sign, exponent: x_exp, mantissa: C1)
+        return Self(sign: x_sign, exponent: x_exp, significand: C1)
       } // end -MAXFP <= x <= -MINFP - 1 ulp OR MINFP <= x <= MAXFP - 1 ulp
     } // end x is not special and is not zero
   //  return res
@@ -3737,11 +3737,11 @@ extension IntDecimal {
   
   static func sqrt(_ x: Self, _ rmode:Rounding) -> Self {
     // unpack arguments, check for NaN or Infinity
-    var (signX, exponentX, mantissaX, valid) = x.unpack()
+    var (signX, exponentX, significandX, valid) = x.unpack()
     if !valid {
       // x is Inf. or NaN or 0
       if x.isInfinite {
-        let res = mantissaX.clearing(range: g6tog10Range)
+        let res = significandX.clearing(range: g6tog10Range)
         if x.isNaNInf && signX == .minus {
           return Self.nan(signX, 0)
           //status.insert(.invalidOperation)
@@ -3753,24 +3753,24 @@ extension IntDecimal {
       }
       // x is 0
       exponentX = (exponentX + exponentBias) >> 1
-      return Self(sign: signX, exponent: exponentX, mantissa: 0)
+      return Self(sign: signX, exponent: exponentX, significand: 0)
     }
     // x<0?
-    if signX == .minus && mantissaX != 0 {
+    if signX == .minus && significandX != 0 {
       // status.insert(.invalidOperation)
       return Self.nan()
     }
     
     //--- get number of bits in the coefficient of x ---
-    let tempx = Float32(mantissaX)
+    let tempx = Float32(significandX)
     let bin_expon_cx = Int(((tempx.bitPattern >> 23) & 0xff) - 0x7f)
     var digits_x = estimateDecDigits(bin_expon_cx)
     // add test for range
-    if mantissaX >= bid_power10_index_binexp(bin_expon_cx) {
+    if significandX >= bid_power10_index_binexp(bin_expon_cx) {
       digits_x+=1
     }
     
-    var A10 = mantissaX
+    var A10 = significandX
     if exponentX & 1 == 0 {
       A10 = (A10 << 2) + A10;
       A10 += A10;
@@ -3780,7 +3780,7 @@ extension IntDecimal {
     let QE = UInt32(dqe)
     if QE * QE == A10 {
       return Self(sign: .plus, exponent: (exponentX + exponentBias) >> 1,
-                  mantissa: Mantissa(QE))
+                  significand: Significand(QE))
     }
     // if exponent is odd, scale coefficient by 10
     var scale = Int(13 - digits_x)
@@ -3788,7 +3788,7 @@ extension IntDecimal {
     scale += (exponent_q & 1)   // exp. bias is even
     
     let CT = UInt128(power10(scale)).components.low
-    let CA = UInt64(mantissaX) * CT
+    let CA = UInt64(significandX) * CT
     let dq = Double(CA).squareRoot()
     
     exponent_q = exponent_q >> 1  // square root of 10^x = 10^(x/2)
@@ -3805,7 +3805,7 @@ extension IntDecimal {
         Q+=1
       }
     }
-    return Self(sign: .plus, exponent: exponent_q, mantissa: Mantissa(Q))
+    return Self(sign: .plus, exponent: exponent_q, significand: Significand(Q))
   }
 }
 
@@ -4023,7 +4023,7 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
     if right_radix_leading_zeros < 0 {
       right_radix_leading_zeros = T.exponentBias
     }
-    return T(sign: sign, exponent: right_radix_leading_zeros, mantissa: 0)
+    return T(sign: sign, exponent: right_radix_leading_zeros, significand: 0)
   }
   
   // detect special cases (INF or NaN)
@@ -4082,7 +4082,7 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
   }
   
   var rdx_pt_enc = false
-  var mantissaX = T.Mantissa(0)
+  var significandX = T.Significand(0)
   
   // detect zero (and eliminate/ignore leading zeros)
   if c == "0" || c == "." {
@@ -4141,31 +4141,31 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
     
     ndigits+=1
     if ndigits <= T.maximumDigits {
-      mantissaX = (mantissaX << 1) + (mantissaX << 3);
-      mantissaX += T.Mantissa(c.wholeNumberValue ?? 0)
+      significandX = (significandX << 1) + (significandX << 3);
+      significandX += T.Significand(c.wholeNumberValue ?? 0)
     } else if ndigits == T.maximumDigits+1 {
       // coefficient rounding
       switch round {
         case .toNearestOrEven:
-          midpoint = (c == "5" && (mantissaX & 1 == 0)) ? 1 : 0;
+          midpoint = (c == "5" && (significandX & 1 == 0)) ? 1 : 0;
           // if coefficient is even and c is 5, prepare to round up if
           // subsequent digit is nonzero
           // if str[MAXDIG+1] > 5, we MUST round up
           // if str[MAXDIG+1] == 5 and coefficient is ODD, ROUND UP!
-          if c > "5" || (c == "5" && (mantissaX & 1) != 0) {
-            mantissaX += 1
+          if c > "5" || (c == "5" && (significandX & 1) != 0) {
+            significandX += 1
             rounded_up = 1
           }
         case .down:
-          if sign == .minus { mantissaX+=1; rounded_up=1 }
+          if sign == .minus { significandX+=1; rounded_up=1 }
         case .up:
-          if sign != .minus { mantissaX+=1; rounded_up=1 }
+          if sign != .minus { significandX+=1; rounded_up=1 }
         case .toNearestOrAwayFromZero:
-          if c >= "5" { mantissaX+=1; rounded_up=1 }
+          if c >= "5" { significandX+=1; rounded_up=1 }
         default: break
       }
-      if mantissaX == T.largestNumber+1 {
-        mantissaX = (T.largestNumber+1)/10
+      if significandX == T.largestNumber+1 {
+        significandX = (T.largestNumber+1)/10
         add_expon = 1
       }
 //      if c > "0" {
@@ -4175,7 +4175,7 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
     } else { // ndigits > 8
       add_expon += 1
       if midpoint != 0 && c > "0" {
-        mantissaX += 1
+        significandX += 1
         midpoint = 0
         rounded_up = 1
       }
@@ -4193,7 +4193,7 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
 //      T.state.insert(.inexact)
 //    }
     return T(sign: sign, exponent: add_expon+T.exponentBias,
-             mantissa: T.Mantissa(mantissaX))
+             significand: T.Significand(significandX))
   }
   
   if c != "e" {
@@ -4213,7 +4213,7 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
   
   var expon_x = 0
   while c.isNumber {
-    if expon_x < (1 << T.smallMantissaBits.upperBound) {
+    if expon_x < (1 << T.smallSignificandBits.upperBound) {
       expon_x = (expon_x << 1) + (expon_x << 3)
       expon_x += c.wholeNumberValue ?? 0
     }
@@ -4237,12 +4237,12 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
   
   if expon_x < 0 {
     if rounded_up != 0 {
-      mantissaX -= 1
+      significandX -= 1
     }
-    return T.handleRounding(sign, expon_x, Int(mantissaX),
+    return T.handleRounding(sign, expon_x, Int(significandX),
                             rounded_up, round)
   }
-  let mant = T.Mantissa(mantissaX)
+  let mant = T.Significand(significandX)
   // return T.handleRounding(sign, expon_x, Int(mant), 0, round)
   let result = T.adjustOverflowUnderflow(sign, expon_x, mant, round)
   return T(result)
