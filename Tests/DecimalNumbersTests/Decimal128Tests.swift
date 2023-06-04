@@ -31,9 +31,10 @@ final class Decimal128Tests: XCTestCase {
     // basic DPD to BID conversion and BID to DPD
     let dpd = StaticBigInt(0xA207_8000_0000_0000_0000_0000_0000_03D0)
     let n = UInt128(integerLiteral: dpd)
-    let a = Decimal128(bitPattern: n, bidEncoding: false)
+    let a = Decimal128(dpdBitPattern: n)
     XCTAssert(a.description == "-7.50")
-    print(a, a.dpd == n ? "a = n" : "a != n"); XCTAssert(a.dpd == n)
+    print(a, a.dpdBitPattern == n ? "a = n" : "a != n")
+    XCTAssert(a.dpdBitPattern == n)
   }
   
 }

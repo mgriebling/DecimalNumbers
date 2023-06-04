@@ -251,13 +251,12 @@ extension Decimal64 : DecimalFloatingPoint {
 
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for DecimalFloatingPoint
-  public init(bitPattern bits: RawSignificand, bidEncoding: Bool) {
-    if bidEncoding {
-      bid.data = bits
-    } else {
-      // convert from dpd to bid
-      bid = ID(dpd: ID.RawData(bits))
-    }
+  public init(bidBitPattern bits: RawSignificand) {
+    bid.data = bits
+  }
+  
+  public init(dpdBitPattern bits: RawSignificand) {
+    bid = ID(dpd: ID.RawData(bits))
   }
   
   public init(sign: Sign, exponentBitPattern: RawExponent,
@@ -271,7 +270,8 @@ extension Decimal64 : DecimalFloatingPoint {
   
   public var significandBitPattern: UInt64 { UInt64(bid.significand) }
   public var exponentBitPattern: UInt      { UInt(bid.exponent) }
-  public var dpd: UInt64                   { bid.dpd }
+  public var bidBitPattern: UInt64         { bid.data }
+  public var dpdBitPattern: UInt64         { bid.dpd }
   public var int: Int64                    { bid.int(Self.rounding) }
   public var uint: UInt64                  { bid.uint(Self.rounding) }
   

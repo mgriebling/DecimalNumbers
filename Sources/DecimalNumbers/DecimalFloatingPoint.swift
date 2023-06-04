@@ -52,14 +52,19 @@ public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
   init(sign: Sign, exponentBitPattern: RawExponent,
        significandBitPattern: RawSignificand)
   
-  /// Initialize from raw Binary Integer Decimal (BID) or
-  /// Densely Packed Decimal (DPD) encoded integers.
+  /// Initialize from a raw binary integer decimal bit pattern obtained
+  /// from the `bidBitPattern`
   /// - Parameters:
-  ///   - bits: The bit pattern to use for the new value.
-  ///   - bidEncoding: When `true`, the `bits` are assumed to have a BID
-  ///     encoding; otherwise, a DPD encoding is assumed, which is translated
-  ///     to BID format during initialization.
-  init(bitPattern bits: RawSignificand, bidEncoding: Bool)
+  ///   - bits: The binary integer decimal bit pattern to use for the new
+  ///           value.
+  init(bidBitPattern bits: RawSignificand)
+  
+  /// Initialize from a raw densely packed decimal bit pattern obtained
+  /// from the `dpdBitPattern`
+  /// - Parameters:
+  ///   - bits: The densely packed decimal bit pattern to use for the new
+  ///           value.
+  init(dpdBitPattern bits: RawSignificand)
   
   /// Creates a new instance from the given value, rounded to the closest
   /// possible representation.
@@ -80,14 +85,6 @@ public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
   /// - Parameter value: A floating-point value to be converted.
   init?<Source:DecimalFloatingPoint>(exactly value: Source)
   
-  /// A decimal floating-point type's `exponentBias` imposes a limit on the
-  /// range of the exponent for normal, finite values. The unbiased exponent of
-  /// a type `F` can be obtained with this attribute. The unbiased exponent
-  /// can be calculated as:
-  ///         `exponent = exponentBitPattern - exponentBias`
-  ///
-  static var exponentBias: Int { get }
-  
   /// The number of bits used to represent the type's exponent.
   static var exponentBitCount: Int { get }
   
@@ -107,8 +104,14 @@ public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
   /// This value is unadjusted by the type's exponent bias.
   var exponentBitPattern: Self.RawExponent { get }
   
-  /// The raw encoding of the value's significand field.
+  /// The raw binary integer encoding of the value's significand field.
   var significandBitPattern: RawSignificand { get }
+  
+  /// The binary integer decimal encoding of the value as an unsigned integer.
+  var bidBitPattern: RawSignificand { get }
+  
+  /// The densely packed decimal encoding of the value as an unsigned integer.
+  var dpdBitPattern: RawSignificand { get }
   
   /// The floating-point value with the same sign and exponent as this value,
   /// but with a significand of 1.0.
@@ -138,7 +141,7 @@ public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
   ///
   /// The initializer `init(bitPattern:bidEncoding)` works from both DPD and
   /// BID. Converters to both formats are also available.
-  static var isBIDFormat: Bool { get }
+  // static var isBIDFormat: Bool { get }
   
   // FIXME: - Discussion on how to do rounding and state tracking
   /// Class-wide setting for how numbers will be rounded in calculations.
@@ -269,8 +272,8 @@ extension DecimalFloatingPoint {
       if exponent > exemplar.exponent {
         return (isMinus ? -.infinity : .infinity, false)
       }
-      exponentBitPattern = RawExponent(exponent +
-                                       Source.Exponent(Self.exponentBias))
+      let bias = Int(Self.zero.exponentBitPattern)
+      exponentBitPattern = RawExponent(Int(exponent) + bias)
     }
     
     let value = Self(
@@ -403,7 +406,7 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     // Note: Self's exponent is x10ⁿ where n is the radix 10 exponent whereas
     // Source's exponent is x2ª where a is the radix 2 exponent.
     // Useful constants:
-    let exponentBias = Self.exponentBias
+    let exponentBias = Self.zero.exponentBitPattern
     
     //  Zero is really extra simple, and saves us from trying to normalize a
     //  value that cannot be normalized.

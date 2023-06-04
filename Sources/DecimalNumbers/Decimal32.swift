@@ -23,7 +23,6 @@ import UInt128
 /// to completely define many of the Decimal32 operations.  The `data` word
 /// holds all 32 bits of the Decimal32 data type.
 struct IntDecimal32 : IntDecimal {
-  
   typealias RawData = UInt32
   typealias Significand = UInt
   
@@ -56,7 +55,13 @@ struct IntDecimal32 : IntDecimal {
 /// conversion functions between the two encoding formats.
 public struct Decimal32 : Codable, Hashable {
   typealias ID = IntDecimal32
-  var bid: ID = ID.zero(.plus)
+  
+  public typealias RawExponent = UInt
+  public typealias RawSignificand = UInt32
+  
+  public static var rounding = Rounding.toNearestOrEven
+  
+  var bid = ID.zero(.plus)
   
   public init(bid: UInt32) { self.bid.data = bid }
   init(bid: ID)            { self.bid = bid }
@@ -245,22 +250,15 @@ extension Decimal32 : FloatingPoint {
 }
 
 extension Decimal32 : DecimalFloatingPoint {
-  public typealias RawExponent = UInt
-  public typealias RawSignificand = UInt32
-  
-  public static var rounding = Rounding.toNearestOrEven
-
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for DecimalFloatingPoint
   
-  public init(bitPattern bits: RawSignificand, bidEncoding: Bool) {
-    if bidEncoding {
-      // just assign the raw data bits
-      bid.data = bits
-    } else {
-      // convert from dpd to bid
-      bid = ID(dpd: ID.RawData(bits))
-    }
+  public init(bidBitPattern bits: RawSignificand) {
+    bid.data = bits
+  }
+  
+  public init(dpdBitPattern bits: RawSignificand) {
+    bid = ID(dpd: ID.RawData(bits))
   }
   
   public init(sign: Sign, exponentBitPattern: RawExponent,
@@ -274,7 +272,8 @@ extension Decimal32 : DecimalFloatingPoint {
   
   public var significandBitPattern: UInt32 { UInt32(bid.significand) }
   public var exponentBitPattern: UInt      { UInt(bid.exponent) }
-  public var dpd: UInt32                   { bid.dpd }
+  public var bidBitPattern: UInt32         { bid.data }
+  public var dpdBitPattern: UInt32         { bid.dpd }
   public var int: Int64                    { bid.int(Self.rounding) }
   public var uint: UInt64                  { bid.uint(Self.rounding) }
   public var double: Double                { bid.double(Self.rounding) }
