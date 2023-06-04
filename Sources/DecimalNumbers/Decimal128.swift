@@ -28,9 +28,7 @@ struct IntDecimal128 : IntDecimal {
   
   var data: RawData = 0
   
-  init(_ word: RawData) {
-    self.data = word
-  }
+  init(_ word: RawData) { self.data = word }
   
   init(sign:Sign = .plus, exponent:Int=0, significand:Significand) {
     self.sign = sign
@@ -38,19 +36,14 @@ struct IntDecimal128 : IntDecimal {
   }
   
   // Define the fields and required parameters
-  static var exponentBias:    Int {  6176 }
-  static var maxBiasedExponent: Int { 12287 } // unbiased
-  static var minBiasedExponent: Int {     0 } // unbiased
-  static var maximumDigits:   Int {    34 }
-  static var exponentBits:    Int {    14 }
+  static var exponentBias:      Int {  6176 }
+  static var maxBiasedExponent: Int { 12287 }
+  static var maximumDigits:     Int {    34 }
+  static var exponentBits:      Int {    14 }
   
   static var largestNumber: Significand {
     Significand(9_999_999_999_999_999_999_999_999_999_999_999)
   }
-  
-  // Two significand sizes must be supported
-  static var largeSignificandBits: IntRange { 0...112 }
-  static var smallSignificandBits: IntRange { 0...110 }
 }
 
 /// Implementation of the 128-bit Decimal128 floating-point operations from

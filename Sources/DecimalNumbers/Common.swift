@@ -119,6 +119,13 @@ extension IntDecimal {
   static var exponentLMBits: IntRange { maxBit-exponentBits ... maxBit-1 }
   static var exponentSMBits: IntRange { maxBit-exponentBits-2 ... maxBit-3 }
   
+  // Two significand sizes must be supported
+  static var largeSignificandBits: IntRange { 0...maxBit-exponentBits-1 }
+  static var smallSignificandBits: IntRange { 0...maxBit-exponentBits-3 }
+  
+  // Doesn't change for the different types of Decimals
+  static var minBiasedExponent: Int { 0 }
+  
   // masks for clearing bits
   static var sNanRange: IntRange      { 0 ... maxBit-6 }
   static var sInfinityRange: IntRange { 0 ... maxBit-5 }

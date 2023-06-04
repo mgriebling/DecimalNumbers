@@ -36,15 +36,10 @@ struct IntDecimal64 : IntDecimal {
   // Define the fields and required parameters
   static var exponentBias:      Int {  398 }
   static var maxBiasedExponent: Int {  767 } // unbiased
-  static var minBiasedExponent: Int {    0 } // unbiased
   static var maximumDigits:     Int {   16 }
   static var exponentBits:      Int {   10 }
   
   public static var largestNumber: Significand { 9_999_999_999_999_999 }
-  
-  // Two significand sizes must be supported
-  public static var largeSignificandBits: IntRange { 0...52 }
-  public static var smallSignificandBits: IntRange { 0...50 }
 }
 
 /// Implementation of the 64-bit Decimal64 floating-point operations from

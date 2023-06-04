@@ -39,15 +39,10 @@ struct IntDecimal32 : IntDecimal {
   // Define the fields and required parameters
   static var exponentBias:      Int {  101 }
   static var maxBiasedExponent: Int {  191 }
-  static var minBiasedExponent: Int {    0 }
   static var maximumDigits:     Int {    7 }
   static var exponentBits:      Int {    8 }
   
   static var largestNumber: Significand { 9_999_999 }
-  
-  // Two significand sizes must be supported
-  static var largeSignificandBits: IntRange { 0...22 }
-  static var smallSignificandBits: IntRange { 0...20 }
 }
 
 /// Implementation of the 32-bit Decimal32 floating-point operations from
