@@ -35,7 +35,7 @@ struct IntDecimal64 : IntDecimal {
   
   // Define the fields and required parameters
   static var exponentBias:      Int {  398 }
-  static var maxBiasedExponent: Int {  767 } // unbiased
+  static var maxBiasedExponent: Int {  767 } 
   static var maximumDigits:     Int {   16 }
   static var exponentBits:      Int {   10 }
   
@@ -62,7 +62,7 @@ public struct Decimal64 : Codable, Hashable {
   
   public init?(_ s: String) {
     if let n: ID = numberFromString(s, round: Self.rounding) { bid = n }
-    return nil
+    else { return nil }
   }
 }
 

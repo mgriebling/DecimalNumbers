@@ -69,7 +69,7 @@ public struct Decimal32 : Codable, Hashable {
   
   public init?(_ s: String) {
     if let n: ID = numberFromString(s, round: Self.rounding) { bid = n }
-    return nil
+    else { return nil }
   }
 }
 
@@ -271,9 +271,9 @@ extension Decimal32 : DecimalFloatingPoint {
   }
   
   public init(sign: Sign, exponentBitPattern: RawExponent,
-              significandBitPattern significantBitPattern: RawSignificand) {
+              significandBitPattern: RawSignificand) {
     bid = ID(sign: sign, exponent: Int(exponentBitPattern),
-             significand: ID.Significand(significantBitPattern))
+             significand: ID.Significand(significandBitPattern))
   }
   
   ///////////////////////////////////////////////////////////////////////////
@@ -283,6 +283,7 @@ extension Decimal32 : DecimalFloatingPoint {
   public var exponentBitPattern: UInt      { UInt(bid.exponent) }
   public var bidBitPattern: UInt32         { bid.data }
   public var dpdBitPattern: UInt32         { bid.dpd }
+  
   public var int: Int64                    { bid.int(Self.rounding) }
   public var uint: UInt64                  { bid.uint(Self.rounding) }
   

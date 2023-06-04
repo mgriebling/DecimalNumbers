@@ -66,7 +66,7 @@ public struct Decimal128 : Codable, Hashable {
   
   public init?(_ s: String) {
     if let n: ID = numberFromString(s, round: Self.rounding) { bid = n }
-    return nil
+    else { return nil }
   }
 }
 
@@ -279,6 +279,8 @@ extension Decimal128 : DecimalFloatingPoint {
   public var exponentBitPattern: UInt       { UInt(bid.exponent) }
   public var bidBitPattern: UInt128         { bid.data }
   public var dpdBitPattern: UInt128         { bid.dpd }
+  
+  // Not officially support - move to FixedWidthInteger protocol
   public var int: Int64                     { bid.int(Self.rounding) }
   public var uint: UInt64                   { bid.uint(Self.rounding) }
   
