@@ -59,6 +59,8 @@ public struct Decimal128 : Codable, Hashable {
   typealias ID = IntDecimal128
   var bid: ID = ID.zero(.plus)
   
+  private static let rounding = Rounding.toNearestOrEven
+  
   public init(bid: UInt128) { self.bid.data = bid }
   init(bid: ID)             { self.bid = bid }
   
@@ -252,7 +254,7 @@ extension Decimal128 : DecimalFloatingPoint {
   public typealias RawExponent = UInt
   public typealias RawSignificand = UInt128
   
-  public static var rounding = Rounding.toNearestOrEven
+  // private static var rounding = Rounding.toNearestOrEven
 
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for DecimalFloatingPoint

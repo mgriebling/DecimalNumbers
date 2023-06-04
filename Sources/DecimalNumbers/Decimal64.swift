@@ -55,6 +55,8 @@ public struct Decimal64 : Codable, Hashable {
   typealias ID = IntDecimal64
   var bid: ID = ID.zero(.plus)
   
+  private static let rounding = Rounding.toNearestOrEven
+  
   public init(bid: UInt64) { self.bid.data = bid }
   init(bid: ID)            { self.bid = bid }
   
@@ -247,7 +249,7 @@ extension Decimal64 : DecimalFloatingPoint {
   public typealias RawExponent = UInt
   public typealias RawSignificand = UInt64
   
-  public static var rounding = Rounding.toNearestOrEven
+  // public static var rounding = Rounding.toNearestOrEven
 
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for DecimalFloatingPoint

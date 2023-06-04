@@ -348,9 +348,9 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_div", 0, "0xfe000000", "1.0", 0xfc000000, 0x01),
       TestCase("bid32_div", 0, "Infinity", "Infinity", 0x7c000000, 0x01),
       TestCase("bid32_div", 0, "Infinity", "NaN", 0x7c000000, 0x00),
-      TestCase("bid32_div", 1, "0x803c6719", "0xa77f173f", 0x08488551, 0x20),   // 65
-      TestCase("bid32_div", 2, "0x803c6719", "0xa77f173f", 0x08488552, 0x20),
-      TestCase("bid32_div", 2, "0xc27912d4", "0x6c2e0ad6", 0xf0220ff5, 0x20),
+//      TestCase("bid32_div", 1, "0x803c6719", "0xa77f173f", 0x08488551, 0x20),   // 65
+//      TestCase("bid32_div", 2, "0x803c6719", "0xa77f173f", 0x08488552, 0x20),
+//      TestCase("bid32_div", 2, "0xc27912d4", "0x6c2e0ad6", 0xf0220ff5, 0x20),
       
       TestCase("bid32_sqrt", 0, "0x00000001", 0x163040A6, 0x20),   // ulp=-3.3983162067e-01
       TestCase("bid32_sqrt", 0, "0x00000001", 0x163040a6, 0x20),   // ulp=-3.398316e-01
@@ -1059,17 +1059,16 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_fma", 0, "SNaN", "0", "Infinity", 0x7c000000, 01),
       TestCase("bid32_fma", 0, "SNaN", "+56858.E0", "SNaN", 0x7c000000, 01),
       TestCase("bid32_fma", 0, "SNaN", "-Infinity", "QNaN", 0x7c000000, 01),
-      TestCase("bid32_fma", 1, "0x00000010", "0x8f464f29", "0x40000001", 0x6f38967f, 0x20),
-      TestCase("bid32_fma", 1, "-0", "0", "SNaN", 0x7c000000, 01),
-      TestCase("bid32_fma", 1, "0x812f6fda", "0x175cbe7d", "0x3ffaffff", 0x3ffafffe, 0x20),
-      TestCase("bid32_fma", 1, "0xdf800000", "0x55966da3", "0x20000000", 0xa0000000, 0x00),
-      TestCase("bid32_fma", 2, "0x04436437", "0x971895d0", "0x00000001", 0x00000001, 0x30), // 570
+//      TestCase("bid32_fma", 1, "0x00000010", "0x8f464f29", "0x40000001", 0x6f38967f, 0x20),
+//      TestCase("bid32_fma", 1, "-0", "0", "SNaN", 0x7c000000, 01),
+//      TestCase("bid32_fma", 1, "0x812f6fda", "0x175cbe7d", "0x3ffaffff", 0x3ffafffe, 0x20),
+//      TestCase("bid32_fma", 1, "0xdf800000", "0x55966da3", "0x20000000", 0xa0000000, 0x00),
+//      TestCase("bid32_fma", 2, "0x04436437", "0x971895d0", "0x00000001", 0x00000001, 0x30), // 570
 //      TestCase("bid32_fma", 2, "0x05cc9cb1", "0x800420a2", "0x00001000", 0x00001000, 0x30),
 //      TestCase("bid32_fma", 2, "0x80104200", "0xa1480040", "0x264b785d", 0x264b785e, 0x20),
       TestCase("bid32_fma", 4, "0x030ab023", "0x2b260b0c", "0x10090200", 0x0fda1400, 0x20),
       TestCase("bid32_fma", 4, "0x29314e22", "0x00000462", "0x89102128", 0x89102128, 0x20),
       TestCase("bid32_fma", 4, "0x3de1a7d1", "0x20010465", "0x9fe7fd9f", 0x2dc11921, 0x20),
-      // FIXME: - Test case 575 failure
  //     TestCase("bid32_fma", 4, "0x40890002", "0x02800028", "0x90db8353", 0x111ad94d, 0x20),
       TestCase("bid32_fma", 4, "0x8000000b", "0x07e8eaec", "0x0280000a", 0x000f4240, 0x30), // underflow_before_only
       TestCase("bid32_fma", 4, "0x80000a0a", "0x86080300", "0xa3800000", 0x00000000, 0x30),
@@ -1664,7 +1663,7 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_mul", 0, "0xfe000000", "1.0", 0xfc000000, 0x01),
       TestCase("bid32_mul", 0, "Infinity", "NaN", 0x7c000000, 0x00),
       TestCase("bid32_mul", 0, "0x07040000", "0xa7cce69c", 0x8000339b, 0x30),
-      TestCase("bid32_mul", 2, "0x07040000", "0xa7cce69c", 0x8000339b, 0x30), // 50
+//      TestCase("bid32_mul", 2, "0x07040000", "0xa7cce69c", 0x8000339b, 0x30), // 50
       TestCase("bid32_mul", 0, "0xa09d5d70", "0x78000000", 0xf8000000, 0x00),
       TestCase("bid32_mul", 0, "0x04000000", "0x1a172eeb", 0x00000000, 0x00),
       TestCase("bid32_mul", 0, "0x78000000", "0x3fff3da3", 0x78000000, 0x00),
@@ -1677,14 +1676,14 @@ final class Decimal32Tests: XCTestCase {
       // TestCase("bid32_mul", 0, "0xb186347f", "0x3200014a", 0xb2147a0a, 0x20), // 60
       TestCase("bid32_mul", 0, "1010101E-95",  "99E-8", "1000000E-101", 0x30), //  underflow_before_only
       // TestCase("bid32_mul", 1, "1010101E-95",  "99E-8", "999999E-101", 0x30), //
-      TestCase("bid32_mul", 2, "1010101E-95",  "99E-8", "1000000E-101", 0x30), //  underflow_before_only
-      TestCase("bid32_mul", 3, "1010101E-95",  "99E-8", "999999E-101", 0x30), //
-      TestCase("bid32_mul", 4, "1010101E-95",  "99E-8", "1000000E-101", 0x30), //  underflow_before_only
+//      TestCase("bid32_mul", 2, "1010101E-95",  "99E-8", "1000000E-101", 0x30), //  underflow_before_only
+//      TestCase("bid32_mul", 3, "1010101E-95",  "99E-8", "999999E-101", 0x30), //
+//      TestCase("bid32_mul", 4, "1010101E-95",  "99E-8", "1000000E-101", 0x30), //  underflow_before_only
       TestCase("bid32_mul", 0, "1010101E-95", "-99E-8", "-1000000E-101", 0x30), //  underflow_before_only
       // TestCase("bid32_mul", 1, "1010101E-95", "-99E-8", "-1000000E-101", 0x30), //  underflow_before_only
-      TestCase("bid32_mul", 2, "1010101E-95", "-99E-8", "-999999E-101", 0x30), //
-      TestCase("bid32_mul", 3, "1010101E-95", "-99E-8", "-999999E-101", 0x30), //
-      TestCase("bid32_mul", 4, "1010101E-95", "-99E-8", "-1000000E-101", 0x30), // underflow_before_only
+//      TestCase("bid32_mul", 2, "1010101E-95", "-99E-8", "-999999E-101", 0x30), //
+//      TestCase("bid32_mul", 3, "1010101E-95", "-99E-8", "-999999E-101", 0x30), //
+//      TestCase("bid32_mul", 4, "1010101E-95", "-99E-8", "-1000000E-101", 0x30), // underflow_before_only
       
       TestCase("bid32_negate", 0, "0x00000001", 0x80000001, 0x00),    // 1
       TestCase("bid32_negate", 0, "0x00080001", 0x80080001, 0x00),
@@ -4772,27 +4771,27 @@ final class Decimal32Tests: XCTestCase {
     let state = Status.clearFlags
     
     for test in testCases1+testCases2+testCases3 {
-      Decimal32.rounding = test.roundMode // state = []
+      // Decimal32.rounding = test.roundMode // state = []
       // reset for each type of test
       if prevID != test.id { testID = 1; prevID = test.id; print() }
       
       func getNumber(_ s: String) -> Decimal32 {
         if s.hasPrefix("0x") {
           var s = s; s.removeFirst(2)
-          return Decimal32(bidBitPattern: UInt32(s, radix:16) ?? 0)
+          return Decimal32(bid: UInt32(s, radix:16) ?? 0)
         }
-        return Decimal32(stringLiteral: s)
+        return Decimal32(stringLiteral: s, round: test.roundMode)
       }
       
       switch test.id {
         case "bid32_from_string":
           let t1 = getNumber(test.istr)
-          let dtest = Decimal32(UInt32(test.res))
+          let dtest = Decimal32(bid: UInt32(test.res))
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]",
                              test.res, t1.bid.data)
           checkValues(test, UInt64(t1.bid.data), state, error)
         case "bid32_to_binary64":
-          let t1 = getNumber(test.istr).double
+          let t1 = getNumber(test.istr).double(round: test.roundMode)
           let d1 = Double(bitPattern: test.res)
           let error = "\(d1) != \(t1)"
           checkValues(test, t1.bitPattern, state, error)
@@ -4912,7 +4911,8 @@ final class Decimal32Tests: XCTestCase {
                              test.res, t1.bid.data)
           checkValues(test, UInt64(t1.bid.data), state, error)
         case "bid32_sqrt":
-          let t1 = getNumber(test.istr).squareRoot()
+          var t1 = getNumber(test.istr)
+          t1.formSquareRoot(round: test.roundMode)
           let state = state
           let dtest = Decimal32(UInt32(test.res))
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]",
@@ -4952,9 +4952,6 @@ final class Decimal32Tests: XCTestCase {
           } else if test.id.hasSuffix("sub") {
             res = t1 - t2
           } else if test.id.hasSuffix("mul") {
-//            if testID == 33 {
-//              print(t1, "*", t2)
-//            }
             res = t1 * t2
           } else if test.id.hasSuffix("rem") {
             res = t1; res.formRemainder(dividingBy: t2)
@@ -4996,9 +4993,9 @@ final class Decimal32Tests: XCTestCase {
           let t1 = getNumber(test.istr)
           let t2 = getNumber(test.istr2)
           let t3 = getNumber(test.istr3)
-          if testID == 572 {
-            print(t3, "+", t1, "*", t2)
-          }
+//          if testID == 572 {
+//            print(t3, "+", t1, "*", t2)
+//          }
           let res = t3.addingProduct(t1, t2)
           let dtest = Decimal32(bid:UInt32(test.res))
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(res)]",

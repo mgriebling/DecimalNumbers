@@ -59,7 +59,8 @@ public struct Decimal32 : Codable, Hashable {
   public typealias RawExponent = UInt
   public typealias RawSignificand = UInt32
   
-  public static var rounding = Rounding.toNearestOrEven
+  // Default rounding mode used by most methods
+  private static let rounding = Rounding.toNearestOrEven
   
   var bid = ID.zero(.plus)
   
@@ -85,7 +86,7 @@ extension Decimal32 : AdditiveArithmetic {
     Self(bid: ID.add(lhs.bid, rhs.bid, rounding: Self.rounding))
   }
   
-  public static var zero: Self { Self(bid: ID.zero(.plus)) }
+  public static var zero: Self { Self(bid: ID.zero()) }
 }
 
 extension Decimal32 : Equatable {
@@ -134,7 +135,11 @@ extension Decimal32 : ExpressibleByIntegerLiteral {
 
 extension Decimal32 : ExpressibleByStringLiteral {
   public init(stringLiteral value: StringLiteralType) {
-    bid = numberFromString(value, round: Self.rounding) ?? Self.zero.bid
+    self.init(stringLiteral: value, round: .toNearestOrEven)
+  }
+  
+  public init(stringLiteral value: StringLiteralType, round: Rounding) {
+    bid = numberFromString(value, round: round) ?? Self.zero.bid
   }
 }
 
@@ -164,9 +169,9 @@ extension Decimal32 : FloatingPoint {
   public static var exponentBias: Int          {ID.exponentBias}
   public static var significandDigitCount: Int {ID.maximumDigits}
   
-  public static var nan: Self          { Self(bid:ID.nan()) }
-  public static var signalingNaN: Self { Self(bid:ID.snan) }
-  public static var infinity: Self     { Self(bid:ID.infinite()) }
+  public static var nan: Self                  { Self(bid:ID.nan()) }
+  public static var signalingNaN: Self         { Self(bid:ID.snan) }
+  public static var infinity: Self             { Self(bid:ID.infinite()) }
   
   public static var greatestFiniteMagnitude: Self {
     Self(bid:ID(exponent:ID.maxBiasedExponent, significand:ID.largestNumber))
@@ -235,6 +240,10 @@ extension Decimal32 : FloatingPoint {
     bid = ID.sqrt(self.bid, Self.rounding)
   }
   
+  public mutating func formSquareRoot(round: Rounding) {
+    bid = ID.sqrt(self.bid, round)
+  }
+  
   public mutating func addProduct(_ lhs: Self, _ rhs: Self) {
     bid = ID.fma(lhs.bid, rhs.bid, self.bid, Self.rounding)
   }
@@ -276,7 +285,8 @@ extension Decimal32 : DecimalFloatingPoint {
   public var dpdBitPattern: UInt32         { bid.dpd }
   public var int: Int64                    { bid.int(Self.rounding) }
   public var uint: UInt64                  { bid.uint(Self.rounding) }
-  public var double: Double                { bid.double(Self.rounding) }
+  
+  public func double(round:Rounding) -> Double { bid.double(round) }
   
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }

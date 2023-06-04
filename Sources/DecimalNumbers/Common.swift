@@ -2312,10 +2312,10 @@ extension IntDecimal {
       return Self(Self.adjustOverflowUnderflow(sign, exponentX, P, rmode))
     }
     
-    var rmode1 = rmode.index(negative: sign == .minus, lsb: 0)
-    if sign == .minus && (UInt32(rmode1) &- 1) < 2 {
-      rmode1 = 3 - rmode1
-    }
+    var rmode1 = rmode.index(negative: sign == .minus, lsb: 0) >> 2
+//    if sign == .minus && (UInt32(rmode1) &- 1) < 2 {
+//      rmode1 = 3 - rmode1
+//    }
     
     if exponentX < 0 { rmode1 = 3 }  // RZ
     

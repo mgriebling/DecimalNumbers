@@ -24,7 +24,7 @@ limitations under the License.
 /// available.
 ///
 /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
-public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
+public protocol DecimalFloatingPoint:FloatingPoint {
   
   /// A type that represents the encoded significand of a value.
   associatedtype RawSignificand: UnsignedInteger
@@ -135,18 +135,6 @@ public protocol DecimalFloatingPoint:FloatingPoint, ExpressibleByFloatLiteral {
   ///```
   var decade: Self { get }
   
-  /// True if the internal number encoding is binary integer decimal or BID.
-  /// The alternative allowed by the IEEE standard is densely packed decimal
-  /// or DPD.
-  ///
-  /// The initializer `init(bitPattern:bidEncoding)` works from both DPD and
-  /// BID. Converters to both formats are also available.
-  // static var isBIDFormat: Bool { get }
-  
-  // FIXME: - Discussion on how to do rounding and state tracking
-  /// Class-wide setting for how numbers will be rounded in calculations.
-  static var rounding: Rounding { get set }
-  
   /// The number of digits required to represent the value's significand.
   ///
   /// If this value is a finite nonzero number, `significandDigitCount` is the
@@ -214,7 +202,7 @@ extension DecimalFloatingPoint {
   static func _convert<Source: DecimalFloatingPoint>(from source: Source) ->
                                               (value: Self, exact: Bool) {
     let isMinus = source.sign == .minus
-    guard !source.isZero else { return (isMinus ? -0.0 : 0, true) }
+    guard !source.isZero else { return (isMinus ? -0 : 0, true) }
     
     guard source.isFinite else {
       if source.isInfinite { return (isMinus ? -.infinity : .infinity, true) }
@@ -248,7 +236,7 @@ extension DecimalFloatingPoint {
       exemplar = Self.leastNonzeroMagnitude
       let minExponent = exemplar.exponent
       if exponent + 1 < minExponent {
-        return (isMinus ? -0.0 : 0, false)
+        return (isMinus ? -0 : 0, false)
       }
       if _slowPath(exponent + 1 == minExponent) {
         // Although the most significant bit (MSB) of a subnormal source
@@ -261,7 +249,7 @@ extension DecimalFloatingPoint {
         // Therefore, we do not need to adjust our work here for a subnormal
         // source.
         return source.significandDigitCount == 0
-        ? (isMinus ? -0.0 : 0, false)
+        ? (isMinus ? -0 : 0, false)
         : (isMinus ? -exemplar : exemplar, false)
       }
       
