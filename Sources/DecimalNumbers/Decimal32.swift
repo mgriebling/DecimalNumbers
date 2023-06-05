@@ -24,15 +24,15 @@ import UInt128
 /// holds all 32 bits of the Decimal32 data type.
 struct IntDecimal32 : IntDecimal {
   typealias RawData = UInt32
-  typealias Significand = UInt
+  typealias RawSignificand = UInt
   
   var data: RawData = 0
   
   init(_ word: RawData) { self.data = word }
   
-  init(sign:Sign = .plus, exponent:Int=0, significand:Significand) {
+  init(sign:Sign = .plus, encodedExponent:Int=0, significand:RawSignificand) {
     self.sign = sign
-    self.set(exponent: exponent, significand: significand)
+    self.set(exponent: encodedExponent, significand: significand)
   }
   
   // Define the fields and required parameters
@@ -41,7 +41,7 @@ struct IntDecimal32 : IntDecimal {
   static var maximumDigits:     Int {    7 }
   static var exponentBits:      Int {    8 }
   
-  static var largestNumber: Significand { 9_999_999 }
+  static var largestNumber: RawSignificand { 9_999_999 }
 }
 
 /// Implementation of the 32-bit Decimal32 floating-point operations from
@@ -154,7 +154,7 @@ extension Decimal32 : FloatingPoint {
   // MARK: - Initializers for FloatingPoint
   
   public init(sign: Sign, exponent: Int, significand: Self) {
-    self.bid = ID(sign: sign, exponent: exponent+Self.exponentBias,
+    self.bid = ID(sign: sign, encodedExponent: exponent+Self.exponentBias,
                     significand: significand.bid.unpack().significand)
   }
   
@@ -174,19 +174,19 @@ extension Decimal32 : FloatingPoint {
   public static var infinity: Self             { Self(bid:ID.infinite()) }
   
   public static var greatestFiniteMagnitude: Self {
-    Self(bid:ID(exponent:ID.maxBiasedExponent, significand:ID.largestNumber))
+    Self(bid:ID(encodedExponent:ID.maxBiasedExponent, significand:ID.largestNumber))
   }
   
   public static var leastNormalMagnitude: Self {
-    Self(bid:ID(exponent:ID.minBiasedExponent, significand:ID.largestNumber))
+    Self(bid:ID(encodedExponent:ID.minBiasedExponent, significand:ID.largestNumber))
   }
   
   public static var leastNonzeroMagnitude: Self {
-    Self(bid: ID(exponent: ID.minBiasedExponent, significand: 1))
+    Self(bid: ID(encodedExponent: ID.minBiasedExponent, significand: 1))
   }
   
   public static var pi: Self {
-    Self(bid: ID(exponent: ID.exponentBias-ID.maximumDigits+1,
+    Self(bid: ID(encodedExponent: ID.exponentBias-ID.maximumDigits+1,
                  significand: 3_141_593))
   }
   
@@ -209,7 +209,7 @@ extension Decimal32 : FloatingPoint {
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()
     if !valid { return self }
-    return Self(bid: ID(exponent: Int(exponentBitPattern), significand: man))
+    return Self(bid: ID(encodedExponent: Int(exponentBitPattern), significand: man))
   }
 
   ///////////////////////////////////////////////////////////////////////////
@@ -272,8 +272,8 @@ extension Decimal32 : DecimalFloatingPoint {
   
   public init(sign: Sign, exponentBitPattern: RawExponent,
               significandBitPattern: RawSignificand) {
-    bid = ID(sign: sign, exponent: Int(exponentBitPattern),
-             significand: ID.Significand(significandBitPattern))
+    bid = ID(sign: sign, encodedExponent: Int(exponentBitPattern),
+             significand: ID.RawSignificand(significandBitPattern))
   }
   
   ///////////////////////////////////////////////////////////////////////////
@@ -296,6 +296,6 @@ extension Decimal32 : DecimalFloatingPoint {
   
   public var decade: Self {
     guard bid.isValid else { return self } // For infinity, Nan, sNaN
-    return Self(bid: ID(exponent: bid.exponent, significand: 1))
+    return Self(bid: ID(encodedExponent: bid.exponent, significand: 1))
   }
 }
