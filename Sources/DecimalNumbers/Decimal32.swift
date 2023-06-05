@@ -141,7 +141,6 @@ extension Decimal32 : Strideable {
 }
 
 extension Decimal32 : FloatingPoint {
-  
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for FloatingPoint
   
@@ -276,8 +275,8 @@ extension Decimal32 : DecimalFloatingPoint {
   public var bidBitPattern: UInt32         { bid.data }
   public var dpdBitPattern: UInt32         { bid.dpd }
   
-  public var int: Int64                    { bid.int(ID.rounding) }
-  public var uint: UInt64                  { bid.uint(ID.rounding) }
+//  public var int: Int64                    { bid.int(ID.rounding) }
+//  public var uint: UInt64                  { bid.uint(ID.rounding) }
   
   public func double(round:Rounding) -> Double { bid.double(round) }
   

@@ -167,10 +167,6 @@ extension DecimalFloatingPoint {
   /// are extraordinarily rare in practice.
   @inlinable public static var radix: Int { 10 }
   
-  ///////////////////////////////////////////////////////////////////////////
-  // MARK: - DecimalFloatingPoint properties and attributes
-  @inlinable public static var isBIDFormat: Bool { true }
-  
   /// Creates a new floating-point value using the sign of one value and the
   /// magnitude of another.
   ///
@@ -285,7 +281,6 @@ extension DecimalFloatingPoint {
   ///
   /// - Parameter value: A decimal floating-point value to be converted.
   @inlinable public init<S:DecimalFloatingPoint>(_ value: S) {
-//    let (value, _) = Self._convert(from: value)
     self = Self._convert(from: value).value
   }
   
@@ -368,26 +363,21 @@ extension DecimalFloatingPoint {
   
 }
 
-extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
-  
-  static func _decimalLogarithm<Source:BinaryInteger>(_ x:Source) ->
-                                    (exp:Int, digits:Self.RawSignificand) {
-    assert(x > (0 as Source))  // negatives and zero are illegal
-    var digits = 0
-    let ten = (10 as Source)
-    var expx10 = 0
-    var pow10 = 1
-    var n = x
-    while n > 0 {
-      expx10 += 1
-      let x = n.quotientAndRemainder(dividingBy: ten)
-      digits = digits + Int(x.remainder) * pow10
-      pow10 *= 10
-      n = x.quotient
-    }
-    return (expx10, Self.RawSignificand(digits))
+func _decimalLogarithm<Source:BinaryInteger>(_ x:Source) -> Int {
+  assert(x > (0 as Source))  // negatives and zero are illegal
+  var expx10 = 1
+  var pow10 = 10
+  while pow10 < x {
+    expx10 += 1
+    pow10 *= 10
+    //if pow10 < Source.max/10 { pow10 *= 10 }
+    //else { pow10 = Source.max }
   }
-  
+  return expx10
+}
+
+extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
+    
   public // @testable
   static func _convert<Source:BinaryInteger>(from source: Source) ->
                                             (value: Self, exact: Bool) {
@@ -403,11 +393,11 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     //  We now have a non-zero value; convert it to a strictly positive value
     //  by taking the magnitude.
     // need a x10ⁿ exponent & significand digits
-    let expMag = _decimalLogarithm(source.magnitude)
+    let exp = _decimalLogarithm(source.magnitude)
     
     //  If the exponent would be larger than the largest representable
     //  exponent, the result is just an infinity of the appropriate sign.
-    guard expMag.exp <= Self.greatestFiniteMagnitude.exponent else {
+    guard exp <= Self.greatestFiniteMagnitude.exponent else {
       return (Source.isSigned && source < 0 ? -.infinity : .infinity, false)
     }
     
@@ -416,9 +406,9 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     let value = Self(
       sign: Source.isSigned && source < 0 ? .minus : .plus,
       exponentBitPattern: Self.RawExponent(exponentBias),
-      significandBitPattern: expMag.digits
+      significandBitPattern: RawSignificand(source.magnitude)
     )
-    return (value, expMag.exp <= Self.significandDigitCount)
+    return (value, exp <= Self.significandDigitCount)
   }
   
   /// Creates a new value, rounded to the closest possible representation.
@@ -485,7 +475,7 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     //  is an acceptable short-term fix.
     precondition(delta.isFinite,
                  "There is no uniform distribution on an infinite range")
-    let max = delta.significandBitPattern
+    let max = UInt(delta.significandBitPattern)
       
     // get a random integer up to the maximum
     let r = generator.next(upperBound: max)
@@ -572,7 +562,7 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     //  is an acceptable short-term fix.
     precondition(delta.isFinite,
                  "There is no uniform distribution on an infinite range")
-    let max = delta.significandBitPattern
+    let max = UInt(delta.significandBitPattern)
 
     // get a random integer up to the maximum
     let r = generator.next(upperBound: max)

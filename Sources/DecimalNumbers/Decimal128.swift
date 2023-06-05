@@ -135,7 +135,6 @@ extension Decimal128 : Strideable {
 }
 
 extension Decimal128 : FloatingPoint {
-  
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for FloatingPoint
   

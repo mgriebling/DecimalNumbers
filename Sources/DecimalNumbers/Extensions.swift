@@ -13,6 +13,95 @@ extension UInt128 {
   }
 }
 
+extension FixedWidthInteger {
+  @_semantics("optimize.sil.specialize.generic.partial.never")
+  public // @testable
+  static func _convert<Source: DecimalFloatingPoint>(
+    from source: Source
+  ) -> (value: Self?, exact: Bool) {
+    guard _fastPath(!source.isZero) else { return (0, true) }
+    guard _fastPath(source.isFinite) else { return (nil, false) }
+    guard Self.isSigned || source > -1 else { return (nil, false) }
+    let exponent = Int(source.exponent)
+    let destMaxDigits = _decimalLogarithm(Self.max)
+    let digitWidth = source.significandDigitCount // exact digit width
+    if _slowPath(digitWidth+exponent <= destMaxDigits) { return (nil, false) }
+    let isExact = exponent >= 0
+    let bitPattern = Self.Magnitude(source.significandBitPattern) // all digits
+    
+    // Determine the actual number of integral significand digits.
+    // We can ignore any fraction since we are rounding to zero
+    let shift = Int(exponent)
+    // Use `Self.Magnitude` to prevent sign extension if `shift < 0`.
+    let shiftedDigits = shift >= 0
+        ? bitPattern * power(10, to:shift)
+        : bitPattern / power(10, to:-shift)
+    if _slowPath(Self.isSigned && Self.bitWidth &- 1 == exponent) {
+      return source < 0 && shiftedDigits == 0
+        ? (Self.min, isExact)
+        : (nil, false)
+    }
+    let magnitude = shiftedDigits
+    return (
+      Self.isSigned && source < 0 ? 0 &- Self(magnitude) : Self(magnitude),
+      isExact)
+  }
+  
+  /// Creates an integer from the given floating-point value, rounding toward
+  /// zero. Any fractional part of the value passed as `source` is removed.
+  ///
+  ///     let x = Int(21.5)
+  ///     // x == 21
+  ///     let y = Int(-21.5)
+  ///     // y == -21
+  ///
+  /// If `source` is outside the bounds of this type after rounding toward
+  /// zero, a runtime error may occur.
+  ///
+  ///     let z = UInt(-21.5)
+  ///     // Error: ...outside the representable range
+  ///
+  /// - Parameter source: A floating-point value to convert to an integer.
+  ///   `source` must be representable in this type after rounding toward
+  ///   zero.
+  @inlinable
+  @_semantics("optimize.sil.specialize.generic.partial.never")
+  @inline(__always)
+  public init<T: DecimalFloatingPoint>(_ source: T) {
+    guard let value = Self._convert(from: source).value else {
+      fatalError("""
+        \(T.self) value cannot be converted to \(Self.self) because it is \
+        outside the representable range
+        """)
+    }
+    self = value
+  }
+  
+  /// Creates an integer from the given floating-point value, if it can be
+  /// represented exactly.
+  ///
+  /// If the value passed as `source` is not representable exactly, the result
+  /// is `nil`. In the following example, the constant `x` is successfully
+  /// created from a value of `21.0`, while the attempt to initialize the
+  /// constant `y` from `21.5` fails:
+  ///
+  ///     let x = Int(exactly: 21.0)
+  ///     // x == Optional(21)
+  ///     let y = Int(exactly: 21.5)
+  ///     // y == nil
+  ///
+  /// - Parameter source: A floating-point value to convert to an integer.
+  @_semantics("optimize.sil.specialize.generic.partial.never")
+  @inlinable
+  public init?<T: DecimalFloatingPoint>(exactly source: T) {
+    let (temporary, exact) = Self._convert(from: source)
+    guard exact, let value = temporary else {
+      return nil
+    }
+    self = value
+  }
+}
+
 /// Defines bit-related operations such as setting/getting bits of a number
 extension FixedWidthInteger {
   private func mask(_ size: Int) -> Self { (Self(1) << size) - 1 }
