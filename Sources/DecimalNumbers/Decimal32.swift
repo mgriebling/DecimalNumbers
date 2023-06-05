@@ -24,24 +24,24 @@ import UInt128
 /// holds all 32 bits of the Decimal32 data type.
 struct IntDecimal32 : IntDecimal {
   typealias RawData = UInt32
-  typealias RawSignificand = UInt
+  typealias RawBitPattern = UInt
   
   var data: RawData = 0
   
   init(_ word: RawData) { self.data = word }
   
-  init(sign:Sign = .plus, encodedExponent:Int=0, significand:RawSignificand) {
+  init(sign:Sign = .plus, expBitPattern:Int=0, sigBitPattern:RawBitPattern) {
     self.sign = sign
-    self.set(exponent: encodedExponent, significand: significand)
+    self.set(exponent: expBitPattern, sigBitPattern: sigBitPattern)
   }
   
   // Define the fields and required parameters
   static var exponentBias:      Int {  101 }
-  static var maxBiasedExponent: Int {  191 }
+  static var maxEncodedExponent: Int {  191 }
   static var maximumDigits:     Int {    7 }
   static var exponentBits:      Int {    8 }
   
-  static var largestNumber: RawSignificand { 9_999_999 }
+  static var largestNumber: RawBitPattern { 9_999_999 }
 }
 
 /// Implementation of the 32-bit Decimal32 floating-point operations from
@@ -59,18 +59,10 @@ public struct Decimal32 : Codable, Hashable {
   public typealias RawExponent = UInt
   public typealias RawSignificand = UInt32
   
-  // Default rounding mode used by most methods
-  private static let rounding = Rounding.toNearestOrEven
-  
   var bid = ID.zero(.plus)
   
   public init(bid: UInt32) { self.bid.data = bid }
   init(bid: ID)            { self.bid = bid }
-  
-  public init?(_ s: String) {
-    if let n: ID = numberFromString(s, round: Self.rounding) { bid = n }
-    else { return nil }
-  }
 }
 
 extension Decimal32 : AdditiveArithmetic {
@@ -83,7 +75,7 @@ extension Decimal32 : AdditiveArithmetic {
   public mutating func negate() { self.bid.data.toggle(bit: ID.signBit) }
   
   public static func + (lhs: Self, rhs: Self) -> Self {
-    Self(bid: ID.add(lhs.bid, rhs.bid, rounding: Self.rounding))
+    Self(bid: ID.add(lhs.bid, rhs.bid, rounding: ID.rounding))
   }
   
   public static var zero: Self { Self(bid: ID.zero()) }
@@ -117,7 +109,7 @@ extension Decimal32 : CustomStringConvertible {
 
 extension Decimal32 : ExpressibleByFloatLiteral {
   public init(floatLiteral value: Double) {
-    self.init(bid: ID.bid(from: value, Self.rounding))
+    self.init(bid: ID.bid(from: value, ID.rounding))
   }
 }
 
@@ -125,10 +117,10 @@ extension Decimal32 : ExpressibleByIntegerLiteral {
   public init(integerLiteral value: IntegerLiteralType) {
     if IntegerLiteralType.isSigned {
       let x = Int(value).magnitude
-      bid = ID.bid(from: UInt64(x), Self.rounding)
+      bid = ID.bid(from: UInt64(x), ID.rounding)
       if value.signum() < 0 { self.negate() }
     } else {
-      bid = ID.bid(from: UInt64(value), Self.rounding)
+      bid = ID.bid(from: UInt64(value), ID.rounding)
     }
   }
 }
@@ -154,8 +146,8 @@ extension Decimal32 : FloatingPoint {
   // MARK: - Initializers for FloatingPoint
   
   public init(sign: Sign, exponent: Int, significand: Self) {
-    self.bid = ID(sign: sign, encodedExponent: exponent+Self.exponentBias,
-                    significand: significand.bid.unpack().significand)
+    self.bid = ID(sign: sign, expBitPattern: exponent+Self.exponentBias,
+                    sigBitPattern: significand.bid.unpack().sigBits)
   }
   
   public mutating func round(_ rule: Rounding) {
@@ -174,20 +166,20 @@ extension Decimal32 : FloatingPoint {
   public static var infinity: Self             { Self(bid:ID.infinite()) }
   
   public static var greatestFiniteMagnitude: Self {
-    Self(bid:ID(encodedExponent:ID.maxBiasedExponent, significand:ID.largestNumber))
+    Self(bid:ID(expBitPattern:ID.maxEncodedExponent, sigBitPattern:ID.largestNumber))
   }
   
   public static var leastNormalMagnitude: Self {
-    Self(bid:ID(encodedExponent:ID.minBiasedExponent, significand:ID.largestNumber))
+    Self(bid:ID(expBitPattern:ID.minEncodedExponent, sigBitPattern:ID.largestNumber))
   }
   
   public static var leastNonzeroMagnitude: Self {
-    Self(bid: ID(encodedExponent: ID.minBiasedExponent, significand: 1))
+    Self(bid: ID(expBitPattern: ID.minEncodedExponent, sigBitPattern: 1))
   }
   
   public static var pi: Self {
-    Self(bid: ID(encodedExponent: ID.exponentBias-ID.maximumDigits+1,
-                 significand: 3_141_593))
+    Self(bid: ID(expBitPattern: ID.exponentBias-ID.maximumDigits+1,
+                 sigBitPattern: 3_141_593))
   }
   
   ///////////////////////////////////////////////////////////////////////////
@@ -204,25 +196,25 @@ extension Decimal32 : FloatingPoint {
   public var isNaN: Bool          { bid.isNaN }
   public var isSignalingNaN: Bool { bid.isSNaN }
   public var isCanonical: Bool    { bid.isCanonical }
-  public var exponent: Int        { bid.exponent - ID.exponentBias }
+  public var exponent: Int        { bid.expBitPattern - ID.exponentBias }
   
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()
     if !valid { return self }
-    return Self(bid: ID(encodedExponent: Int(exponentBitPattern), significand: man))
+    return Self(bid: ID(expBitPattern: Int(exponentBitPattern), sigBitPattern: man))
   }
 
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Floating-point basic operations
   
   public static func * (lhs: Self, rhs: Self) -> Self {
-    Self(bid: ID.mul(lhs.bid, rhs.bid, Self.rounding))
+    Self(bid: ID.mul(lhs.bid, rhs.bid, ID.rounding))
   }
   
   public static func *= (lhs: inout Self, rhs: Self) { lhs = lhs * rhs }
   
   public static func / (lhs: Self, rhs: Self) -> Self {
-    Self(bid: ID.div(lhs.bid, rhs.bid, Self.rounding))
+    Self(bid: ID.div(lhs.bid, rhs.bid, ID.rounding))
   }
   
   public static func /= (lhs: inout Self, rhs: Self) { lhs = lhs / rhs }
@@ -237,7 +229,7 @@ extension Decimal32 : FloatingPoint {
   }
   
   public mutating func formSquareRoot() {
-    bid = ID.sqrt(self.bid, Self.rounding)
+    bid = ID.sqrt(self.bid, ID.rounding)
   }
   
   public mutating func formSquareRoot(round: Rounding) {
@@ -245,7 +237,7 @@ extension Decimal32 : FloatingPoint {
   }
   
   public mutating func addProduct(_ lhs: Self, _ rhs: Self) {
-    bid = ID.fma(lhs.bid, rhs.bid, self.bid, Self.rounding)
+    bid = ID.fma(lhs.bid, rhs.bid, self.bid, ID.rounding)
   }
   
   public func isEqual(to other: Self) -> Bool  { self == other }
@@ -262,40 +254,40 @@ extension Decimal32 : DecimalFloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for DecimalFloatingPoint
   
-  public init(bidBitPattern bits: RawSignificand) {
-    bid.data = bits
+  public init(bidBitPattern: RawSignificand) {
+    bid.data = bidBitPattern
   }
   
-  public init(dpdBitPattern bits: RawSignificand) {
-    bid = ID(dpd: ID.RawData(bits))
+  public init(dpdBitPattern: RawSignificand) {
+    bid = ID(dpd: ID.RawData(dpdBitPattern))
   }
   
   public init(sign: Sign, exponentBitPattern: RawExponent,
               significandBitPattern: RawSignificand) {
-    bid = ID(sign: sign, encodedExponent: Int(exponentBitPattern),
-             significand: ID.RawSignificand(significandBitPattern))
+    bid = ID(sign: sign, expBitPattern: Int(exponentBitPattern),
+             sigBitPattern: ID.RawBitPattern(significandBitPattern))
   }
   
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Instance properties and attributes
   
-  public var significandBitPattern: UInt32 { UInt32(bid.significand) }
-  public var exponentBitPattern: UInt      { UInt(bid.exponent) }
+  public var significandBitPattern: UInt32 { UInt32(bid.sigBitPattern) }
+  public var exponentBitPattern: UInt      { UInt(bid.expBitPattern) }
   public var bidBitPattern: UInt32         { bid.data }
   public var dpdBitPattern: UInt32         { bid.dpd }
   
-  public var int: Int64                    { bid.int(Self.rounding) }
-  public var uint: UInt64                  { bid.uint(Self.rounding) }
+  public var int: Int64                    { bid.int(ID.rounding) }
+  public var uint: UInt64                  { bid.uint(ID.rounding) }
   
   public func double(round:Rounding) -> Double { bid.double(round) }
   
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }
-    return ID.digitsIn(bid.significand)
+    return ID.digitsIn(bid.sigBitPattern)
   }
   
   public var decade: Self {
     guard bid.isValid else { return self } // For infinity, Nan, sNaN
-    return Self(bid: ID(encodedExponent: bid.exponent, significand: 1))
+    return Self(bid: ID(expBitPattern: bid.expBitPattern, sigBitPattern: 1))
   }
 }
