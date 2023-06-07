@@ -1762,19 +1762,19 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_nextup", 0, "0xfc100100", 0xfc000100, 0x00),
       TestCase("bid32_nextup", 0, "0xfe000000", 0xfc000000, 01),
       
-//      TestCase("bid32_to_bid128", 0, "0x3d000000",
-//               "0x306a0000000000000000000000000000", 0x00),
-//      TestCase("bid32_to_bid128", 0, "0x7c000100",
-//               "0x7c0000033b2e3c9fd0803ce800000000", 0x00),
-//      TestCase("bid32_to_bid128", 0, "0x92229c08",
-//               "0xafbe0000000000000000000000229c08", 0x00),
-//      TestCase("bid32_to_bid128", 0, "0xe5c005c3",
-//               "0xafd200000000000000000000008005c3", 0x00),
-//      TestCase("bid32_to_bid128", 0, "0xfe000000",
-//               "0xfc000000000000000000000000000000", 0x01),
-//      TestCase("bid32_to_bid128", 0, "-Infinity",
-//               "0xf8000000000000000000000000000000", 0x00),
-//
+      TestCase("bid32_to_bid128", 0, "0x3d000000",
+               "0x306a0000000000000000000000000000", 0x00),
+      TestCase("bid32_to_bid128", 0, "0x7c000100",
+               "0x7c0000033b2e3c9fd0803ce800000000", 0x00),
+      TestCase("bid32_to_bid128", 0, "0x92229c08",
+               "0xafbe0000000000000000000000229c08", 0x00),
+      TestCase("bid32_to_bid128", 0, "0xe5c005c3",
+               "0xafd200000000000000000000008005c3", 0x00),
+      TestCase("bid32_to_bid128", 0, "0xfe000000",
+               "0xfc000000000000000000000000000000", 0x01),
+      TestCase("bid32_to_bid128", 0, "-Infinity",
+               "0xf8000000000000000000000000000000", 0x00),
+
       TestCase("bid32_to_bid64", 0, "0x00000000", 0x2520000000000000, 0x00),
       TestCase("bid32_to_bid64", 0, "0x00000001", 0x2520000000000001, 0x00),
       TestCase("bid32_to_bid64", 0, "0x00000066", 0x2520000000000066, 0x00),
@@ -4721,17 +4721,7 @@ final class Decimal32Tests: XCTestCase {
       if verbose { print("Decimal32 test \(test.id)-\(testID) \(pf)") }
     }
     
-//    func myFatalError (_ message: @autoclosure () -> String = String(),
-//                       _ file:StaticString, _line: UInt) -> Never {
-//      print("Fatal error \(message())")
-//      return
-//      // fatalError()
-//    }
-    
     let state = Status.clearFlags
-    
-    // disable fatal errors
-//    triggerFatalError = myFatalError
     
     for test in testCases1+testCases2+testCases3 {
       // Decimal32.rounding = test.roundMode // state = []
@@ -4780,17 +4770,17 @@ final class Decimal32Tests: XCTestCase {
                              test.res, t1.bid.data)
           checkValues(test, UInt64(t1.bid.data), state, error)
         case "bid32_to_bid128":
-          break
-//          let t1 = Decimal32(stringLiteral: test.istr)
-//          let b128 = t1.decimal128
-//          let d128 = Decimal128( UInt128(upper: test.reshi, lower: test.reslo))
-//          let error = String(format: "0x%08X%08X[\(d128)] != 0x%08X%08X[\(b128)]", test.reshi, test.reslo, b128.bid.data.hi, b128.bid.data.lo)
-//          checkValues(test, b128.bid.data, state, error)
+          let t1 = getNumber(test.istr)
+          let b128 = Decimal128(t1)
+          let d128 = Decimal128(bid:UInt128(high: test.reshi, low: test.reslo))
+          let error = String(format:
+                            "0x%08X%08X[\(d128)] != 0x%08X%08X[\(b128)]",
+                             test.reshi, test.reslo,
+                             b128.bid.data.components.high,
+                             b128.bid.data.components.low)
+          checkValues(test, b128.bid.data, state, error)
         case "bid32_to_bid64":
           let t1 = getNumber(test.istr)
-          if testID == 59 {
-            print(t1)
-          }
           let b64 = Decimal64(t1)
           let error = "\(Decimal64(bid:test.res)) != \(b64)"
           checkValues(test, b64.bid.data, state, error)
@@ -4956,9 +4946,6 @@ final class Decimal32Tests: XCTestCase {
           let t1 = getNumber(test.istr)
           let t2 = getNumber(test.istr2)
           let t3 = getNumber(test.istr3)
-//          if testID == 572 {
-//            print(t3, "+", t1, "*", t2)
-//          }
           let res = t3.addingProduct(t1, t2)
           let dtest = Decimal32(bid:UInt32(test.res))
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(res)]",
