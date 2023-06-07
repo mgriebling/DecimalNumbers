@@ -17,38 +17,41 @@ extension FixedWidthInteger {
   @_semantics("optimize.sil.specialize.generic.partial.never")
   public // @testable
   static func _convert<Source: DecimalFloatingPoint>(
-    from source: Source
-  ) -> (value: Self?, exact: Bool) {
+    from source: Source) -> (value: Self?, exact: Bool) {
     guard _fastPath(!source.isZero) else { return (0, true) }
     guard _fastPath(source.isFinite) else { return (nil, false) }
     guard Self.isSigned || source > -1 else { return (nil, false) }
     let exponent = Int(source.exponent)
-    let destMaxDigits = _decimalLogarithm(Self.max)
-    let digitWidth = source.significandDigitCount // exact digit width
-    if _slowPath(digitWidth+exponent <= destMaxDigits) { return (nil, false) }
-    let isExact = exponent >= 0
-    let bitPattern = Self.Magnitude(source.significandBitPattern) // all digits
-    
-    // Determine the actual number of integral significand digits.
-    // We can ignore any fraction since we are rounding to zero
-    let shift = Int(exponent)
-    // Use `Self.Magnitude` to prevent sign extension if `shift < 0`.
-    let shiftedDigits = shift >= 0
-        ? bitPattern * power(10, to:shift)
-        : bitPattern / power(10, to:-shift)
-    if _slowPath(Self.isSigned && Self.bitWidth &- 1 == exponent) {
-      return source < 0 && shiftedDigits == 0
-        ? (Self.min, isExact)
-        : (nil, false)
+    let destMaxDigits : Int = digitsIn(Self.max)   // max Self digits
+    let digitWidth = source.significandDigitCount  // exact source width
+    if _slowPath(digitWidth+exponent > destMaxDigits) {
+      return (source.sign == .minus ? Self.min : Self.max, false)
     }
-    let magnitude = shiftedDigits
+    let isExact = exponent >= 0
+    let c = Self(source.significandBitPattern) // all digits
+    
+    // check for underflow
+    if digitWidth + exponent <= 0 { return (0, false) }
+    
+    // check if the decimal shifting will create overflow
+    let result = exponent >= 0
+      ? c.multipliedReportingOverflow(by: power(10, to:exponent))
+      : c.dividedReportingOverflow(by: power(10, to:-exponent))
+    if digitWidth + exponent == destMaxDigits {
+      if result.overflow {
+        return (source.sign == .minus ? Self.min : Self.max, false)
+      }
+    }
+
+    let magnitude = result.partialValue
     return (
       Self.isSigned && source < 0 ? 0 &- Self(magnitude) : Self(magnitude),
       isExact)
   }
   
-  /// Creates an integer from the given floating-point value, rounding toward
-  /// zero. Any fractional part of the value passed as `source` is removed.
+  /// Creates an integer from the given decimal floating-point value, rounding
+  /// toward zero. Any fractional part of the value passed as `source` is
+  /// removed.
   ///
   ///     let x = Int(21.5)
   ///     // x == 21
@@ -61,16 +64,15 @@ extension FixedWidthInteger {
   ///     let z = UInt(-21.5)
   ///     // Error: ...outside the representable range
   ///
-  /// - Parameter source: A floating-point value to convert to an integer.
-  ///   `source` must be representable in this type after rounding toward
-  ///   zero.
-  @inlinable
+  /// - Parameter source: A decimal floating-point value to convert to an
+  ///    integer. `source` must be representable in this type after rounding
+  ///    toward zero.
   @_semantics("optimize.sil.specialize.generic.partial.never")
   @inline(__always)
   public init<T: DecimalFloatingPoint>(_ source: T) {
     guard let value = Self._convert(from: source).value else {
       fatalError("""
-        \(T.self) value cannot be converted to \(Self.self) because it is \
+        \(source) cannot be converted to \(Self.self) because it is \
         outside the representable range
         """)
     }
@@ -95,9 +97,7 @@ extension FixedWidthInteger {
   @inlinable
   public init?<T: DecimalFloatingPoint>(exactly source: T) {
     let (temporary, exact) = Self._convert(from: source)
-    guard exact, let value = temporary else {
-      return nil
-    }
+    guard exact, let value = temporary else { return nil }
     self = value
   }
 }

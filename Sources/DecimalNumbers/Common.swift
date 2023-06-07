@@ -118,6 +118,7 @@ extension IntDecimal {
   static var signBit: Int             { maxBit }
   static var specialBits: IntRange    { maxBit-2 ... maxBit-1 }
   static var nanBitRange: IntRange    { maxBit-6 ... maxBit-1 }
+  static var infBitRange: IntRange    { maxBit-5 ... maxBit-1 }
   static var nanClearRange: IntRange  { 0 ... maxBit-7 }
   static var g6tog10Range: IntRange   { maxBit-11 ... maxBit-7 }
   
@@ -169,14 +170,14 @@ extension IntDecimal {
   }
   
   @inlinable var expBitPattern: Int {
-    let range = isSmallSignificand ? Self.exponentSMBits : Self.exponentLMBits
+    let range = isSmallSig ? Self.exponentSMBits : Self.exponentLMBits
     return data.getInt(range: range)
   }
   
   @inlinable var sigBitPattern: RawBitPattern {
-    let range = isSmallSignificand ? Self.smallSignificandBits
+    let range = isSmallSig ? Self.smallSignificandBits
                                    : Self.largeSignificandBits
-    if isSmallSignificand {
+    if isSmallSig {
       return RawBitPattern(data.get(range:range)) + Self.highSignificandBit
     } else {
       return RawBitPattern(data.get(range:range))
@@ -184,7 +185,7 @@ extension IntDecimal {
   }
   
   static func adjustOverflowUnderflow(_ sign: Sign, _ exp: Int,
-                            _ mant: RawBitPattern, _ rmode: Rounding) -> RawData {
+                        _ mant: RawBitPattern, _ rmode: Rounding) -> RawData {
     var exp = exp, mant = mant, rmode = rmode
     var raw = RawData(0)
     if mant > largestNumber {
@@ -402,7 +403,8 @@ extension IntDecimal {
   }
   
   @inlinable static var snan: Self {
-    Self(sign: .plus, expBitPattern: snanPattern<<(exponentBits-6), sigBitPattern: 0)
+    Self(sign: .plus, expBitPattern: snanPattern<<(exponentBits-6),
+         sigBitPattern: 0)
   }
   
   @inlinable static func zero(_ sign: Sign = .plus) -> Self {
@@ -412,16 +414,17 @@ extension IntDecimal {
   @inlinable
   static func nan(_ sign: Sign = .plus, _ payload: Int = 0) -> Self {
     let man = payload > largestNumber/10 ? 0 : RawBitPattern(payload)
-    return Self(sign:sign, expBitPattern:nanPattern<<(exponentBits-6), sigBitPattern:man)
+    return Self(sign:sign, expBitPattern:nanPattern<<(exponentBits-6),
+                sigBitPattern:man)
   }
   
   ///////////////////////////////////////////////////////////////////////
   // MARK: - Handy routines for testing different aspects of the number
   @inlinable var nanBits: Int { data.getInt(range: Self.nanBitRange) }
   
-  var isSmallSignificand: Bool { isSpecial }
-  var isNaN: Bool           { nanBits & Self.nanPattern == Self.nanPattern }
-  var isSNaN: Bool          { nanBits & Self.snanPattern == Self.snanPattern }
+  var isSmallSig: Bool { isSpecial }
+  var isNaN: Bool      { nanBits & Self.nanPattern == Self.nanPattern }
+  var isSNaN: Bool     { nanBits & Self.snanPattern == Self.snanPattern }
   
   var isFinite: Bool {
     let infinite = Self.infinitePattern
@@ -438,16 +441,15 @@ extension IntDecimal {
   }
   
   var isInfinite: Bool {
-    let infinite = Self.infinitePattern
-    let data = data.getInt(range: Self.signBit-5...Self.signBit-1)
-    return (data & infinite == infinite) 
+    let data = data.getInt(range: Self.infBitRange)
+    return (data & Self.infinitePattern) == Self.infinitePattern
   }
   
   var isValid: Bool {
     if isNaN { return false }
     if isSpecial {
       if isInfinite { return false }
-      if sigBitPattern > Self.largestNumber || sigBitPattern == 0 { return false }
+      if sigBitPattern>Self.largestNumber || sigBitPattern==0 { return false }
     } else {
       if sigBitPattern == 0 { return false }
     }
@@ -754,280 +756,280 @@ extension IntDecimal {
     return Self(sign: s, expBitPattern: e_out+exponentBias, sigBitPattern: c_prov)
   }
   
-  func int(_ rmode:Rounding) -> Int64 {
-    let x = self
-    var res: Int64 = 0
-    
-    if x.isNaN || x.isInfinite {
-      // set invalid flag
-      // pfpsc.insert(.invalidOperation)
-      
-      // return Integer Indefinite
-      return Int64.min
-    }
-    
-    // unpack x
-    let (x_sign, x_exp, C1, _) = x.unpack()
-    
-    // check for zeros (possibly from non-canonical values)
-    if C1 == 0 {
-      // x is 0
-      return 0
-    }
-    
-    // x is not special and is not zero
-    // q = nr. of decimal digits in x (1 <= q <= 7)
-    //  determine first the nr. of bits in x
-    let q : Int = Self.digitsIn(C1)
-    let exp = Int(x_exp) - Self.exponentBias // unbiased exponent
-    
-    if (q + exp) > 19 { // x >= 10^19 ~= 2^63.11... (cannot fit in BID_SINT64)
-      // set invalid flag
-      // pfpsc.insert(.invalidOperation)
-      // return Integer Indefinite
-      return Int64.min
-    } else if (q + exp) == 19 { // x = c(0)c(1)...c(q-1)00...0 (19 dec. digits)
-      // in this case 2^63.11... ~= 10^19 <= x < 10^20 ~= 2^66.43...
-      // so x rounded to an integer may or may not fit in a signed 64-bit int
-      // the cases that do not fit are identified here; the ones that fit
-      // fall through and will be handled with other cases further,
-      // under '1 <= q + exp <= 19'
-      var C = UInt128()
-      if x_sign == .minus { // if n < 0 and q + exp = 19
-        // if n <= -2^63 - 1 then n is too large
-        // <=> c(0)c(1)...c(q-1)00...0[19 dec. digits] >= 2^63+1
-        // <=> 0.c(0)c(1)...c(q-1) * 10^20 >= 0x5000000000000000a, 1<=q<=7
-        // <=> C * 10^(20-q) >= 0x5000000000000000a, 1<=q<=7
-        // 1 <= q <= 7 => 13 <= 20-q <= 19 => 10^(20-q) is 64-bit, and so is C1
-        C = Self.mul64x64to128(UInt64(C1), Self.bid_ten2k64(20 - q))
-        // Note: C1 * 10^(11-q) has 19 or 20 digits;0x5000000000000000a, has 20
-        if (C.components.high > 0x05 ||
-            (C.components.high == 0x05 && C.components.low >= 0x0a)) {
-          // set invalid flag
-          //pfpsc.insert(.invalidOperation)
-          // return Integer Indefinite
-          return Int64.min
-        }
-        // else cases that can be rounded to a 64-bit int fall through
-        // to '1 <= q + exp <= 19'
-      } else { // if n > 0 and q + exp = 19
-        // if n >= 2^63 then n is too large
-        // <=> c(0)c(1)...c(q-1)00...0[19 dec. digits] >= 2^63
-        // <=> if 0.c(0)c(1)...c(q-1) * 10^20 >= 0x50000000000000000, 1<=q<=7
-        // <=> if C * 10^(20-q) >= 0x5_0000000000000000, 1<=q<=7
-        C.components = (5, 0x0000000000000000)
-        
-        // 1 <= q <= 7 => 13 <= 20-q <= 19 => 10^(20-q) is 64-bit, and so is C1
-        C = Self.mul64x64to128(UInt64(C1), Self.bid_ten2k64(20 - q))
-        if C.components.high >= 0x05 {
-          // actually C.hi == 0x05 && C.lo >= 0x0000000000000000) {
-          // set invalid flag
-          //pfpsc.insert(.invalidOperation)
-          // return Integer Indefinite
-          return Int64.min
-        }
-        // else cases that can be rounded to a 64-bit int fall through
-        // to '1 <= q + exp <= 19'
-      }    // end else if n > 0 and q + exp = 19
-    }    // end else if ((q + exp) == 19)
-    
-    // n is not too large to be converted to int64: -2^63-1 < n < 2^63
-    // Note: some of the cases tested for above fall through to this point
-    if (q + exp) <= 0 { // n = +/-0.0...c(0)c(1)...c(q-1)
-      // return 0
-      return 0
-    } else { // if (1 <= q + exp <= 19, 1 <= q <= 7, -6 <= exp <= 18)
-      // -2^63-1 < x <= -1 or 1 <= x < 2^63 so x can be rounded
-      // to nearest to a 64-bit signed integer
-      if exp < 0 { // 2 <= q <= 7, -6 <= exp <= -1, 1 <= q + exp <= 19
-        let ind = -exp // 1 <= ind <= 6; ind is a synonym for 'x'
-        // chop off ind digits from the lower part of C1
-        // C1 fits in 64 bits
-        // calculate C* and f*
-        // C* is actually floor(C*) in this case
-        // C* and f* need shifting and masking, as shown by
-        // bid_shiftright128[] and bid_maskhigh128[]
-        // 1 <= x <= 6
-        // kx = 10^(-x) = bid_ten2mk64[ind - 1]
-        // C* = C1 * 10^(-x)
-        // the approximation of 10^(-x) was rounded up to 54 bits
-        let P128 = Self.mul64x64to128(UInt64(C1), Self.bid_ten2mk64(ind - 1))
-        var Cstar = P128.components.high
-        // the top Ex bits of 10^(-x) are T* = bid_ten2mk128trunc[ind].lo, e.g.
-        // if x=1, T*=bid_ten2mk128trunc[0].lo=0x1999999999999999
-        // C* = floor(C*) (logical right shift; C has p decimal digits,
-        //     correct by Property 1)
-        // n = C* * 10^(e+x)
-        
-        // shift right C* by Ex-64 = bid_shiftright128[ind]
-        let shift = Self.bid_shiftright128[ind - 1] // 0 <= shift <= 39
-        Cstar = Cstar >> shift
-        
-        if x_sign == .minus {
-          res = -Int64(Cstar)
-        } else {
-          res = Int64(Cstar)
-        }
-      } else if exp == 0 {
-        // 1 <= q <= 7
-        // res = +/-C (exact)
-        if x_sign == .minus {
-          res = -Int64(C1)
-        } else {
-          res = Int64(C1)
-        }
-      } else {
-        // if (exp > 0) => 1 <= exp <= 18, 1 <= q <= 7, 2 <= q + exp <= 20
-        // (the upper limit of 20 on q + exp is due to the fact that
-        // +/-C * 10^exp is guaranteed to fit in 64 bits)
-        // res = +/-C * 10^exp (exact)
-        if x_sign == .minus {
-          res = -Int64(UInt64(C1) * Self.bid_ten2k64(exp))
-        } else {
-          res = Int64(UInt64(C1) * Self.bid_ten2k64(exp))
-        }
-      }
-    }
-    return res
-  }
-  
-  func uint(_ rmode:Rounding) -> UInt64 {
-    let x = self
-    
-    // check for NaN or Infinity
-    if x.isNaN || x.isInfinite {
-      // set invalid flag
-      // pfpsc.insert(.invalidOperation)
-      
-      // return Integer Indefinite
-      return UInt64(bitPattern: Int64.min)
-    }
-    
-    // unpack x
-    let (x_sign, x_exp, C1, _) = x.unpack()
-    
-    // check for zeros (possibly from non-canonical values)
-    if C1 == 0 {
-      // x is 0
-      return 0
-    }
-    
-    // x is not special and is not zero
-    // q = nr. of decimal digits in x (1 <= q <= 7)
-    //  determine first the nr. of bits in x
-    let q : Int = Self.digitsIn(C1)
-    let exp = Int(x_exp) - Self.exponentBias // unbiased exponent
-    
-    if (q + exp) > 20 { // x >= 10^20 ~= 2^66.45... (cannot fit in 64 bits)
-      // set invalid flag
-      // pfpsc.insert(.invalidOperation)
-      
-      // return Integer Indefinite
-      return UInt64(bitPattern: Int64.min)
-    } else if (q + exp) == 20 { // x = c(0)c(1)...c(q-1)00...0 (20 dec. digits)
-      // in this case 2^63.11... ~= 10^19 <= x < 10^20 ~= 2^66.43...
-      // so x rounded to an integer may or may not fit in an unsigned 64-bit int
-      // the cases that do not fit are identified here; the ones that fit
-      // fall through and will be handled with other cases further,
-      // under '1 <= q + exp <= 20'
-      if x_sign == .minus {
-        // if n < 0 and q + exp = 20 then x is much less than -1
-        // set invalid flag
-        // pfpsc.insert(.invalidOperation)
-        
-        // return Integer Indefinite
-        return UInt64(bitPattern: Int64.min)
-      } else { // if n > 0 and q + exp = 20
-        // if n >= 2^64 then n is too large
-        // <=> c(0)c(1)...c(q-1)00...0[20 dec. digits] >= 2^64
-        // <=> 0.c(0)c(1)...c(q-1) * 10^21 >= 5*(2^65)
-        // <=> C * 10^(21-q) >= 0xa0000000000000000, 1<=q<=7
-        var C = UInt128()
-        if q == 1 {
-          // C * 10^20 >= 0xa0000000000000000
-          C = Self.mul128x64to128(UInt64(C1), Self.bid_ten2k128(0)) //10^20 * C
-          if C.components.high >= 0x0a {
-            // actually C.w[1] == 0x0a && C.w[0] >= 0x0000000000000000ull) {
-            // set invalid flag
-            // pfpsc.insert(.invalidOperation)
-            
-            // return Integer Indefinite
-            return UInt64(bitPattern: Int64.min)
-          }
-          // else cases that can be rounded to a 64-bit int fall through
-          // to '1 <= q + exp <= 20'
-        } else { // if (2 <= q <= 7) => 14 <= 21 - q <= 19
-          // Note: C * 10^(21-q) has 20 or 21 digits; 0xa0000000000000000
-          // has 21 digits
-          C = Self.mul64x64to128(UInt64(C1), Self.bid_ten2k64(21 - q))
-          if C.components.high >= 0x0a {
-            // actually C.w[1] == 0x0a && C.w[0] >= 0x0000000000000000ull) {
-            // set invalid flag
-            // pfpsc.insert(.invalidOperation)
-            
-            // return Integer Indefinite
-            return UInt64(bitPattern: Int64.min)
-          }
-          // else cases that can be rounded to a 64-bit int fall through
-          // to '1 <= q + exp <= 20'
-        }
-      }
-    }
-    
-    // n is not too large to be converted to int64 if -1 < n < 2^64
-    // Note: some of the cases tested for above fall through to this point
-    var res = UInt64()
-    if (q + exp) <= 0 { // n = +/-0.[0...0]c(0)c(1)...c(q-1)
-      // return 0
-      return 0
-    } else { // if (1 <= q + exp <= 20, 1 <= q <= 7, -6 <= exp <= 19)
-      // x <= -1 or 1 <= x < 2^64 so if positive x can be rounded
-      // to nearest to a 64-bit unsigned signed integer
-      if x_sign == .minus { // x <= -1
-        // set invalid flag
-        // pfpsc.insert(.invalidOperation)
-        
-        // return Integer Indefinite
-        return UInt64(bitPattern: Int64.min)
-      }
-      // 1 <= x < 2^64 so x can be rounded
-      // to nearest to a 64-bit unsigned integer
-      if exp < 0 { // 2 <= q <= 7, -6 <= exp <= -1, 1 <= q + exp <= 6
-        let ind = -exp; // 1 <= ind <= 6; ind is a synonym for 'x'
-        // chop off ind digits from the lower part of C1
-        // C1 fits in 64 bits
-        // calculate C* and f*
-        // C* is actually floor(C*) in this case
-        // C* and f* need shifting and masking, as shown by
-        // bid_shiftright128[] and bid_maskhigh128[]
-        // 1 <= x <= 6
-        // kx = 10^(-x) = bid_ten2mk64[ind - 1]
-        // C* = C1 * 10^(-x)
-        // the approximation of 10^(-x) was rounded up to 54 bits
-        let P128 = Self.mul64x64to128(UInt64(C1), Self.bid_ten2mk64(ind - 1))
-        var Cstar = P128.components.high
-        
-        // the top Ex bits of 10^(-x) are T* = bid_ten2mk128trunc[ind].w[0],
-        // e.g. if x=1, T*=bid_ten2mk128trunc[0].w[0]=0x1999999999999999
-        // C* = floor(C*) (logical right shift; C has p decimal digits,
-        //     correct by Property 1)
-        // n = C* * 10^(e+x)
-        
-        // shift right C* by Ex-64 = bid_shiftright128[ind]
-        let shift = Self.bid_shiftright128[ind - 1] // 0 <= shift <= 39
-        Cstar = Cstar >> shift
-        res = Cstar // the result is positive
-      } else if exp == 0 {
-        // 1 <= q <= 10
-        // res = +C (exact)
-        res = UInt64(C1) // the result is positive
-      } else { // if (exp > 0) => 1 <= exp <= 9, 1 <= q < 9, 2 <= q + exp <= 10
-        // res = +C * 10^exp (exact)
-        res = UInt64(C1) * Self.bid_ten2k64(exp) // the result is positive
-      }
-    }
-    return UInt64(res)
-  }
+//  func int(_ rmode:Rounding) -> Int64 {
+//    let x = self
+//    var res: Int64 = 0
+//
+//    if x.isNaN || x.isInfinite {
+//      // set invalid flag
+//      // pfpsc.insert(.invalidOperation)
+//
+//      // return Integer Indefinite
+//      return Int64.min
+//    }
+//
+//    // unpack x
+//    let (x_sign, x_exp, C1, _) = x.unpack()
+//
+//    // check for zeros (possibly from non-canonical values)
+//    if C1 == 0 {
+//      // x is 0
+//      return 0
+//    }
+//
+//    // x is not special and is not zero
+//    // q = nr. of decimal digits in x (1 <= q <= 7)
+//    //  determine first the nr. of bits in x
+//    let q : Int = Self.digitsIn(C1)
+//    let exp = Int(x_exp) - Self.exponentBias // unbiased exponent
+//
+//    if (q + exp) > 19 { // x >= 10^19 ~= 2^63.11... (cannot fit in BID_SINT64)
+//      // set invalid flag
+//      // pfpsc.insert(.invalidOperation)
+//      // return Integer Indefinite
+//      return Int64.min
+//    } else if (q + exp) == 19 { // x = c(0)c(1)...c(q-1)00...0 (19 dec. digits)
+//      // in this case 2^63.11... ~= 10^19 <= x < 10^20 ~= 2^66.43...
+//      // so x rounded to an integer may or may not fit in a signed 64-bit int
+//      // the cases that do not fit are identified here; the ones that fit
+//      // fall through and will be handled with other cases further,
+//      // under '1 <= q + exp <= 19'
+//      var C = UInt128()
+//      if x_sign == .minus { // if n < 0 and q + exp = 19
+//        // if n <= -2^63 - 1 then n is too large
+//        // <=> c(0)c(1)...c(q-1)00...0[19 dec. digits] >= 2^63+1
+//        // <=> 0.c(0)c(1)...c(q-1) * 10^20 >= 0x5000000000000000a, 1<=q<=7
+//        // <=> C * 10^(20-q) >= 0x5000000000000000a, 1<=q<=7
+//        // 1 <= q <= 7 => 13 <= 20-q <= 19 => 10^(20-q) is 64-bit, and so is C1
+//        C = Self.mul64x64to128(UInt64(C1), Self.bid_ten2k64(20 - q))
+//        // Note: C1 * 10^(11-q) has 19 or 20 digits;0x5000000000000000a, has 20
+//        if (C.components.high > 0x05 ||
+//            (C.components.high == 0x05 && C.components.low >= 0x0a)) {
+//          // set invalid flag
+//          //pfpsc.insert(.invalidOperation)
+//          // return Integer Indefinite
+//          return Int64.min
+//        }
+//        // else cases that can be rounded to a 64-bit int fall through
+//        // to '1 <= q + exp <= 19'
+//      } else { // if n > 0 and q + exp = 19
+//        // if n >= 2^63 then n is too large
+//        // <=> c(0)c(1)...c(q-1)00...0[19 dec. digits] >= 2^63
+//        // <=> if 0.c(0)c(1)...c(q-1) * 10^20 >= 0x50000000000000000, 1<=q<=7
+//        // <=> if C * 10^(20-q) >= 0x5_0000000000000000, 1<=q<=7
+//        C.components = (5, 0x0000000000000000)
+//
+//        // 1 <= q <= 7 => 13 <= 20-q <= 19 => 10^(20-q) is 64-bit, and so is C1
+//        C = Self.mul64x64to128(UInt64(C1), Self.bid_ten2k64(20 - q))
+//        if C.components.high >= 0x05 {
+//          // actually C.hi == 0x05 && C.lo >= 0x0000000000000000) {
+//          // set invalid flag
+//          //pfpsc.insert(.invalidOperation)
+//          // return Integer Indefinite
+//          return Int64.min
+//        }
+//        // else cases that can be rounded to a 64-bit int fall through
+//        // to '1 <= q + exp <= 19'
+//      }    // end else if n > 0 and q + exp = 19
+//    }    // end else if ((q + exp) == 19)
+//
+//    // n is not too large to be converted to int64: -2^63-1 < n < 2^63
+//    // Note: some of the cases tested for above fall through to this point
+//    if (q + exp) <= 0 { // n = +/-0.0...c(0)c(1)...c(q-1)
+//      // return 0
+//      return 0
+//    } else { // if (1 <= q + exp <= 19, 1 <= q <= 7, -6 <= exp <= 18)
+//      // -2^63-1 < x <= -1 or 1 <= x < 2^63 so x can be rounded
+//      // to nearest to a 64-bit signed integer
+//      if exp < 0 { // 2 <= q <= 7, -6 <= exp <= -1, 1 <= q + exp <= 19
+//        let ind = -exp // 1 <= ind <= 6; ind is a synonym for 'x'
+//        // chop off ind digits from the lower part of C1
+//        // C1 fits in 64 bits
+//        // calculate C* and f*
+//        // C* is actually floor(C*) in this case
+//        // C* and f* need shifting and masking, as shown by
+//        // bid_shiftright128[] and bid_maskhigh128[]
+//        // 1 <= x <= 6
+//        // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+//        // C* = C1 * 10^(-x)
+//        // the approximation of 10^(-x) was rounded up to 54 bits
+//        let P128 = Self.mul64x64to128(UInt64(C1), Self.bid_ten2mk64(ind - 1))
+//        var Cstar = P128.components.high
+//        // the top Ex bits of 10^(-x) are T* = bid_ten2mk128trunc[ind].lo, e.g.
+//        // if x=1, T*=bid_ten2mk128trunc[0].lo=0x1999999999999999
+//        // C* = floor(C*) (logical right shift; C has p decimal digits,
+//        //     correct by Property 1)
+//        // n = C* * 10^(e+x)
+//
+//        // shift right C* by Ex-64 = bid_shiftright128[ind]
+//        let shift = Self.bid_shiftright128[ind - 1] // 0 <= shift <= 39
+//        Cstar = Cstar >> shift
+//
+//        if x_sign == .minus {
+//          res = -Int64(Cstar)
+//        } else {
+//          res = Int64(Cstar)
+//        }
+//      } else if exp == 0 {
+//        // 1 <= q <= 7
+//        // res = +/-C (exact)
+//        if x_sign == .minus {
+//          res = -Int64(C1)
+//        } else {
+//          res = Int64(C1)
+//        }
+//      } else {
+//        // if (exp > 0) => 1 <= exp <= 18, 1 <= q <= 7, 2 <= q + exp <= 20
+//        // (the upper limit of 20 on q + exp is due to the fact that
+//        // +/-C * 10^exp is guaranteed to fit in 64 bits)
+//        // res = +/-C * 10^exp (exact)
+//        if x_sign == .minus {
+//          res = -Int64(UInt64(C1) * Self.bid_ten2k64(exp))
+//        } else {
+//          res = Int64(UInt64(C1) * Self.bid_ten2k64(exp))
+//        }
+//      }
+//    }
+//    return res
+//  }
+//
+//  func uint(_ rmode:Rounding) -> UInt64 {
+//    let x = self
+//
+//    // check for NaN or Infinity
+//    if x.isNaN || x.isInfinite {
+//      // set invalid flag
+//      // pfpsc.insert(.invalidOperation)
+//
+//      // return Integer Indefinite
+//      return UInt64(bitPattern: Int64.min)
+//    }
+//
+//    // unpack x
+//    let (x_sign, x_exp, C1, _) = x.unpack()
+//
+//    // check for zeros (possibly from non-canonical values)
+//    if C1 == 0 {
+//      // x is 0
+//      return 0
+//    }
+//
+//    // x is not special and is not zero
+//    // q = nr. of decimal digits in x (1 <= q <= 7)
+//    //  determine first the nr. of bits in x
+//    let q : Int = Self.digitsIn(C1)
+//    let exp = Int(x_exp) - Self.exponentBias // unbiased exponent
+//
+//    if (q + exp) > 20 { // x >= 10^20 ~= 2^66.45... (cannot fit in 64 bits)
+//      // set invalid flag
+//      // pfpsc.insert(.invalidOperation)
+//
+//      // return Integer Indefinite
+//      return UInt64(bitPattern: Int64.min)
+//    } else if (q + exp) == 20 { // x = c(0)c(1)...c(q-1)00...0 (20 dec. digits)
+//      // in this case 2^63.11... ~= 10^19 <= x < 10^20 ~= 2^66.43...
+//      // so x rounded to an integer may or may not fit in an unsigned 64-bit int
+//      // the cases that do not fit are identified here; the ones that fit
+//      // fall through and will be handled with other cases further,
+//      // under '1 <= q + exp <= 20'
+//      if x_sign == .minus {
+//        // if n < 0 and q + exp = 20 then x is much less than -1
+//        // set invalid flag
+//        // pfpsc.insert(.invalidOperation)
+//
+//        // return Integer Indefinite
+//        return UInt64(bitPattern: Int64.min)
+//      } else { // if n > 0 and q + exp = 20
+//        // if n >= 2^64 then n is too large
+//        // <=> c(0)c(1)...c(q-1)00...0[20 dec. digits] >= 2^64
+//        // <=> 0.c(0)c(1)...c(q-1) * 10^21 >= 5*(2^65)
+//        // <=> C * 10^(21-q) >= 0xa0000000000000000, 1<=q<=7
+//        var C = UInt128()
+//        if q == 1 {
+//          // C * 10^20 >= 0xa0000000000000000
+//          C = Self.mul128x64to128(UInt64(C1), Self.bid_ten2k128(0)) //10^20 * C
+//          if C.components.high >= 0x0a {
+//            // actually C.w[1] == 0x0a && C.w[0] >= 0x0000000000000000ull) {
+//            // set invalid flag
+//            // pfpsc.insert(.invalidOperation)
+//
+//            // return Integer Indefinite
+//            return UInt64(bitPattern: Int64.min)
+//          }
+//          // else cases that can be rounded to a 64-bit int fall through
+//          // to '1 <= q + exp <= 20'
+//        } else { // if (2 <= q <= 7) => 14 <= 21 - q <= 19
+//          // Note: C * 10^(21-q) has 20 or 21 digits; 0xa0000000000000000
+//          // has 21 digits
+//          C = Self.mul64x64to128(UInt64(C1), Self.bid_ten2k64(21 - q))
+//          if C.components.high >= 0x0a {
+//            // actually C.w[1] == 0x0a && C.w[0] >= 0x0000000000000000ull) {
+//            // set invalid flag
+//            // pfpsc.insert(.invalidOperation)
+//
+//            // return Integer Indefinite
+//            return UInt64(bitPattern: Int64.min)
+//          }
+//          // else cases that can be rounded to a 64-bit int fall through
+//          // to '1 <= q + exp <= 20'
+//        }
+//      }
+//    }
+//
+//    // n is not too large to be converted to int64 if -1 < n < 2^64
+//    // Note: some of the cases tested for above fall through to this point
+//    var res = UInt64()
+//    if (q + exp) <= 0 { // n = +/-0.[0...0]c(0)c(1)...c(q-1)
+//      // return 0
+//      return 0
+//    } else { // if (1 <= q + exp <= 20, 1 <= q <= 7, -6 <= exp <= 19)
+//      // x <= -1 or 1 <= x < 2^64 so if positive x can be rounded
+//      // to nearest to a 64-bit unsigned signed integer
+//      if x_sign == .minus { // x <= -1
+//        // set invalid flag
+//        // pfpsc.insert(.invalidOperation)
+//
+//        // return Integer Indefinite
+//        return UInt64(bitPattern: Int64.min)
+//      }
+//      // 1 <= x < 2^64 so x can be rounded
+//      // to nearest to a 64-bit unsigned integer
+//      if exp < 0 { // 2 <= q <= 7, -6 <= exp <= -1, 1 <= q + exp <= 6
+//        let ind = -exp; // 1 <= ind <= 6; ind is a synonym for 'x'
+//        // chop off ind digits from the lower part of C1
+//        // C1 fits in 64 bits
+//        // calculate C* and f*
+//        // C* is actually floor(C*) in this case
+//        // C* and f* need shifting and masking, as shown by
+//        // bid_shiftright128[] and bid_maskhigh128[]
+//        // 1 <= x <= 6
+//        // kx = 10^(-x) = bid_ten2mk64[ind - 1]
+//        // C* = C1 * 10^(-x)
+//        // the approximation of 10^(-x) was rounded up to 54 bits
+//        let P128 = Self.mul64x64to128(UInt64(C1), Self.bid_ten2mk64(ind - 1))
+//        var Cstar = P128.components.high
+//
+//        // the top Ex bits of 10^(-x) are T* = bid_ten2mk128trunc[ind].w[0],
+//        // e.g. if x=1, T*=bid_ten2mk128trunc[0].w[0]=0x1999999999999999
+//        // C* = floor(C*) (logical right shift; C has p decimal digits,
+//        //     correct by Property 1)
+//        // n = C* * 10^(e+x)
+//
+//        // shift right C* by Ex-64 = bid_shiftright128[ind]
+//        let shift = Self.bid_shiftright128[ind - 1] // 0 <= shift <= 39
+//        Cstar = Cstar >> shift
+//        res = Cstar // the result is positive
+//      } else if exp == 0 {
+//        // 1 <= q <= 10
+//        // res = +C (exact)
+//        res = UInt64(C1) // the result is positive
+//      } else { // if (exp > 0) => 1 <= exp <= 9, 1 <= q < 9, 2 <= q + exp <= 10
+//        // res = +C * 10^exp (exact)
+//        res = UInt64(C1) * Self.bid_ten2k64(exp) // the result is positive
+//      }
+//    }
+//    return UInt64(res)
+//  }
   
   static func bid(from x:UInt64, _ rndMode:Rounding) -> Self {
     // Get BID from a 64-bit unsigned integer
@@ -1505,19 +1507,6 @@ extension IntDecimal {
   
   /// Returns ten to the `i`th power or `10^i` where `i ≥ 0`.
   static func power5<T:FixedWidthInteger>(_ i: Int) -> T { power(T(5), to: i) }
-  
-  /// Returns the number of decimal digits in `sig`.
-  static func digitsIn<T:BinaryInteger>(_ sig: T) -> Int {
-    return digitsIn(sig).digits
-  }
-  
-  /// Returns the number of decimal digits and power of 10 in `sig`.
-  static func digitsIn<T:BinaryInteger>(_ sig: T) -> (digits:Int, tenPower:T) {
-    // find power of 10 just greater than sig
-    var tenPower = T(10), digits = 1
-    while sig >= tenPower { tenPower *= 10; digits += 1 }
-    return (digits, tenPower)
-  }
   
   // bid_ten2mk64 power-of-two scaling
   static var bid_powers : [UInt8] {
@@ -2081,8 +2070,6 @@ extension IntDecimal {
     // Deal with illegal numbers
     if !validX {
       if xb.isNaN {
-        // if xb.isSNaN || yb.isSNaN { /* invalid Op */ }
-        // significandX.clear(bit: nanBitRange.lowerBound)
         return Self.nanQuiet(significandX)
       }
       if xb.isInfinite {
@@ -2094,8 +2081,6 @@ extension IntDecimal {
           }
         }
         if yb.isNaN {
-          // if yb.isSNaN { /* invalid Op */ }
-          // significandY.clear(bit: nanBitRange.lowerBound)
           return Self.nanQuiet(significandY)
         } else {
           // +/- infinity
@@ -2111,8 +2096,6 @@ extension IntDecimal {
     
     if !validY {
       if yb.isInfinite {
-        // if yb.isSNaN { /* invalid Op */ }
-        // significandY.clear(bit: nanBitRange.lowerBound)
         return Self.nanQuiet(significandY)
       }
       
@@ -4266,23 +4249,5 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
   // return T.handleRounding(sign, expon_x, Int(mant), 0, round)
   let result = T.adjustOverflowUnderflow(sign, expon_x, mant, round)
   return T(result)
-}
-
-/// Returns x^exp where x = *num*.
-/// - Precondition: x ≥ 0, exp ≥ 0
-internal func power<T:FixedWidthInteger>(_ num:T, to exp: Int) -> T {
-  // Zero raised to anything except zero is zero (provided exponent is valid)
-  guard exp >= 0 else { return T.max }
-  if num == 0 { return exp == 0 ? 1 : 0 }
-  var z = num
-  var y : T = 1
-  var n = abs(exp)
-  while true {
-    if !n.isMultiple(of: 2) { y *= z }
-    n >>= 1
-    if n == 0 { break }
-    z *= z
-  }
-  return y
 }
 

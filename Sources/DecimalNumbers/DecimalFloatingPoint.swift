@@ -196,10 +196,8 @@ extension DecimalFloatingPoint {
   
   public // @testable
   static func _convert<Source: DecimalFloatingPoint>(from source: Source) ->
-                                              (value: Self, exact: Bool) {
+  (value: Self, exact: Bool) {
     let isMinus = source.sign == .minus
-    guard !source.isZero else { return (isMinus ? -0 : 0, true) }
-    
     guard source.isFinite else {
       if source.isInfinite { return (isMinus ? -.infinity : .infinity, true) }
       
@@ -232,20 +230,11 @@ extension DecimalFloatingPoint {
       exemplar = Self.leastNonzeroMagnitude
       let minExponent = exemplar.exponent
       if exponent + 1 < minExponent {
-        return (isMinus ? -0 : 0, false)
+        return (isMinus ? -zero : zero, false)
       }
       if _slowPath(exponent + 1 == minExponent) {
-        // Although the most significant bit (MSB) of a subnormal source
-        // significand is explicit, Swift BinaryFloatingPoint APIs actually
-        // omit any explicit MSB from the count represented in
-        // significandWidth. For instance:
-        //
-        //   Double.leastNonzeroMagnitude.significandWidth == 0
-        //
-        // Therefore, we do not need to adjust our work here for a subnormal
-        // source.
         return source.significandDigitCount == 0
-        ? (isMinus ? -0 : 0, false)
+        ? (isMinus ? -zero : zero, false)
         : (isMinus ? -exemplar : exemplar, false)
       }
       
@@ -260,7 +249,7 @@ extension DecimalFloatingPoint {
       exponentBitPattern = RawExponent(Int(exponent) + bias)
     }
     
-    let value = Self(
+    let value = Self (
       sign: source.sign,
       exponentBitPattern: exponentBitPattern,
       significandBitPattern: RawSignificand(significand))
@@ -363,19 +352,6 @@ extension DecimalFloatingPoint {
   
 }
 
-func _decimalLogarithm<Source:BinaryInteger>(_ x:Source) -> Int {
-  assert(x > (0 as Source))  // negatives and zero are illegal
-  var expx10 = 1
-  var pow10 = 10
-  while pow10 < x {
-    expx10 += 1
-    pow10 *= 10
-    //if pow10 < Source.max/10 { pow10 *= 10 }
-    //else { pow10 = Source.max }
-  }
-  return expx10
-}
-
 extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     
   public // @testable
@@ -393,7 +369,7 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     //  We now have a non-zero value; convert it to a strictly positive value
     //  by taking the magnitude.
     // need a x10ⁿ exponent & significand digits
-    let exp = _decimalLogarithm(source.magnitude)
+    let exp:Int = digitsIn(Int(source.magnitude))
     
     //  If the exponent would be larger than the largest representable
     //  exponent, the result is just an infinity of the appropriate sign.
@@ -606,3 +582,51 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
   }
 }
 
+// Internally-used standard functions
+
+//internal func _decimalLogarithm<S:FixedWidthInteger>(_ x:S) -> Int {
+//
+//  var expx10 = 1
+//  var pow10 = 10 as S
+//  while pow10 < x {
+//    expx10 += 1
+//    if pow10 < S.max/10 { pow10 *= 10 }
+//    else { pow10 = S.max }
+//  }
+//  return expx10
+//}
+
+/// Returns the number of decimal digits in `sig`.
+internal func digitsIn<T:FixedWidthInteger>(_ sig:T)->Int{digitsIn(sig).digits}
+
+/// Returns the number of decimal digits and power of 10 in `sig`.
+internal func digitsIn<T:FixedWidthInteger>(_ sig:T)->(digits:Int,tenPower:T) {
+  // find power of 10 just greater than sig
+  let sig = sig.magnitude
+  let maxDiv10 = T.max/10
+  var pow10 = 10 as T, digits = 1
+  while pow10 <= sig {
+    digits += 1
+    if pow10 < maxDiv10 { pow10 *= 10 }
+    else { return (digits, T.max) }
+  }
+  return (digits, pow10)
+}
+
+/// Returns x^exp where x = *num*.
+/// - Precondition: x ≥ 0, exp ≥ 0
+internal func power<T:FixedWidthInteger>(_ num:T, to exp: Int) -> T {
+  // Zero raised to anything except zero is zero (provided exponent is valid)
+  guard exp >= 0 else { return T.max }
+  if num == 0 { return exp == 0 ? 1 : 0 }
+  var z = num
+  var y : T = 1
+  var n = abs(exp)
+  while true {
+    if !n.isMultiple(of: 2) { y *= z }
+    n >>= 1
+    if n == 0 { break }
+    z *= z
+  }
+  return y
+}

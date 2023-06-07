@@ -136,7 +136,7 @@ extension Decimal64 : FloatingPoint {
   // MARK: - Initializers for FloatingPoint
   
   public init(sign: Sign, exponent: Int, significand: Self) {
-    self.bid = ID(sign: sign, expBitPattern: exponent+Self.exponentBias,
+    self.bid = ID(sign: sign, expBitPattern: exponent+ID.exponentBias,
                     sigBitPattern: significand.bid.unpack().sigBits)
   }
   
@@ -148,7 +148,7 @@ extension Decimal64 : FloatingPoint {
   // MARK: - DecimalFloatingPoint properties and attributes
   
   public static var exponentBitCount: Int      {ID.exponentBits}
-  public static var exponentBias: Int          {ID.exponentBias}
+//  public static var exponentBias: Int          {ID.exponentBias}
   public static var significandDigitCount: Int {ID.maximumDigits}
   public static var nan: Self                  { Self(bid:ID.nan()) }
   public static var signalingNaN: Self         { Self(bid:ID.snan) }
@@ -270,12 +270,9 @@ extension Decimal64 : DecimalFloatingPoint {
   public var bidBitPattern: UInt64         { bid.data }
   public var dpdBitPattern: UInt64         { bid.dpd }
   
-  public var int: Int64                    { bid.int(ID.rounding) }
-  public var uint: UInt64                  { bid.uint(ID.rounding) }
-  
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }
-    return ID.digitsIn(bid.sigBitPattern)
+    return digitsIn(bid.sigBitPattern)
   }
   
   public var decade: Self {
