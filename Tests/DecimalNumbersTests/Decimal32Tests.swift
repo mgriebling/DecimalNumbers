@@ -4767,9 +4767,6 @@ final class Decimal32Tests: XCTestCase {
           //          checkValues(test, UInt64(t1.bid.data), state, error)
         case "bid32_to_int64_int":
           let t1 = getNumber(test.istr)
-          if testID == 8 {
-            print(t1)
-          }
           let error = "\(Int64(bitPattern:test.res)) != \(Int64(t1))"
           checkValues(test, UInt64(bitPattern: Int64(t1)), state, error)
         case "bid32_to_uint64_int":
@@ -4790,12 +4787,13 @@ final class Decimal32Tests: XCTestCase {
 //          let error = String(format: "0x%08X%08X[\(d128)] != 0x%08X%08X[\(b128)]", test.reshi, test.reslo, b128.bid.data.hi, b128.bid.data.lo)
 //          checkValues(test, b128.bid.data, state, error)
         case "bid32_to_bid64":
-          break
-//          let t1 = getNumber(test.istr)
-//          let b64 = Decimal64(t1)
-//          print(b64)
-//          let error = "\(Decimal64(bid:test.res)) != \(b64)"
-//          checkValues(test, b64.bid.data, state, error)
+          let t1 = getNumber(test.istr)
+          if testID == 59 {
+            print(t1)
+          }
+          let b64 = Decimal64(t1)
+          let error = "\(Decimal64(bid:test.res)) != \(b64)"
+          checkValues(test, b64.bid.data, state, error)
         case "bid32_quiet_less_equal":
           let t1 = getNumber(test.istr)
           let t2 = getNumber(test.istr2)

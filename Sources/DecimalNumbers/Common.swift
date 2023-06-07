@@ -113,8 +113,7 @@ extension IntDecimal {
   
   /// These bit fields can be predetermined just from the size of
   /// the number type `RawDataFields` `bitWidth`
-  static var maxBit: Int { RawData.bitWidth - 1 }
-  
+  static var maxBit: Int              { RawData.bitWidth - 1 }
   static var signBit: Int             { maxBit }
   static var specialBits: IntRange    { maxBit-2 ... maxBit-1 }
   static var nanBitRange: IntRange    { maxBit-6 ... maxBit-1 }

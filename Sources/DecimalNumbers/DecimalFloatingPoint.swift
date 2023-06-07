@@ -199,22 +199,40 @@ extension DecimalFloatingPoint {
   (value: Self, exact: Bool) {
     let isMinus = source.sign == .minus
     guard source.isFinite else {
-      if source.isInfinite { return (isMinus ? -.infinity : .infinity, true) }
+      if source.isInfinite { return (isMinus ? -infinity : infinity, true) }
       
       // IEEE 754 requires that any NaN payload be propagated, if possible.
-      let payload = RawSignificand(source.significandBitPattern)
+      let c = source.significandBitPattern
+      let maxNaNBit = c.bitWidth - 4 - Source.exponentBitCount
+      let nanMask = Source.RawSignificand(1) << maxNaNBit - 1
+      var payload = RawSignificand(truncatingIfNeeded: c & nanMask)
       
-      // Although .signalingNaN.exponentBitPattern == .nan.exponentBitPattern,
-      // we do not *need* to rely on this relation, and therefore we do not.
-      let value = source.isSignalingNaN
-      ? Self(
+      // Decimal floating point NaNs are weird, larger bit widths must be
+      // scaled up from smaller bit widths and vice-versa.
+      let deltaWidth = zero.bidBitPattern.bitWidth - c.bitWidth
+      var scale: Self.RawSignificand {
+        switch abs(deltaWidth) {
+          case  0: return 1
+          case 32: return 1_000_000_000 // 10^9
+          case 64: return 1_000_000_000_000_000_000 // 10^18
+          case 96: return 1_000_000_000_000_000_000_000_000_000 // 10^27
+          default: assertionFailure("Unknown Decimal Type"); return 1
+        }
+      }
+      if deltaWidth > 0 {
+        payload *= scale // scale up the payload
+      } else if deltaWidth < 0 {
+        payload /= scale // scale down the payload
+      }
+      if payload > Self.greatestFiniteMagnitude.significandBitPattern/10 {
+        payload = 0
+      }
+      
+      // sNan is cleared according to Intel documents
+      let value = Self(
         sign: source.sign,
-        exponentBitPattern: Self.signalingNaN.exponentBitPattern,
-        significandBitPattern: payload)
-      : Self(
-        sign: source.sign,
-        exponentBitPattern: Self.nan.exponentBitPattern,
-        significandBitPattern: payload)
+        exponentBitPattern: nan.exponentBitPattern,
+        significandBitPattern: payload | nan.significandBitPattern)
       // We define exactness by equality after roundtripping; since NaN is
       // never equal to itself, it can never be converted exactly.
       return (value, false)
@@ -223,7 +241,7 @@ extension DecimalFloatingPoint {
     let exponent = source.exponent
     var exemplar = Self.leastNormalMagnitude
     let exponentBitPattern: Self.RawExponent
-    let significand = source.significandBitPattern
+    var significand = source.significandBitPattern
     
     if exponent < exemplar.exponent {
       // The floating-point result is either zero or subnormal.
@@ -244,6 +262,9 @@ extension DecimalFloatingPoint {
       exemplar = Self.greatestFiniteMagnitude
       if exponent > exemplar.exponent {
         return (isMinus ? -.infinity : .infinity, false)
+      }
+      if significand > Source.greatestFiniteMagnitude.significandBitPattern {
+        significand = 0
       }
       let bias = Int(Self.zero.exponentBitPattern)
       exponentBitPattern = RawExponent(Int(exponent) + bias)
