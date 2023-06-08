@@ -278,7 +278,7 @@ extension Decimal128 : DecimalFloatingPoint {
   
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }
-    return digitsIn(bid.sigBitPattern)
+    return _digitsIn(bid.sigBitPattern)
   }
   
   public var decade: Self {

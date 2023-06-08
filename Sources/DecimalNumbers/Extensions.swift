@@ -22,7 +22,7 @@ extension FixedWidthInteger {
     guard _fastPath(source.isFinite) else { return (nil, false) }
     guard Self.isSigned || source > -1 else { return (nil, false) }
     let exponent = Int(source.exponent)
-    let destMaxDigits : Int = digitsIn(Self.max)   // max Self digits
+    let destMaxDigits : Int = _digitsIn(Self.max)   // max Self digits
     let digitWidth = source.significandDigitCount  // exact source width
     if _slowPath(digitWidth+exponent > destMaxDigits) {
       return (source.sign == .minus ? Self.min : Self.max, false)
@@ -35,8 +35,8 @@ extension FixedWidthInteger {
     
     // check if the decimal shifting will create overflow
     let result = exponent >= 0
-      ? c.multipliedReportingOverflow(by: power(10, to:exponent))
-      : c.dividedReportingOverflow(by: power(10, to:-exponent))
+      ? c.multipliedReportingOverflow(by: _power(10, to:exponent))
+      : c.dividedReportingOverflow(by: _power(10, to:-exponent))
     if digitWidth + exponent == destMaxDigits {
       if result.overflow {
         return (source.sign == .minus ? Self.min : Self.max, false)

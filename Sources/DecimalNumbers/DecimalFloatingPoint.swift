@@ -24,7 +24,7 @@ limitations under the License.
 /// available.
 ///
 /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
-public protocol DecimalFloatingPoint:FloatingPoint {
+public protocol DecimalFloatingPoint : FloatingPoint {
   
   /// A type that represents the encoded significand of a value.
   associatedtype RawSignificand: UnsignedInteger
@@ -51,20 +51,6 @@ public protocol DecimalFloatingPoint:FloatingPoint {
   ///     of the new value.
   init(sign: Sign, exponentBitPattern: RawExponent,
        significandBitPattern: RawSignificand)
-  
-  /// Initialize from a raw binary integer decimal bit pattern obtained
-  /// from the `bidBitPattern`
-  /// - Parameters:
-  ///   - bits: The binary integer decimal bit pattern to use for the new
-  ///           value.
-  init(bidBitPattern bits: RawSignificand)
-  
-  /// Initialize from a raw densely packed decimal bit pattern obtained
-  /// from the `dpdBitPattern`
-  /// - Parameters:
-  ///   - bits: The densely packed decimal bit pattern to use for the new
-  ///           value.
-  init(dpdBitPattern bits: RawSignificand)
   
   /// Creates a new instance from the given value, rounded to the closest
   /// possible representation.
@@ -102,16 +88,10 @@ public protocol DecimalFloatingPoint:FloatingPoint {
   /// The raw encoding of the value's exponent field.
   ///
   /// This value is unadjusted by the type's exponent bias.
-  var exponentBitPattern: Self.RawExponent { get }
+  var exponentBitPattern: RawExponent { get }
   
-  /// The raw binary integer encoding of the value's significand field.
+  /// The raw binary integer decimal encoding of the value's significand field.
   var significandBitPattern: RawSignificand { get }
-  
-  /// The binary integer decimal encoding of the value as an unsigned integer.
-  var bidBitPattern: RawSignificand { get }
-  
-  /// The densely packed decimal encoding of the value as an unsigned integer.
-  var dpdBitPattern: RawSignificand { get }
   
   /// The floating-point value with the same sign and exponent as this value,
   /// but with a significand of 1.0.
@@ -209,7 +189,7 @@ extension DecimalFloatingPoint {
       
       // Decimal floating point NaNs are weird, larger bit widths must be
       // scaled up from smaller bit widths and vice-versa.
-      let deltaWidth = zero.bidBitPattern.bitWidth - c.bitWidth
+      let deltaWidth = Self.RawSignificand.zero.bitWidth - c.bitWidth
       var scale: Self.RawSignificand {
         switch abs(deltaWidth) {
           case  0: return 1
@@ -390,7 +370,7 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
     //  We now have a non-zero value; convert it to a strictly positive value
     //  by taking the magnitude.
     // need a x10ⁿ exponent & significand digits
-    let exp:Int = digitsIn(Int(source.magnitude))
+    let exp:Int = _digitsIn(Int(source.magnitude))
     
     //  If the exponent would be larger than the largest representable
     //  exponent, the result is just an infinity of the appropriate sign.
@@ -605,23 +585,11 @@ extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {
 
 // Internally-used standard functions
 
-//internal func _decimalLogarithm<S:FixedWidthInteger>(_ x:S) -> Int {
-//
-//  var expx10 = 1
-//  var pow10 = 10 as S
-//  while pow10 < x {
-//    expx10 += 1
-//    if pow10 < S.max/10 { pow10 *= 10 }
-//    else { pow10 = S.max }
-//  }
-//  return expx10
-//}
-
 /// Returns the number of decimal digits in `sig`.
-internal func digitsIn<T:FixedWidthInteger>(_ sig:T)->Int{digitsIn(sig).digits}
+func _digitsIn<T:FixedWidthInteger>(_ sig:T) -> Int { _digitsIn(sig).digits }
 
 /// Returns the number of decimal digits and power of 10 in `sig`.
-internal func digitsIn<T:FixedWidthInteger>(_ sig:T)->(digits:Int,tenPower:T) {
+func _digitsIn<T:FixedWidthInteger>(_ sig: T) -> (digits: Int, tenPower: T) {
   // find power of 10 just greater than sig
   let sig = sig.magnitude
   let maxDiv10 = T.max/10
@@ -636,7 +604,7 @@ internal func digitsIn<T:FixedWidthInteger>(_ sig:T)->(digits:Int,tenPower:T) {
 
 /// Returns x^exp where x = *num*.
 /// - Precondition: x ≥ 0, exp ≥ 0
-internal func power<T:FixedWidthInteger>(_ num:T, to exp: Int) -> T {
+func _power<T:FixedWidthInteger>(_ num:T, to exp: Int) -> T {
   // Zero raised to anything except zero is zero (provided exponent is valid)
   guard exp >= 0 else { return T.max }
   if num == 0 { return exp == 0 ? 1 : 0 }

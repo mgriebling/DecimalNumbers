@@ -478,7 +478,7 @@ extension IntDecimal {
     // if exponent is less than -95, the number may be subnormal
     // let exp = exp - Self.exponentBias
     if exp < Self.minEncodedExponent+Self.maximumDigits-1 {
-      let tenPower = power(UInt64(10), to: exp)
+      let tenPower = _power(UInt64(10), to: exp)
       let mantPrime = UInt64(mant) * tenPower
       return mantPrime > Self.largestNumber/10 // normal test
     }
@@ -779,7 +779,7 @@ extension IntDecimal {
 //    // x is not special and is not zero
 //    // q = nr. of decimal digits in x (1 <= q <= 7)
 //    //  determine first the nr. of bits in x
-//    let q : Int = Self.digitsIn(C1)
+//    let q : Int = Self._digitsIn(C1)
 //    let exp = Int(x_exp) - Self.exponentBias // unbiased exponent
 //
 //    if (q + exp) > 19 { // x >= 10^19 ~= 2^63.11... (cannot fit in BID_SINT64)
@@ -916,7 +916,7 @@ extension IntDecimal {
 //    // x is not special and is not zero
 //    // q = nr. of decimal digits in x (1 <= q <= 7)
 //    //  determine first the nr. of bits in x
-//    let q : Int = Self.digitsIn(C1)
+//    let q : Int = Self._digitsIn(C1)
 //    let exp = Int(x_exp) - Self.exponentBias // unbiased exponent
 //
 //    if (q + exp) > 20 { // x >= 10^20 ~= 2^66.45... (cannot fit in 64 bits)
@@ -1499,13 +1499,13 @@ extension IntDecimal {
   // MARK: - Table-derived functions
   
   /// Returns the number of decimal digits in `2^i` where `i ≥ 0`.
-  static func estimateDecDigits(_ i: Int) -> Int { digitsIn(UInt128(1) << i) }
+  static func estimateDecDigits(_ i: Int) -> Int { _digitsIn(UInt128(1) << i) }
   
   /// Returns ten to the `i`th power or `10^i` where `i ≥ 0`.
-  static func power10<T:FixedWidthInteger>(_ i:Int) -> T { power(T(10), to:i) }
+  static func power10<T:FixedWidthInteger>(_ i:Int) -> T { _power(T(10), to:i) }
   
   /// Returns ten to the `i`th power or `10^i` where `i ≥ 0`.
-  static func power5<T:FixedWidthInteger>(_ i: Int) -> T { power(T(5), to: i) }
+  static func power5<T:FixedWidthInteger>(_ i: Int) -> T { _power(T(5), to: i) }
   
   // bid_ten2mk64 power-of-two scaling
   static var bid_powers : [UInt8] {
@@ -1530,7 +1530,7 @@ extension IntDecimal {
   
   /// Returns 10^n such that 2^i < 10^n
   static func bid_power10_index_binexp(_ i:Int) -> UInt64 {
-    digitsIn(UInt64(1) << i).tenPower
+    _digitsIn(UInt64(1) << i).tenPower
   }
     
   /// Returns rounding constants for a given rounding mode `rnd` and
@@ -2043,13 +2043,13 @@ extension IntDecimal {
     // need to compensate the significand
     var manPrime: Self.RawBitPattern
     if xexp > yexp {
-      manPrime = xman * power(Self.RawBitPattern(10), to: xexp - yexp)
+      manPrime = xman * _power(Self.RawBitPattern(10), to: xexp - yexp)
       if manPrime == yman { return false }
       return (manPrime < yman) != (xsign == .minus)
     }
     
     // adjust y significand upwards
-    manPrime = yman * power(Self.RawBitPattern(10), to: yexp - xexp)
+    manPrime = yman * _power(Self.RawBitPattern(10), to: yexp - xexp)
     if manPrime == xman { return false }
     
     // if positive, return whichever abs number is smaller
@@ -3327,7 +3327,7 @@ extension IntDecimal {
     
     // q = nr. of decimal digits in x (1 <= q <= 54)
     //  determine first the nr. of bits in x
-    let q : Int = digitsIn(C1)
+    let q : Int = _digitsIn(C1)
     if exp >= 0 {
       // the argument is an integer already
       return x
@@ -3696,7 +3696,7 @@ extension IntDecimal {
         // Note: we could check here if x >= 10^7 to speed up the case q1 = 7
         // q1 = nr. of decimal digits in x (1 <= q1 <= 7)
         //  determine first the nr. of bits in x
-        let q1: Int = digitsIn(C1)
+        let q1: Int = _digitsIn(C1)
         
         // if q1 < P7 then pad the significand with zeros
         if q1 < maximumDigits {
