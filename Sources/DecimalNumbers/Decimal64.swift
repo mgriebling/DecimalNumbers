@@ -21,6 +21,7 @@ limitations under the License.
 /// to completely define many of the Decimal64 operations.  The `data` word
 /// holds all 64 bits of the Decimal64 data type.
 struct IntDecimal64 : IntDecimal {
+  typealias RawSignificand = UInt64
   typealias RawData = UInt64
   typealias RawBitPattern = UInt64
   

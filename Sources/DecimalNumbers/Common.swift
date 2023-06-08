@@ -30,6 +30,7 @@ protocol IntDecimal : Codable, Hashable {
   
   associatedtype RawData : UnsignedInteger & FixedWidthInteger
   associatedtype RawBitPattern : UnsignedInteger & FixedWidthInteger
+  associatedtype RawSignificand : UnsignedInteger
   
   /// Storage of the Decimal number in a raw binary integer decimal
   /// encoding as per IEEE STD 754-2008
@@ -43,11 +44,17 @@ protocol IntDecimal : Codable, Hashable {
   
   /// Initialize with sign, biased exponent, and unsigned significand
   init(sign: Sign, expBitPattern: Int, sigBitPattern: RawBitPattern)
+
+  
+  init(nan payload: RawSignificand, signaling: Bool)
   
   //////////////////////////////////////////////////////////////////
   /// Conversions from/to densely packed decimal numbers
+  
+  /// Initializes the number from a DPD number
   init(dpd: RawData)
   
+  /// Returns a DPD number
   var dpd: RawData { get }
   
   //////////////////////////////////////////////////////////////////
@@ -162,6 +169,12 @@ extension IntDecimal {
     else { return nil }
   }
   
+  public init(nan payload: RawSignificand, signaling: Bool) {
+    let pattern = signaling ? Self.snanPattern : Self.nanPattern
+    let man = payload > Self.largestNumber/10 ? 0 : RawBitPattern(payload)
+    self.init(0)
+    set(exponent: pattern<<(Self.exponentBits-6), sigBitPattern: man)
+  }
   
   @inlinable var sign: Sign {
     get { Sign(rawValue: data.get(bit: Self.signBit))! }
@@ -175,7 +188,7 @@ extension IntDecimal {
   
   @inlinable var sigBitPattern: RawBitPattern {
     let range = isSmallSig ? Self.smallSignificandBits
-                                   : Self.largeSignificandBits
+                           : Self.largeSignificandBits
     if isSmallSig {
       return RawBitPattern(data.get(range:range)) + Self.highSignificandBit
     } else {
@@ -325,19 +338,17 @@ extension IntDecimal {
           return (s, e, k, c, Self.double_inf(s))
         }
         // if (x & (UInt32(1)<<25)) != 0 { status.insert(.invalidOperation) }
-        let high = x.get(range: Self.manLower) > Self.largestNumber/10
-                      ? 0 : UInt64(x) << 44
-        return (s, e, k, c, Self.double_nan(s, high, 0))
+        let payload = x.get(range: Self.manLower)
+        let high = payload > Self.largestNumber/10 ? 0 : UInt64(payload)
+        return (s, e, k, c, Self.double_nan(high))
       }
-      // e = Int((x >> 21) & ((UInt32(1)<<8)-1)) - exponentBias
-      c = UInt64(self.sigBitPattern) // UInt64((UInt32(1)<<23) + (x & ((UInt32(1)<<21)-1)))
+      c = UInt64(self.sigBitPattern)
       if UInt(c) > Self.largestNumber {
         return (s, e, k, c, Self.double_zero(s))
       }
       k = 0
     } else {
-      // e = Int((x >> 23) & ((UInt32(1)<<8)-1)) - exponentBias
-      c = UInt64(self.sigBitPattern) // UInt64(x) & (UInt64(1)<<23 - 1)
+      c = UInt64(self.sigBitPattern)
       if c == 0 { return (s, e, k, c, Self.double_zero(s)) }
       k = UInt32(c).leadingZeroBitCount - 8
       c = c << k
@@ -345,16 +356,21 @@ extension IntDecimal {
     return (s, e, k, c, nil)
   }
   
-  @inlinable static func double_zero(_ s:Sign) -> Double { double(s, 0, 0) }
-  @inlinable static func double_inf(_ s:Sign) -> Double { double(s, 2047, 0) }
-  @inlinable static func double_nan(
-    _ s:Sign, _ c_hi:UInt64, _ c_lo:UInt64) -> Double {
-      double(s, 2047, (c_hi>>13)+(UInt64(1)<<51))
-    }
+  @inlinable static func double_zero(_ s:Sign) -> Double {
+    s == .minus ? -Double.zero : .zero
+  }
+  
+  @inlinable static func double_inf(_ s:Sign) -> Double {
+    s == .minus ? -Double.infinity : .infinity
+  }
+  
+  @inlinable static func double_nan(_ c:UInt64) -> Double {
+      // nan check is incorrect in Double(nan:signalling:)?
+    double(.plus, 2047, (c<<31)+(UInt64(1)<<51))
+  }
   
   @inlinable static func double(_ s:Sign, _ e:Int, _ c:UInt64) -> Double {
-    let s = s == .minus ? 1 : 0
-    return Double(bitPattern: (UInt64(s) << 63) + (UInt64(e) << 52) + c)
+    Double(sign: s, exponentBitPattern: UInt(e), significandBitPattern: c)
   }
   
   /// Return `dpd` pieces all at once
@@ -3537,7 +3553,7 @@ extension IntDecimal {
         } else {    // if exp < 0 and q + exp <= 0
           // the result is +0 or -1
           if x_sign != .plus {
-            return Self(sign: .minus, expBitPattern: exponentBias, sigBitPattern: 1)
+            return Self(sign:.minus,expBitPattern:exponentBias,sigBitPattern:1)
           } else {
             return zero()
           }
@@ -3583,13 +3599,13 @@ extension IntDecimal {
             //pfpsf.insert(.inexact)
           }
           // set exponent to zero as it was negative before.
-          return Self(sign: x_sign, expBitPattern: exponentBias, sigBitPattern: res)
+          return Self(sign:x_sign,expBitPattern:exponentBias,sigBitPattern:res)
         } else {    // if exp < 0 and q + exp <= 0
           // the result is -0 or +1
           if x_sign != .plus {
             return zero(.minus)
           } else {
-            return Self(sign: .plus, expBitPattern: exponentBias, sigBitPattern: 1)
+            return Self(sign:.plus,expBitPattern:exponentBias,sigBitPattern:1)
           }
         }
       case .towardZero:
@@ -3636,8 +3652,8 @@ extension IntDecimal {
           // pfpsf.insert(.inexact)
         }
       default: break
-    }    // end switch ()
-    return Self(sign: x_sign, expBitPattern: exp+exponentBias, sigBitPattern: res)
+    }    // end switch (
+    return Self(sign:x_sign,expBitPattern:exp+exponentBias,sigBitPattern:res)
   }
   
   /***************************************************************************
@@ -3681,14 +3697,17 @@ extension IntDecimal {
     // check for zeros (possibly from non-canonical values)
     if C1 == 0 || (x.isSpecial && C1 > Self.largestNumber) {
       // x is 0: MINFP = 1 * 10^emin
-      return Self(sign: .plus, expBitPattern: minEncodedExponent, sigBitPattern: 1)
+      return Self(sign: .plus, expBitPattern: minEncodedExponent,
+                  sigBitPattern: 1)
     } else { // x is not special and is not zero
       if x == largestBID { // LARGEST_BID {
         // x = +MAXFP = 9999999 * 10^emax
         return Self.infinite() // INFINITY_MASK // +inf
-      } else if x == Self(sign:.minus, expBitPattern:minEncodedExponent, sigBitPattern:1) {
+      } else if x == Self(sign:.minus, expBitPattern:minEncodedExponent,
+                          sigBitPattern:1) {
         // x = -MINFP = 1...99 * 10^emin
-        return Self(sign: .minus, expBitPattern: minEncodedExponent, sigBitPattern: 0)
+        return Self(sign: .minus, expBitPattern: minEncodedExponent,
+                    sigBitPattern: 0)
       } else {
         // -MAXFP <= x <= -MINFP - 1 ulp OR MINFP <= x <= MAXFP - 1 ulp
         // can add/subtract 1 ulp to the significand
@@ -3807,7 +3826,8 @@ extension IntDecimal {
         Q+=1
       }
     }
-    return Self(sign: .plus, expBitPattern: exponent_q, sigBitPattern: RawBitPattern(Q))
+    return Self(sign: .plus, expBitPattern: exponent_q,
+                sigBitPattern: RawBitPattern(Q))
   }
 }
 

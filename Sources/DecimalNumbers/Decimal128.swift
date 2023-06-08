@@ -22,7 +22,7 @@ import UInt128
 /// to completely define many of the Decimal128 operations. The `data` word
 /// holds all 128 bits of the Decimal128 data type.
 struct IntDecimal128 : IntDecimal {
-    
+  typealias RawSignificand = UInt128
   typealias RawData = UInt128
   typealias RawBitPattern = UInt128
   

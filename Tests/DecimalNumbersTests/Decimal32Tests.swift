@@ -4713,7 +4713,7 @@ final class Decimal32Tests: XCTestCase {
     func checkValues(_ test: TestCase, _ x: UInt128, _ s: Status,
                      _ msg: String) {
       let pass1 = test.reshi == x >> 64 && test.reslo == x &
-                                      UInt128("FFFFFFFFFFFFFFFF", radix: 16)!
+                                      UInt128(0xFFFFFFFF_FFFFFFFF)
       let pass2 = true // test.status == s
       XCTAssert(pass1, "Expected: " + msg)
       XCTAssert(pass2, "[\(test.status)] != [\(s)]")
@@ -4744,10 +4744,14 @@ final class Decimal32Tests: XCTestCase {
                              test.res, t1.bid.data)
           checkValues(test, UInt64(t1.bid.data), state, error)
         case "bid32_to_binary64":
-          let t1 = getNumber(test.istr).double(round: test.roundMode)
+          let t1 = getNumber(test.istr)
+//          if testID == 70 {
+//            print(t1)
+//          }
+          let t1d = t1.double(test.roundMode) // Double(t1)
           let d1 = Double(bitPattern: test.res)
-          let error = "\(d1) != \(t1)"
-          checkValues(test, t1.bitPattern, state, error)
+          let error = "\(d1) != \(t1d)"
+          checkValues(test, t1d.bitPattern, state, error)
         case "bid32_to_binary32":
           // FIXME: - Problem in bid32_to_binary32() function
           break

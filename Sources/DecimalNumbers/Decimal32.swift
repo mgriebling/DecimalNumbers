@@ -23,6 +23,7 @@ import UInt128
 /// to completely define many of the Decimal32 operations.  The `data` word
 /// holds all 32 bits of the Decimal32 data type.
 struct IntDecimal32 : IntDecimal {
+  typealias RawSignificand = UInt32
   typealias RawData = UInt32
   typealias RawBitPattern = UInt
   
@@ -36,10 +37,10 @@ struct IntDecimal32 : IntDecimal {
   }
   
   // Define the fields and required parameters
-  static var exponentBias:      Int {  101 }
+  static var exponentBias:       Int {  101 }
   static var maxEncodedExponent: Int {  191 }
-  static var maximumDigits:     Int {    7 }
-  static var exponentBits:      Int {    8 }
+  static var maximumDigits:      Int {    7 }
+  static var exponentBits:       Int {    8 }
   
   static var largestNumber: RawBitPattern { 9_999_999 }
 }
@@ -59,10 +60,34 @@ public struct Decimal32 : Codable, Hashable {
   public typealias RawExponent = UInt
   public typealias RawSignificand = UInt32
   
+  // Internal data store for the binary integer decimal encoded number.
+  // The internal representation is always binary integer decimal.
   var bid = ID.zero(.plus)
   
+  /// Raw data initializer -- only for internal use.
   public init(bid: UInt32) { self.bid = ID(bid) }
   init(bid: ID)            { self.bid = bid }
+  
+  /// Creates a NaN ("not a number") value with the specified payload.
+  ///
+  /// NaN values compare not equal to every value, including themselves. Most
+  /// operations with a NaN operand produce a NaN result. Don't use the
+  /// equal-to operator (`==`) to test whether a value is NaN. Instead, use
+  /// the value's `isNaN` property.
+  ///
+  ///     let x = Decimal32(nan: 0, signaling: false)
+  ///     print(x == .nan)
+  ///     // Prints "false"
+  ///     print(x.isNaN)
+  ///     // Prints "true"
+  ///
+  /// - Parameters:
+  ///   - payload: The payload to use for the new NaN value.
+  ///   - signaling: Pass `true` to create a signaling NaN or `false` to create
+  ///     a quiet NaN.
+  public init(nan payload: RawSignificand, signaling: Bool) {
+    self.bid = ID.init(nan: payload, signaling: signaling)
+  }
 }
 
 extension Decimal32 : AdditiveArithmetic {
@@ -156,20 +181,20 @@ extension Decimal32 : FloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - DecimalFloatingPoint properties and attributes
   
-  public static var exponentBitCount: Int      {ID.exponentBits}
-//  public static var exponentBias: Int          {ID.exponentBias}
-  public static var significandDigitCount: Int {ID.maximumDigits}
-  
-  public static var nan: Self                  { Self(bid:ID.nan()) }
-  public static var signalingNaN: Self         { Self(bid:ID.snan) }
+  public static var exponentBitCount: Int      { ID.exponentBits }
+  public static var significandDigitCount: Int { ID.maximumDigits }
+  public static var nan: Self                  { Self(nan:0, signaling:false) }
+  public static var signalingNaN: Self         { Self(nan:0, signaling:true) }
   public static var infinity: Self             { Self(bid:ID.infinite()) }
   
   public static var greatestFiniteMagnitude: Self {
-    Self(bid:ID(expBitPattern:ID.maxEncodedExponent, sigBitPattern:ID.largestNumber))
+    Self(bid:ID(expBitPattern:ID.maxEncodedExponent,
+                sigBitPattern:ID.largestNumber))
   }
   
   public static var leastNormalMagnitude: Self {
-    Self(bid:ID(expBitPattern:ID.minEncodedExponent, sigBitPattern:ID.largestNumber))
+    Self(bid:ID(expBitPattern:ID.minEncodedExponent,
+                sigBitPattern:ID.largestNumber))
   }
   
   public static var leastNonzeroMagnitude: Self {
@@ -200,7 +225,8 @@ extension Decimal32 : FloatingPoint {
   public var significand: Self {
     let (_, _, man, valid) = bid.unpack()
     if !valid { return self }
-    return Self(bid: ID(expBitPattern: Int(exponentBitPattern), sigBitPattern: man))
+    return Self(bid: ID(expBitPattern: Int(exponentBitPattern),
+                        sigBitPattern: man))
   }
 
   ///////////////////////////////////////////////////////////////////////////
@@ -253,14 +279,6 @@ extension Decimal32 : DecimalFloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for DecimalFloatingPoint
   
-  public init(bidBitPattern: RawSignificand) {
-    bid.data = bidBitPattern
-  }
-  
-  public init(dpdBitPattern: RawSignificand) {
-    bid = ID(dpd: ID.RawData(dpdBitPattern))
-  }
-  
   public init(sign: Sign, exponentBitPattern: RawExponent,
               significandBitPattern: RawSignificand) {
     bid = ID(sign: sign, expBitPattern: Int(exponentBitPattern),
@@ -272,10 +290,34 @@ extension Decimal32 : DecimalFloatingPoint {
   
   public var significandBitPattern: UInt32 { UInt32(bid.sigBitPattern) }
   public var exponentBitPattern: UInt      { UInt(bid.expBitPattern) }
-  public var bidBitPattern: UInt32         { bid.data }
-  public var dpdBitPattern: UInt32         { bid.dpd }
   
-  public func double(round:Rounding) -> Double { bid.double(round) }
+  //  Conversions to/from binary integer decimal encoding.  These are not part
+  //  of the DecimalFloatingPoint prototype because there's no guarantee that
+  //  an integer type of the same size actually exists (e.g. Decimal128).
+  //
+  //  If we want them in a protocol at some future point, that protocol should
+  //  be "InterchangeFloatingPoint" or "PortableFloatingPoint" or similar, and
+  //  apply to IEEE 754 "interchange types".
+  /// The bit pattern of the value's encoding.
+  ///
+  /// The bit pattern matches the decimal interchange format defined by the
+  /// [IEEE 754 specification][spec].
+  ///
+  /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
+  public var bidBitPattern: RawSignificand { bid.data }
+  public var dpdBitPattern: RawSignificand { bid.dpd }
+  
+  public func double(_ rmode: Rounding) -> Double { bid.double(rmode) }
+  
+  public init(bidBitPattern: RawSignificand) {
+    bid.data = bidBitPattern
+  }
+  
+  public init(dpdBitPattern: RawSignificand) {
+    bid = ID(dpd: ID.RawData(dpdBitPattern))
+  }
+  
+  // public func double(round:Rounding) -> Double { bid.double(round) }
   
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }
