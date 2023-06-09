@@ -92,13 +92,13 @@ public struct Decimal32 : Codable, Hashable {
 
 extension Decimal32 : AdditiveArithmetic {
   public static func - (lhs: Self, rhs: Self) -> Self {
-    lhs.subtracting(rhs, rounding: .toNearestOrEven)
+    lhs.subtracting(other: rhs, rounding: .toNearestOrEven)
   }
   
   public mutating func negate() { self.bid.data.toggle(bit: ID.signBit) }
   
   public static func + (lhs: Self, rhs: Self) -> Self {
-    lhs.adding(rhs, rounding: .toNearestOrEven)
+    lhs.adding(other: rhs, rounding: .toNearestOrEven)
   }
   
   public static var zero: Self { Self(bid: ID.zero()) }
@@ -224,22 +224,38 @@ extension Decimal32 : FloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Floating-point basic operations with rounding
   
-  public func adding(_ other: Self, rounding rule: Rounding) -> Self {
+  public func adding(other: Self, rounding rule: Rounding) -> Self {
     Self(bid: ID.add(self.bid, other.bid, rounding: rule))
   }
   
-  public func subtracting(_ other: Self, rounding rule: Rounding) -> Self {
+  public mutating func add(other: Self, rounding rule: Rounding) {
+    self = self.adding(other: other, rounding: rule)
+  }
+  
+  public mutating func subtract(other: Self, rounding rule: Rounding) {
+    self = self.subtracting(other: other, rounding: rule)
+  }
+  
+  public func subtracting(other: Self, rounding rule: Rounding) -> Self {
     var negated = other
     if !other.isNaN { negated.negate() }
-    return self.adding(negated, rounding: rule)
+    return self.adding(other: negated, rounding: rule)
   }
   
   public func multiplied(by other: Self, rounding rule: Rounding) -> Self {
     Self(bid: ID.mul(self.bid, other.bid, rule))
   }
   
+  public mutating func multiply(by other: Self, rounding rule: Rounding) {
+    self = self.multiplied(by: other, rounding: rule)
+  }
+  
   public func divided(by other: Self, rounding rule: Rounding) -> Self {
     Self(bid: ID.div(self.bid, other.bid, rule))
+  }
+  
+  public mutating func divide(by other: Self, rounding rule: Rounding) {
+    self = self.divided(by: other, rounding: rule)
   }
 
   ///////////////////////////////////////////////////////////////////////////
