@@ -4733,7 +4733,7 @@ final class Decimal32Tests: XCTestCase {
           var s = s; s.removeFirst(2)
           return Decimal32(bid: UInt32(s, radix:16) ?? 0)
         }
-        return Decimal32(stringLiteral: s, round: test.roundMode)
+        return Decimal32(stringLiteral: s, rounding:test.roundMode)
       }
       
       switch test.id {
@@ -4865,8 +4865,7 @@ final class Decimal32Tests: XCTestCase {
                              test.res, t1.bid.data)
           checkValues(test, UInt64(t1.bid.data), state, error)
         case "bid32_sqrt":
-          var t1 = getNumber(test.istr)
-          t1.formSquareRoot(round: test.roundMode)
+          let t1 = getNumber(test.istr).squareRoot(rounding: test.roundMode)
           let state = state
           let dtest = Decimal32(UInt32(test.res))
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(t1)]",

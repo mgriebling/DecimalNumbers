@@ -92,15 +92,13 @@ public struct Decimal32 : Codable, Hashable {
 
 extension Decimal32 : AdditiveArithmetic {
   public static func - (lhs: Self, rhs: Self) -> Self {
-    var addIn = rhs
-    if !rhs.isNaN { addIn.negate() }
-    return lhs + addIn
+    lhs.subtracting(rhs, rounding: .toNearestOrEven)
   }
   
   public mutating func negate() { self.bid.data.toggle(bit: ID.signBit) }
   
   public static func + (lhs: Self, rhs: Self) -> Self {
-    Self(bid: ID.add(lhs.bid, rhs.bid, rounding: ID.rounding))
+    lhs.adding(rhs, rounding: .toNearestOrEven)
   }
   
   public static var zero: Self { Self(bid: ID.zero()) }
@@ -136,21 +134,21 @@ extension Decimal32 : ExpressibleByIntegerLiteral {
   public init(integerLiteral value: IntegerLiteralType) {
     if IntegerLiteralType.isSigned {
       let x = Int(value).magnitude
-      bid = ID.bid(from: UInt64(x), ID.rounding)
+      bid = ID.bid(from: UInt64(x), .toNearestOrEven)
       if value.signum() < 0 { self.negate() }
     } else {
-      bid = ID.bid(from: UInt64(value), ID.rounding)
+      bid = ID.bid(from: UInt64(value), .toNearestOrEven)
     }
   }
 }
 
 extension Decimal32 : ExpressibleByStringLiteral {
   public init(stringLiteral value: StringLiteralType) {
-    self.init(stringLiteral: value, round: .toNearestOrEven)
+    self.init(stringLiteral: value, rounding: .toNearestOrEven)
   }
   
-  public init(stringLiteral value: StringLiteralType, round: Rounding) {
-    bid = numberFromString(value, round: round) ?? Self.zero.bid
+  init(stringLiteral value: StringLiteralType, rounding rule: Rounding) {
+    bid = numberFromString(value, round: rule) ?? Self.zero.bid
   }
 }
 
@@ -222,18 +220,39 @@ extension Decimal32 : FloatingPoint {
     return Self(bid: ID(expBitPattern: Int(exponentBitPattern),
                         sigBitPattern: man))
   }
+  
+  ///////////////////////////////////////////////////////////////////////////
+  // MARK: - Floating-point basic operations with rounding
+  
+  public func adding(_ other: Self, rounding rule: Rounding) -> Self {
+    Self(bid: ID.add(self.bid, other.bid, rounding: rule))
+  }
+  
+  public func subtracting(_ other: Self, rounding rule: Rounding) -> Self {
+    var negated = other
+    if !other.isNaN { negated.negate() }
+    return self.adding(negated, rounding: rule)
+  }
+  
+  public func multiplied(by other: Self, rounding rule: Rounding) -> Self {
+    Self(bid: ID.mul(self.bid, other.bid, rule))
+  }
+  
+  public func divided(by other: Self, rounding rule: Rounding) -> Self {
+    Self(bid: ID.div(self.bid, other.bid, rule))
+  }
 
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Floating-point basic operations
   
   public static func * (lhs: Self, rhs: Self) -> Self {
-    Self(bid: ID.mul(lhs.bid, rhs.bid, .toNearestOrEven))
+    lhs.multiplied(by: rhs, rounding: .toNearestOrEven)
   }
   
   public static func *= (lhs: inout Self, rhs: Self) { lhs = lhs * rhs }
   
   public static func / (lhs: Self, rhs: Self) -> Self {
-    Self(bid: ID.div(lhs.bid, rhs.bid, .toNearestOrEven))
+    lhs.divided(by: rhs, rounding: .toNearestOrEven)
   }
   
   public static func /= (lhs: inout Self, rhs: Self) { lhs = lhs / rhs }
@@ -248,21 +267,33 @@ extension Decimal32 : FloatingPoint {
   }
   
   public mutating func formSquareRoot() {
-    self.formSquareRoot(round: .toNearestOrEven)
+    self.formSquareRoot(rounding: .toNearestOrEven)
+  }
+  
+  public func squareRoot(rounding rule: Rounding) -> Self {
+    Self(bid: ID.sqrt(self.bid, rule))
   }
   
   /// Rounding method equivalend of the `formSquareRoot`
-  public mutating func formSquareRoot(round: Rounding) {
-    bid = ID.sqrt(self.bid, round)
+  public mutating func formSquareRoot(rounding rule: Rounding) {
+    self = squareRoot(rounding: rule)
   }
   
   public mutating func addProduct(_ lhs: Self, _ rhs: Self) {
-    self.addProduct(lhs, rhs, round: .toNearestOrEven)
+    self.addProduct(lhs, rhs, rounding: .toNearestOrEven)
+  }
+  
+  public func addingProduct(_ lhs: Self, _ rhs: Self,
+                            rounding rule: Rounding) -> Self {
+    var x = self
+    x.addProduct(lhs, rhs, rounding: rule)
+    return x
   }
   
   /// Rounding method equivalent of the `addProduct`
-  public mutating func addProduct(_ lhs: Self, _ rhs: Self, round: Rounding) {
-    bid = ID.fma(lhs.bid, rhs.bid, self.bid, round)
+  public mutating func addProduct(_ lhs: Self, _ rhs: Self,
+                                  rounding rule: Rounding) {
+    bid = ID.fma(lhs.bid, rhs.bid, self.bid, rule)
   }
   
   public func isEqual(to other: Self) -> Bool  { self == other }

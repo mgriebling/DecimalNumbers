@@ -62,18 +62,37 @@ public struct Decimal64 : Codable, Hashable {
 
 extension Decimal64 : AdditiveArithmetic {
   public static func - (lhs: Self, rhs: Self) -> Self {
-    var addIn = rhs
-    if !rhs.isNaN { addIn.negate() }
-    return lhs + addIn
+    lhs.subtracting(rhs, rounding: .toNearestOrEven)
   }
   
   public mutating func negate() { self.bid.data.toggle(bit: ID.signBit) }
   
   public static func + (lhs: Self, rhs: Self) -> Self {
-    Self(bid: ID.add(lhs.bid, rhs.bid, rounding: ID.rounding))
+    lhs.adding(to: rhs, rounding: .toNearestOrEven)
   }
   
-  public static var zero: Self { Self(bid: ID.zero(.plus)) }
+  public static var zero: Self { Self(bid: ID.zero()) }
+  
+  /// Creates a NaN ("not a number") value with the specified payload.
+  ///
+  /// NaN values compare not equal to every value, including themselves. Most
+  /// operations with a NaN operand produce a NaN result. Don't use the
+  /// equal-to operator (`==`) to test whether a value is NaN. Instead, use
+  /// the value's `isNaN` property.
+  ///
+  ///     let x = Decimal32(nan: 0, signaling: false)
+  ///     print(x == .nan)
+  ///     // Prints "false"
+  ///     print(x.isNaN)
+  ///     // Prints "true"
+  ///
+  /// - Parameters:
+  ///   - payload: The payload to use for the new NaN value.
+  ///   - signaling: Pass `true` to create a signaling NaN or `false` to create
+  ///     a quiet NaN.
+  public init(nan payload: RawSignificand, signaling: Bool) {
+    self.bid = ID.init(nan: payload, signaling: signaling)
+  }
 }
 
 extension Decimal64 : Equatable {
@@ -102,27 +121,21 @@ extension Decimal64 : CustomStringConvertible {
   }
 }
 
-//extension Decimal64 : ExpressibleByFloatLiteral {
-//  public init(floatLiteral value: Double) {
-//    self.init(bid: ID.bid(from: value, ID.rounding))
-//  }
-//}
-
 extension Decimal64 : ExpressibleByIntegerLiteral {
   public init(integerLiteral value: IntegerLiteralType) {
     if IntegerLiteralType.isSigned {
       let x = Int(value).magnitude
-      bid = ID.bid(from: UInt64(x), ID.rounding)
+      bid = ID.bid(from: UInt64(x), .toNearestOrEven)
       if value.signum() < 0 { self.negate() }
     } else {
-      bid = ID.bid(from: UInt64(value), ID.rounding)
+      bid = ID.bid(from: UInt64(value), .toNearestOrEven)
     }
   }
 }
 
 extension Decimal64 : ExpressibleByStringLiteral {
   public init(stringLiteral value: StringLiteralType) {
-    bid = numberFromString(value, round: ID.rounding) ?? Self.zero.bid
+    bid = numberFromString(value, round: .toNearestOrEven) ?? Self.zero.bid
   }
 }
 
@@ -149,7 +162,6 @@ extension Decimal64 : FloatingPoint {
   // MARK: - DecimalFloatingPoint properties and attributes
   
   public static var exponentBitCount: Int      {ID.exponentBits}
-//  public static var exponentBias: Int          {ID.exponentBias}
   public static var significandDigitCount: Int {ID.maximumDigits}
   public static var nan: Self                  { Self(bid:ID.nan()) }
   public static var signalingNaN: Self         { Self(bid:ID.snan) }
@@ -196,36 +208,68 @@ extension Decimal64 : FloatingPoint {
     return Self(bid: ID(expBitPattern: Int(exponentBitPattern),
                         sigBitPattern: man))
   }
+  
+  ///////////////////////////////////////////////////////////////////////////
+  // MARK: - Floating-point basic operations with rounding
+  
+  public func adding(to other: Self, rounding rule: Rounding) -> Self {
+    Self(bid: ID.add(self.bid, other.bid, rounding: rule))
+  }
+  
+  public func subtracting(_ other: Self, rounding rule: Rounding) -> Self {
+    var negated = other
+    if !other.isNaN { negated.negate() }
+    return self.adding(to: negated, rounding: rule)
+  }
+  
+  public func multiplying(by other: Self, rounding rule: Rounding) -> Self {
+    Self(bid: ID.mul(self.bid, other.bid, rule))
+  }
+  
+  public func dividing(by other: Self, rounding rule: Rounding) -> Self {
+    Self(bid: ID.div(self.bid, other.bid, rule))
+  }
 
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Floating-point basic operations
   
   public static func * (lhs: Self, rhs: Self) -> Self {
-    lhs // FIXME: -
+    lhs.multiplying(by: rhs, rounding: .toNearestOrEven)
   }
   
   public static func *= (lhs: inout Self, rhs: Self) { lhs = lhs * rhs }
   
   public static func / (lhs: Self, rhs: Self) -> Self {
-    lhs // FIXME: -
+    lhs.dividing(by: rhs, rounding: .toNearestOrEven)
   }
   
   public static func /= (lhs: inout Self, rhs: Self) { lhs = lhs / rhs }
   
   public mutating func formRemainder(dividingBy other: Self) {
-    // FIXME: -
+    bid = ID.rem(self.bid, other.bid)
   }
   
   public mutating func formTruncatingRemainder(dividingBy other: Self) {
-    // FIXME: -
+    let q = (self/other).rounded(.towardZero)
+    self -= q * other
   }
   
   public mutating func formSquareRoot() {
-    bid = ID.sqrt(self.bid, ID.rounding)
+    bid = ID.sqrt(self.bid, .toNearestOrEven)
+  }
+  
+  /// Rounding method equivalend of the `formSquareRoot`
+  public mutating func formSquareRoot(round: Rounding) {
+    bid = ID.sqrt(self.bid, round)
   }
   
   public mutating func addProduct(_ lhs: Self, _ rhs: Self) {
-    self += lhs * rhs // FIXME: -
+    self.addProduct(lhs, rhs, round: .toNearestOrEven)
+  }
+  
+  /// Rounding method equivalent of the `addProduct`
+  public mutating func addProduct(_ lhs: Self, _ rhs: Self, round: Rounding) {
+    bid = ID.fma(lhs.bid, rhs.bid, self.bid, round)
   }
   
   public func isEqual(to other: Self) -> Bool  { self == other }

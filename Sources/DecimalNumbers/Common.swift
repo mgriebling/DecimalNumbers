@@ -161,11 +161,11 @@ extension IntDecimal {
   static var trailingPattern: Int { 0x3ff }
   
   // Default rounding mode used by most methods
-  static var rounding: Rounding { .toNearestOrEven }
+  // static var rounding: Rounding { .toNearestOrEven }
   
-  public init?(_ s: String) {
+  public init?(_ s: String, rounding rule: Rounding = .toNearestOrEven) {
     self.init(0)
-    if let n:Self = numberFromString(s, round:Self.rounding) { data = n.data }
+    if let n:Self = numberFromString(s, round: rule) { data = n.data }
     else { return nil }
   }
   
