@@ -64,7 +64,7 @@ public struct Decimal32 : Codable, Hashable {
   // The internal representation is always binary integer decimal.
   var bid = ID.zero(.plus)
   
-  /// Raw data initializer -- only for internal use.
+  // Raw data initializer -- only for internal use.
   public init(bid: UInt32) { self.bid = ID(bid) }
   init(bid: ID)            { self.bid = bid }
   
@@ -129,12 +129,6 @@ extension Decimal32 : Comparable {
 extension Decimal32 : CustomStringConvertible {
   public var description: String {
     string(from: bid)
-  }
-}
-
-extension Decimal32 : ExpressibleByFloatLiteral {
-  public init(floatLiteral value: Double) {
-    self.init(bid: ID.bid(from: value, ID.rounding))
   }
 }
 
@@ -279,6 +273,24 @@ extension Decimal32 : DecimalFloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for DecimalFloatingPoint
   
+  /// Creates a new instance from the specified sign and bit patterns.
+  ///
+  /// The values passed as `exponentBitPattern` and `significandBitPattern` are
+  /// interpreted in the decimal interchange format defined by the [IEEE 754
+  /// specification][spec].
+  ///
+  /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
+  ///
+  /// The `significandBitPattern` are the big-endian, binary integer decimal
+  /// digits of the number. For example, the integer number `314` represents a
+  /// significand of `314`.
+  ///
+  /// - Parameters:
+  ///   - sign: The sign of the new value.
+  ///   - exponentBitPattern: The bit pattern to use for the exponent field of
+  ///     the new value.
+  ///   - significandBitPattern: Bit pattern to use for the significand field
+  ///     of the new value.
   public init(sign: Sign, exponentBitPattern: RawExponent,
               significandBitPattern: RawSignificand) {
     bid = ID(sign: sign, expBitPattern: Int(exponentBitPattern),
@@ -288,8 +300,13 @@ extension Decimal32 : DecimalFloatingPoint {
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Instance properties and attributes
   
+  /// The raw encoding of the value's significand field.
   public var significandBitPattern: UInt32 { UInt32(bid.sigBitPattern) }
-  public var exponentBitPattern: UInt      { UInt(bid.expBitPattern) }
+  
+  /// The raw encoding of the value's exponent field.
+  ///
+  /// This value is unadjusted by the type's exponent bias.
+  public var exponentBitPattern: UInt { UInt(bid.expBitPattern) }
   
   //  Conversions to/from binary integer decimal encoding.  These are not part
   //  of the DecimalFloatingPoint prototype because there's no guarantee that
@@ -298,16 +315,30 @@ extension Decimal32 : DecimalFloatingPoint {
   //  If we want them in a protocol at some future point, that protocol should
   //  be "InterchangeFloatingPoint" or "PortableFloatingPoint" or similar, and
   //  apply to IEEE 754 "interchange types".
-  /// The bit pattern of the value's encoding.
+  /// The bit pattern of the value's encoding. A `bid` prefix indicates a
+  /// binary integer decimal encoding; while a `dpd` prefix indicates a
+  /// densely packed decimal encoding.
   ///
-  /// The bit pattern matches the decimal interchange format defined by the
+  /// The bit patterns are extracted using the `bidBitPattern` and
+  /// `dpdBitPattern` accessors. A new decimal floating point number is
+  /// created by passing an appropriate bit pattern to the
+  /// `init(bidBitPattern:)` and `init(dpdBitPattern:)` initializers.
+  /// If incorrect bit encodings are used, there are no guarantees about
+  /// the resultant decimal floating point number.
+  ///
+  /// The bit patterns match the decimal interchange format defined by the
   /// [IEEE 754 specification][spec].
+  ///
+  /// For example, a Decimal32 number has been created with the value "1000.3".
+  /// Using the `bidBitPattern` accessor, a 32-bit unsigned integer encoded
+  /// value of `0x32002713` is returned.  The `dpdBitPattern` returns the
+  /// 32-bit unsigned integer encoded value of `0x22404003`. Passing these
+  /// numbers to the appropriate initializer recreates the original value
+  /// "1000.3".
   ///
   /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
   public var bidBitPattern: RawSignificand { bid.data }
   public var dpdBitPattern: RawSignificand { bid.dpd }
-  
-  public func double(_ rmode: Rounding) -> Double { bid.double(rmode) }
   
   public init(bidBitPattern: RawSignificand) {
     bid.data = bidBitPattern
@@ -317,13 +348,31 @@ extension Decimal32 : DecimalFloatingPoint {
     bid = ID(dpd: ID.RawData(dpdBitPattern))
   }
   
-  // public func double(round:Rounding) -> Double { bid.double(round) }
-  
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }
     return _digitsIn(bid.sigBitPattern)
   }
   
+  /// The floating-point value with the same sign and exponent as this value,
+  /// but with a significand of 1.0.
+  ///
+  /// A *decade* is a set of decimal floating-point values that all have the
+  /// same sign and exponent. The `decade` property is a member of the same
+  /// decade as this value, but with a unit significand.
+  ///
+  /// In this example, `x` has a value of `21.5`, which is stored as
+  /// `2.15 * 10**1`, where `**` is exponentiation. Therefore, `x.decade` is
+  /// equal to `1.0 * 10**1`, or `10.0`.
+  ///```
+  /// let x = 21.5
+  /// // x.significand == 2.15
+  /// // x.exponent == 1
+  ///
+  /// let y = x.decade
+  /// // y == 10.0
+  /// // y.significand == 1.0
+  /// // y.exponent == 1
+  ///```
   public var decade: Self {
     guard bid.isValid else { return self } // For infinity, Nan, sNaN
     return Self(bid: ID(expBitPattern: bid.expBitPattern, sigBitPattern: 1))

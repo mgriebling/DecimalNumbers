@@ -4745,10 +4745,7 @@ final class Decimal32Tests: XCTestCase {
           checkValues(test, UInt64(t1.bid.data), state, error)
         case "bid32_to_binary64":
           let t1 = getNumber(test.istr)
-//          if testID == 70 {
-//            print(t1)
-//          }
-          let t1d = t1.double(test.roundMode) // Double(t1)
+          let t1d = Double(t1, round: test.roundMode)
           let d1 = Double(bitPattern: test.res)
           let error = "\(d1) != \(t1d)"
           checkValues(test, t1d.bitPattern, state, error)
@@ -5010,8 +5007,11 @@ final class Decimal32Tests: XCTestCase {
     XCTAssert(Decimal32.greatestFiniteMagnitude.exponent == 96 - 7 + 1)
     XCTAssert(Decimal32.leastNormalMagnitude.exponent == -95 - 7 + 1)
     
-//    let xx = Double.infinity
-//    let xi = Int(xx)
+    let x5 = Decimal32("1000.3")
+    print(String(x5.bidBitPattern, radix: 16))
+    XCTAssert(x5.bidBitPattern == 0x32002713)
+    XCTAssert(x5.dpdBitPattern == 0x22404003)
+    print(String(x5.dpdBitPattern, radix: 16))
     
     a = "-21.5"; b = "305.15"
     let c = Decimal32(signOf: a, magnitudeOf: b)
@@ -5024,8 +5024,8 @@ final class Decimal32Tests: XCTestCase {
     a = Decimal32.random(in: 1..<1000)
     print(a); XCTAssert(a >= 1 && a < 1000)
     
-    var numbers : [Decimal32] = [2.5, 21.25, 3.0, .nan, -9.5]
-    let ordered : [Decimal32] = [-9.5, 2.5, 3.0, 21.25, .nan]
+    var numbers : [Decimal32] = ["2.5", "21.25", "3.0", "nan", "-9.5"]
+    let ordered : [Decimal32] = ["-9.5", "2.5", "3.0", "21.25", "nan"]
     numbers.sort { !$1.isTotallyOrdered(belowOrEqualTo: $0) }
     print(numbers)
     XCTAssert(ordered.description == numbers.description)
@@ -5068,7 +5068,7 @@ final class Decimal32Tests: XCTestCase {
 //    }
 
     // Equivalent to the C 'round' function:
-    let w = Decimal32(6.5)
+    let w = Decimal32("6.5")
     print(w.rounded(.toNearestOrAwayFromZero))
     XCTAssert(w.rounded(.toNearestOrAwayFromZero) == Decimal32(7)) // w = 7.0
 

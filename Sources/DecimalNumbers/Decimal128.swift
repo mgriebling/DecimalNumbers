@@ -105,11 +105,11 @@ extension Decimal128 : CustomStringConvertible {
   }
 }
 
-extension Decimal128 : ExpressibleByFloatLiteral {
-  public init(floatLiteral value: Double) {
-    self.init(bid: ID.bid(from: value, ID.rounding))
-  }
-}
+//extension Decimal128 : ExpressibleByFloatLiteral {
+//  public init(floatLiteral value: Double) {
+//    self.init(bid: ID.bid(from: value, ID.rounding))
+//  }
+//}
 
 extension Decimal128 : ExpressibleByIntegerLiteral {
   public init(integerLiteral value: IntegerLiteralType) {

@@ -1,9 +1,19 @@
-//
-//  Extensions.swift
-//  
-//
-//  Created by Mike Griebling on 21.05.2023.
-//
+/**
+Copyright © 2023 Computer Inspirations. All rights reserved.
+Portions are Copyright (c) 2014 - 2018 Apple Inc. and the Swift project authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 import UInt128
 
@@ -14,48 +24,19 @@ extension UInt128 {
 }
 
 extension BinaryFloatingPoint {
-  
-  public // @testable
-  static func _convert<Source: DecimalFloatingPoint>(from source: Source) ->
-  (value: Self?, exact: Bool) {
-    let neg = source.sign == .minus
-    let c = UInt128.High(source.significandBitPattern)
-    guard !source.isZero else { return (neg ? -zero : zero, true) }
-    guard source.isFinite else {
-      if source.isInfinite { return (neg ? -infinity : infinity, true) }
-      return (Self(Double(nan:Double.RawSignificand(c),signaling:false)),false)
-    }
-    if c == 0 || c > Source.greatestFiniteMagnitude.significandBitPattern {
-      return (neg ? -zero : zero, true)
-    }
-    let exp = Int(source.exponent)
-    let cl = UInt128(high: c << 31, low: 0)
-    
-    // determine number and exponent
-    var k = 89
-    var eout = Self.Exponent(Tables.bid_exponents_binary64[exp+358] - k)
-    var mmin = Tables.bid_breakpoints_binary64[exp+358]
-    var recip = UInt256()
-    if cl.components.high < mmin.components.high {
-      recip = Tables.bid_multipliers1_binary64[exp+358]
-    } else {
-      recip = Tables.bid_multipliers2_binary64[exp+358]
-      eout += 1
-    }
-    
-    // do reciprocal multiplication
-    var z = UInt384()
-    
-    var x = Self(sign: source.sign, exponent: eout, significand: 0)
-    return (x, true)
-  }
-  
   @inline(__always)
-  public init<T: DecimalFloatingPoint>(_ source: T) {
-    guard let value = Self._convert(from:source).value else {
-      self = Self.nan; return
+  public init<T: DecimalFloatingPoint>(_ source: T,
+                                       round: Rounding = .toNearestOrEven) {
+    if let x = source as? Decimal32 {
+      self = Self(x.bid.double(round))
+    } else if let x = source as? Decimal64 {
+      self = Self(x.bid.double(round))
+    } else if let x = source as? Decimal128 {
+      self = Self(x.bid.double(round))
+    } else {
+      self = Self.nan
+      assertionFailure("Unknown Decimal Floating Point type \(T.self)")
     }
-    self = value
   }
 }
 
