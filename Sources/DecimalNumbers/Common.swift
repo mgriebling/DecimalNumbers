@@ -328,7 +328,8 @@ extension IntDecimal {
   // 2^23 <= c < 2^24   (decimal32)
   // 2^53 <= c < 2^54   (decimal64)
   // 2^112 <= c < 2^113 (decimal128)
-  func unpack() -> (s: Sign, e: Int, k: Int, c: UInt64, valid: Double?) {
+  func unpack<T:BinaryFloatingPoint> () ->
+  (s: Sign, e: Int, k: Int, c: UInt64, f: T?) {
     let x = self.data
     let s = self.sign
     var k=0, c=UInt64()
@@ -357,26 +358,47 @@ extension IntDecimal {
     return (s, e, k, c, nil)
   }
   
-  @inlinable static func dzero(_ s:Sign) -> Double {
-    s == .minus ? -Double.zero : .zero
+  @inlinable static func dzero<T:BinaryFloatingPoint>(_ s:Sign) -> T {
+    s == .minus ? -T.zero : .zero
   }
   
-  @inlinable static func inf(_ s:Sign) -> Double {
-    s == .minus ? -Double.infinity : .infinity
+  @inlinable static func inf<T:BinaryFloatingPoint>(_ s:Sign) -> T {
+    s == .minus ? -T.infinity : .infinity
   }
   
-  @inlinable static func nan(_ c:UInt64) -> Double {
+  @inlinable static func nan<T:BinaryFloatingPoint>(_ c:UInt64) -> T {
       // nan check is incorrect in Double(nan:signalling:)?
-    double(.plus, 2047, (c<<31)+(UInt64(1)<<51))
+    if T.self == Double.self {
+      let t:Double = float(.plus, 2047, UInt64((c<<31)+(1<<51)))
+      return T(t)
+    } else if T.self == Float.self {
+      let t:Float = float(.plus, 255, UInt64((c<<2)+(1<<22)))
+      return T(t)
+    }
+    return T.nan
   }
   
-  @inlinable static func double(_ s:Sign, _ e:Int, _ c:UInt64) -> Double {
-    Double(sign: s, exponentBitPattern: UInt(e), significandBitPattern: c)
+  @inlinable static func float<T:BinaryFloatingPoint>(_ s:Sign, _ e:Int,
+                                                      _ c:UInt64) -> T {
+    if T.self == Double.self {
+      return T(Double(sign: s, exponentBitPattern: UInt(e),
+                      significandBitPattern: c))
+    } else if T.self == Float.self {
+      return T(Float(sign: s, exponentBitPattern: UInt(e),
+                     significandBitPattern: UInt32(c)))
+    }
+    return T(sign: s, exponentBitPattern: T.RawExponent(e),
+             significandBitPattern: T.RawSignificand(c))
   }
+  
+//  @inlinable static func float<T:BinaryFloatingPoint>(_ s:Sign, _ e:UInt, _ c:UInt64) -> T {
+//    T(sign: s, exponentBitPattern: e, significandBitPattern: c)
+//    // T(sign:s, exponentBitPattern:UInt(e), significandBitPattern:UInt32(c))
+//  }
   
   /// Return `dpd` pieces all at once
   static func unpack(dpd: RawData) ->
-                  (sign: Sign, exponent: Int, high: Int, trailing: RawBitPattern) {
+              (sign: Sign, exponent: Int, high: Int, trailing: RawBitPattern) {
     let sgn = dpd.get(bit: signBit) == 1 ? Sign.minus : .plus
     var exponent, high: Int, trailing: RawBitPattern
     let expRange2: IntRange
@@ -2913,8 +2935,9 @@ extension IntDecimal {
     return Self(adjustOverflowUnderflow(sz, ez - scale_k, cz, r))
   }
   
-  func double (_ rmode: Rounding) -> Double {
-    var (s, e, k, high, double) = self.unpack()
+  func float<T:BinaryFloatingPoint>(_ rmode: Rounding) -> T {
+    var double:T?, s:Sign, e:Int, k:Int, high:UInt64
+    (s, e, k, high, double) = self.unpack()
     if let x = double { return x }
     // if let res = unpack_bid32(x, &s, &e, &k, &c.hi) { return res }
     
@@ -2922,7 +2945,7 @@ extension IntDecimal {
     // In fact shift a further 6 places ready for reciprocal multiplication
     // Thus (113-24)+6=95, a shift of 31 given that we've already upacked in c.hi
     let c = UInt128(high: UInt64(high) << 31, low: 0)
-    k = k + 89
+    k += 89
     
     // Check for "trivial" overflow, when 10^e * 1 > 2^{sci_emax+1}, just to
     // keep tables smaller (it would be intercepted later otherwise).
@@ -2944,7 +2967,7 @@ extension IntDecimal {
       r = Tables.bid_multipliers1_binary64[e+358]
     } else {
       r = Tables.bid_multipliers2_binary64[e+358]
-      e_out = e_out + 1;
+      e_out += 1
     }
     
     // Do the reciprocal multiplication
@@ -2955,11 +2978,11 @@ extension IntDecimal {
     
     // Check for exponent underflow and compensate by shifting the product
     // Cut off the process at precision+2, since we can't really shift further
-    var c_prov = Int(z.w[5])
+    var c_prov = Int64(z.w[5])
     
     // Round using round-sticky words
     // If we spill into the next binade, correct
-    let rind = rmode.index(negative:s == .minus, lsb:c_prov)
+    let rind = rmode.index(negative:s == .minus, lsb:Int(c_prov))
     if Self.bid_roundbound_128[rind] < UInt128(high: z.w[4], low: z.w[3]) {
       c_prov = c_prov + 1
     }
@@ -2970,7 +2993,7 @@ extension IntDecimal {
     //          pfpsf.insert(.inexact)
     //      }
     // Package up the result as a binary floating-point number
-    return Self.double(s, e_out, UInt64(c_prov))
+    return Self.float(s, e_out, UInt64(bitPattern:c_prov))
   }
 
   

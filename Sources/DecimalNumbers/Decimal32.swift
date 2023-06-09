@@ -227,13 +227,13 @@ extension Decimal32 : FloatingPoint {
   // MARK: - Floating-point basic operations
   
   public static func * (lhs: Self, rhs: Self) -> Self {
-    Self(bid: ID.mul(lhs.bid, rhs.bid, ID.rounding))
+    Self(bid: ID.mul(lhs.bid, rhs.bid, .toNearestOrEven))
   }
   
   public static func *= (lhs: inout Self, rhs: Self) { lhs = lhs * rhs }
   
   public static func / (lhs: Self, rhs: Self) -> Self {
-    Self(bid: ID.div(lhs.bid, rhs.bid, ID.rounding))
+    Self(bid: ID.div(lhs.bid, rhs.bid, .toNearestOrEven))
   }
   
   public static func /= (lhs: inout Self, rhs: Self) { lhs = lhs / rhs }
@@ -248,15 +248,21 @@ extension Decimal32 : FloatingPoint {
   }
   
   public mutating func formSquareRoot() {
-    bid = ID.sqrt(self.bid, ID.rounding)
+    self.formSquareRoot(round: .toNearestOrEven)
   }
   
+  /// Rounding method equivalend of the `formSquareRoot`
   public mutating func formSquareRoot(round: Rounding) {
     bid = ID.sqrt(self.bid, round)
   }
   
   public mutating func addProduct(_ lhs: Self, _ rhs: Self) {
-    bid = ID.fma(lhs.bid, rhs.bid, self.bid, ID.rounding)
+    self.addProduct(lhs, rhs, round: .toNearestOrEven)
+  }
+  
+  /// Rounding method equivalent of the `addProduct`
+  public mutating func addProduct(_ lhs: Self, _ rhs: Self, round: Rounding) {
+    bid = ID.fma(lhs.bid, rhs.bid, self.bid, round)
   }
   
   public func isEqual(to other: Self) -> Bool  { self == other }

@@ -28,11 +28,14 @@ extension BinaryFloatingPoint {
   public init<T: DecimalFloatingPoint>(_ source: T,
                                        round: Rounding = .toNearestOrEven) {
     if let x = source as? Decimal32 {
-      self = Self(x.bid.double(round))
+      let t:Self = x.bid.float(round)
+      self = t
     } else if let x = source as? Decimal64 {
-      self = Self(x.bid.double(round))
+      let t:Self = x.bid.float(round)
+      self = t
     } else if let x = source as? Decimal128 {
-      self = Self(x.bid.double(round))
+      let t:Self = x.bid.float(round)
+      self = t
     } else {
       self = Self.nan
       assertionFailure("Unknown Decimal Floating Point type \(T.self)")
