@@ -121,6 +121,12 @@ extension Decimal64 : CustomStringConvertible {
   }
 }
 
+extension Decimal64 : ExpressibleByFloatLiteral {
+  public init(floatLiteral value: Double) {
+    self.init(bid: ID.bid(from: value, .toNearestOrEven))
+  }
+}
+
 extension Decimal64 : ExpressibleByIntegerLiteral {
   public init(integerLiteral value: IntegerLiteralType) {
     if IntegerLiteralType.isSigned {

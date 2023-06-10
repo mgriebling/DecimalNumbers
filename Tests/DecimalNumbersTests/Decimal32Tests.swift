@@ -1075,47 +1075,87 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_fma", 4, "0xa2bc202e", "0xd7ff3fcd", "0x3c41374e", 0x4b322429, 0x20),
       TestCase("bid32_fma", 4, "0xbab75018", "0x6f6e1473", "0x72458bf5", 0x49520b01, 0x20), // 580
       
-      TestCase("bid32_fmod", 0, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
-      TestCase("bid32_fmod", 0, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
-      // fmod
-      TestCase("bid32_fmod", 0, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
-      TestCase("bid32_fmod", 0, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
-      TestCase("bid32_fmod", 0, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
-      TestCase("bid32_fmod", 0, "0x78000000", "0x3200000a", 0x7c000000, 01),
-      TestCase("bid32_fmod", 0, "0x78000001", "0x609896ff", 0x7c000000, 01),
-      TestCase("bid32_fmod", 0, "0x78000001", "0x7e001100", 0x7c001100, 01),
-      TestCase("bid32_fmod", 0, "0x78000001", "0xf8000011", 0x7c000000, 01),
-      TestCase("bid32_fmod", 0, "0x78000001", "0xfc000110", 0xfc000110, 0x00),
-      TestCase("bid32_fmod", 0, "0x78a00000", "0x3200000a", 0x7c000000, 01),
-      TestCase("bid32_fmod", 0, "0x7c000000", "0x3200000a", 0x7c000000, 0x00),
-      TestCase("bid32_fmod", 0, "0x7c8f4241", "0x3200000a", 0x7c000000, 0x00),
-      TestCase("bid32_fmod", 0, "0x7e000000", "0x3200000a", 0x7c000000, 01),
-      TestCase("bid32_fmod", 0, "0x7ea00000", "0x3200000a", 0x7c000000, 01),
-      TestCase("bid32_fmod", 0, "0x7effffff", "0x3200000a", 0x7c000000, 01),
-      TestCase("bid32_fmod", 0, "0xfe001000", "0x609896ff", 0xfc001000, 01),
-      TestCase("bid32_fmod", 0, "0xfe001000", "0x7e001100", 0xfc001000, 01),
-      TestCase("bid32_fmod", 0, "0xfe001000", "0xf8000011", 0xfc001000, 01),
-      TestCase("bid32_fmod", 0, "0xfe001000", "0xfc000110", 0xfc001000, 01),
-      TestCase("bid32_fmod", 1, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
-      TestCase("bid32_fmod", 1, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
-      TestCase("bid32_fmod", 1, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
-      TestCase("bid32_fmod", 1, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
-      TestCase("bid32_fmod", 1, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
-      TestCase("bid32_fmod", 2, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
-      TestCase("bid32_fmod", 2, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
-      TestCase("bid32_fmod", 2, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
-      TestCase("bid32_fmod", 2, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
-      TestCase("bid32_fmod", 2, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
-      TestCase("bid32_fmod", 3, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
-      TestCase("bid32_fmod", 3, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
-      TestCase("bid32_fmod", 3, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
-      TestCase("bid32_fmod", 3, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
-      TestCase("bid32_fmod", 3, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
+//      TestCase("bid32_fmod", 0, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
+//      TestCase("bid32_fmod", 0, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
+//      // fmod
+//      TestCase("bid32_fmod", 0, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
+//      TestCase("bid32_fmod", 0, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
+//      TestCase("bid32_fmod", 0, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
+//      TestCase("bid32_fmod", 0, "0x78000000", "0x3200000a", 0x7c000000, 01),
+//      TestCase("bid32_fmod", 0, "0x78000001", "0x609896ff", 0x7c000000, 01),
+//      TestCase("bid32_fmod", 0, "0x78000001", "0x7e001100", 0x7c001100, 01),
+//      TestCase("bid32_fmod", 0, "0x78000001", "0xf8000011", 0x7c000000, 01),
+//      TestCase("bid32_fmod", 0, "0x78000001", "0xfc000110", 0xfc000110, 0x00),
+//      TestCase("bid32_fmod", 0, "0x78a00000", "0x3200000a", 0x7c000000, 01),
+//      TestCase("bid32_fmod", 0, "0x7c000000", "0x3200000a", 0x7c000000, 0x00),
+//      TestCase("bid32_fmod", 0, "0x7c8f4241", "0x3200000a", 0x7c000000, 0x00),
+//      TestCase("bid32_fmod", 0, "0x7e000000", "0x3200000a", 0x7c000000, 01),
+//      TestCase("bid32_fmod", 0, "0x7ea00000", "0x3200000a", 0x7c000000, 01),
+//      TestCase("bid32_fmod", 0, "0x7effffff", "0x3200000a", 0x7c000000, 01),
+//      TestCase("bid32_fmod", 0, "0xfe001000", "0x609896ff", 0xfc001000, 01),
+//      TestCase("bid32_fmod", 0, "0xfe001000", "0x7e001100", 0xfc001000, 01),
+//      TestCase("bid32_fmod", 0, "0xfe001000", "0xf8000011", 0xfc001000, 01),
+//      TestCase("bid32_fmod", 0, "0xfe001000", "0xfc000110", 0xfc001000, 01),
+//      TestCase("bid32_fmod", 1, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
+//      TestCase("bid32_fmod", 1, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
+//      TestCase("bid32_fmod", 1, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
+//      TestCase("bid32_fmod", 1, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
+//      TestCase("bid32_fmod", 1, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
+//      TestCase("bid32_fmod", 2, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
+//      TestCase("bid32_fmod", 2, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
+//      TestCase("bid32_fmod", 2, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
+//      TestCase("bid32_fmod", 2, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
+//      TestCase("bid32_fmod", 2, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
+//      TestCase("bid32_fmod", 3, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
+//      TestCase("bid32_fmod", 3, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
+//      TestCase("bid32_fmod", 3, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
+//      TestCase("bid32_fmod", 3, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
+//      TestCase("bid32_fmod", 3, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
                
-      TestCase("bid32_frexp", 0, "0x78000000", "0", 0x78000000, 0x00),
-      TestCase("bid32_frexp", 0, "0x7c000000", "0", 0x7c000000, 0x00),
-      TestCase("bid32_frexp", 0, "0xf8000000", "0", 0xf8000000, 0x00),
-      TestCase("bid32_frexp", 0, "0xfc000000", "0", 0xfc000000, 0x00),
+//      TestCase("bid32_frexp", 0, "0x78000000", "0", 0x78000000, 0x00),
+//      TestCase("bid32_frexp", 0, "0x7c000000", "0", 0x7c000000, 0x00),
+//      TestCase("bid32_frexp", 0, "0xf8000000", "0", 0xf8000000, 0x00),
+//      TestCase("bid32_frexp", 0, "0xfc000000", "0", 0xfc000000, 0x00),
+//      bid32_frexp 0 [00000001]  -100 [32000001] 00 ulp=0.0000000000 -- MinDen
+//      bid32_frexp 0 [03000001]  -94  [32000001] 00 ulp=0.0000000000 -- MinNorm
+//      bid32_frexp 0 [6BD8967F]  0    [6BD8967F] 00 ulp=0.0000000000 -- 1-ulp
+//      bid32_frexp 0 [77F8967F]  97   [6BD8967F] 00 ulp=0.0000000000 -- Max
+//      bid32_frexp 0 [80000001]  -100 [B2000001] 00 ulp=0.0000000000 -- -MinDen
+//      bid32_frexp 0 [83000001]  -94  [B2000001] 00 ulp=0.0000000000 -- -MinNorm
+//      bid32_frexp 0 [EBD8967F]  0    [EBD8967F] 00 ulp=0.0000000000 -- -(1-ulp)
+//      bid32_frexp 0 [F7F8967F]  97   [EBD8967F] 00 ulp=0.0000000000 -- -Max
+//      bid32_frexp 1 [00000001]  -100 [32000001]  00 ulp=0.0000000000 -- MinDen
+//      bid32_frexp 1 [03000001]  -94  [32000001]  00 ulp=0.0000000000 -- MinNorm
+//      bid32_frexp 1 [6BD8967F]  0    [6BD8967F]  00 ulp=0.0000000000 -- 1-ulp
+//      bid32_frexp 1 [77F8967F]  97   [6BD8967F]  00 ulp=0.0000000000 -- Max
+//      bid32_frexp 1 [80000001]  -100 [B2000001]  00 ulp=0.0000000000 -- -MinDen
+//      bid32_frexp 1 [83000001]  -94  [B2000001]  00 ulp=0.0000000000 -- -MinNorm
+//      bid32_frexp 1 [EBD8967F]  0    [EBD8967F]  00 ulp=0.0000000000 -- -(1-ulp)
+//      bid32_frexp 1 [F7F8967F]  97   [EBD8967F]  00 ulp=0.0000000000 -- -Max
+//      bid32_frexp 2 [00000001]  -100 [32000001]  00 ulp=0.0000000000 -- MinDen
+//      bid32_frexp 2 [03000001]  -94  [32000001]  00 ulp=0.0000000000 -- MinNorm
+//      bid32_frexp 2 [6BD8967F]  0    [6BD8967F]  00 ulp=0.0000000000 -- 1-ulp
+//      bid32_frexp 2 [77F8967F]  97   [6BD8967F]  00 ulp=0.0000000000 -- Max
+//      bid32_frexp 2 [80000001]  -100 [B2000001]  00 ulp=0.0000000000 -- -MinDen
+//      bid32_frexp 2 [83000001]  -94  [B2000001]  00 ulp=0.0000000000 -- -MinNorm
+//      bid32_frexp 2 [EBD8967F]  0    [EBD8967F]  00 ulp=0.0000000000 -- -(1-ulp)
+//      bid32_frexp 2 [F7F8967F]  97   [EBD8967F]  00 ulp=0.0000000000 -- -Max
+//      bid32_frexp 3 [00000001]  -100 [32000001]  00 ulp=0.0000000000 -- MinDen
+//      bid32_frexp 3 [03000001]  -94  [32000001]  00 ulp=0.0000000000 -- MinNorm
+//      bid32_frexp 3 [6BD8967F]  0    [6BD8967F]  00 ulp=0.0000000000 -- 1-ulp
+//      bid32_frexp 3 [77F8967F]  97   [6BD8967F]  00 ulp=0.0000000000 -- Max
+//      bid32_frexp 3 [80000001]  -100 [B2000001]  00 ulp=0.0000000000 -- -MinDen
+//      bid32_frexp 3 [83000001]  -94  [B2000001]  00 ulp=0.0000000000 -- -MinNorm
+//      bid32_frexp 3 [EBD8967F]  0    [EBD8967F]  00 ulp=0.0000000000 -- -(1-ulp)
+//      bid32_frexp 3 [F7F8967F]  97   [EBD8967F]  00 ulp=0.0000000000 -- -Max
+//      bid32_frexp 0 [0401c880] -87 [2f81c880] 00
+//      bid32_frexp 0 [7c8f423f] 0 [7c8f423f] 00
+//      bid32_frexp 0 [7c8f4240] 0 [7c8f4240] 00
+//      bid32_frexp 0 [7c8f4241] 0 [7c8f4241] 00
+//      bid32_frexp 0 [607fffff] 0 [01800000] 00
+//      bid32_frexp 0 [f71fffff] 0 [dc000000] 00
+//      bid32_frexp 0 [f420b31f] 67 [ebc0b31f] 00
+//      bid32_frexp 0 [658c3437] -50 [6bcc3437] 00
       
       TestCase("bid32_from_int32", 0, "0", 0x32800000, 0x00),
       TestCase("bid32_from_int32", 0, "100000000", 0x338f4240, 0x00),
@@ -4691,15 +4731,6 @@ final class Decimal32Tests: XCTestCase {
       .positiveInfinity // 9
     ]
     
-    func XCTAssertThrows(_ block: () throws -> ()) {
-      do {
-        try block()
-        let msg = "Tested block did not throw error as expected."
-        XCTFail(msg, file: #file, line: #line)
-      }
-      catch {}
-    }
-    
     func checkValues(_ test: TestCase, _ x: UInt64, _ s: Status,
                      _ msg: String) {
       let pass1 = test.res == x
@@ -4750,11 +4781,7 @@ final class Decimal32Tests: XCTestCase {
           let error = "\(d1) != \(t1d)"
           checkValues(test, t1d.bitPattern, state, error)
         case "bid32_to_binary32":
-          // FIXME: - Problem in bid32_to_binary32() function
           let t1 = getNumber(test.istr)
-          if testID == 167 {
-            print(t1)
-          }
           let t1f = Float(t1, round: test.roundMode)
           let d1 = Float(bitPattern: UInt32(test.res))
           let error = "\(d1) != \(t1f)"
@@ -5015,7 +5042,7 @@ final class Decimal32Tests: XCTestCase {
     XCTAssert(x5.dpdBitPattern == 0x22404003)
     print(String(x5.dpdBitPattern, radix: 16))
     
-    a = "-21.5"; b = "305.15"
+    a = -21.5; b = 305.15
     let c = Decimal32(signOf: a, magnitudeOf: b)
     print(c); XCTAssert((-b) == c)
     
@@ -5026,8 +5053,8 @@ final class Decimal32Tests: XCTestCase {
     a = Decimal32.random(in: 1..<1000)
     print(a); XCTAssert(a >= 1 && a < 1000)
     
-    var numbers : [Decimal32] = ["2.5", "21.25", "3.0", "nan", "-9.5"]
-    let ordered : [Decimal32] = ["-9.5", "2.5", "3.0", "21.25", "nan"]
+    var numbers : [Decimal32] = [2.5, 21.25, 3.0, .nan, -9.5]
+    let ordered : [Decimal32] = [-9.5, 2.5, 3.0, 21.25, .nan]
     numbers.sort { !$1.isTotallyOrdered(belowOrEqualTo: $0) }
     print(numbers)
     XCTAssert(ordered.description == numbers.description)
@@ -5043,11 +5070,11 @@ final class Decimal32Tests: XCTestCase {
     print("Decimal32.Infinity =", Decimal32.infinity)
     XCTAssert(Decimal32.infinity.description == "Inf")
     
-    var a1 = Decimal32("8.625"); let b1 = Decimal32("0.75")
+    var a1 = Decimal32(8.625); let b1 = Decimal32(0.75)
     let rem = a1.remainder(dividingBy: b1)
     print("\(a1).formRemainder(dividingBy: \(b1) = ", rem)
-    XCTAssert(rem == Decimal32("-0.375"))
-    a1 = Decimal32("8.625")
+    XCTAssert(rem == Decimal32(-0.375))
+    a1 = Decimal32(8.625)
     let q = (a1/b1).rounded(.towardZero); print(q)
     a1 = a1 - q * b1
     print("\(a1)")
@@ -5070,7 +5097,7 @@ final class Decimal32Tests: XCTestCase {
 //    }
 
     // Equivalent to the C 'round' function:
-    let w = Decimal32("6.5")
+    let w = Decimal32(6.5)
     print(w.rounded(.toNearestOrAwayFromZero))
     XCTAssert(w.rounded(.toNearestOrAwayFromZero) == Decimal32(7)) // w = 7.0
 

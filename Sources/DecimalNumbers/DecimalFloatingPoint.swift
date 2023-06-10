@@ -270,7 +270,7 @@ extension DecimalFloatingPoint {
   /// with more trailing zeros in its significand bit pattern.
   ///
   /// - Parameter value: A decimal floating-point value to be converted.
-  @inlinable public init<S:DecimalFloatingPoint>(_ value: S) {
+  @inlinable public init<Source:DecimalFloatingPoint>(_ value: Source) {
     self = Self._convert(from: value).value
   }
   
@@ -284,7 +284,7 @@ extension DecimalFloatingPoint {
   public init?<Source:DecimalFloatingPoint>(exactly value: Source) {
     if value.isNaN { return nil }
     let (value, exact) = Self._convert(from: value)
-    if exact { self = value }
+    if exact { self = value; return }
     return nil
   }
   

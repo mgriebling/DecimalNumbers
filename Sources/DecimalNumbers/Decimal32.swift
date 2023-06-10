@@ -130,6 +130,12 @@ extension Decimal32 : CustomStringConvertible {
   }
 }
 
+extension Decimal32 : ExpressibleByFloatLiteral {
+  public init(floatLiteral value: Double) {
+    self.init(bid: ID.bid(from: value, .toNearestOrEven))
+  }
+}
+
 extension Decimal32 : ExpressibleByIntegerLiteral {
   public init(integerLiteral value: IntegerLiteralType) {
     if IntegerLiteralType.isSigned {
