@@ -320,20 +320,18 @@ extension IntDecimal {
     }
   }
   
-  // Unpack decimal floating-point number x into sign,exponent,coefficient
-  // In special cases, call the macros provided
+  // Unpack decimal floating-point number x into sign, exponent, coefficient.
+  // In special cases, return floating-point numbers to be used.
   // Coefficient is normalized in the binary sense with postcorrection k,
   // so that x = 10^e * c / 2^k and the range of c is:
   //
   // 2^23 <= c < 2^24   (decimal32)
   // 2^53 <= c < 2^54   (decimal64)
   // 2^112 <= c < 2^113 (decimal128)
-  func unpack<T:BinaryFloatingPoint> () ->
-  (s: Sign, e: Int, k: Int, c: UInt64, f: T?) {
-    let x = self.data
-    let s = self.sign
-    var k=0, c=UInt64()
-    let e = self.expBitPattern - Self.exponentBias
+  func unpack<T:BinaryFloatingPoint>() ->
+  (s: Sign, e: Int, k: Int, c: RawSignificand, f: T?) {
+    let x = self.data, s = self.sign, e = self.expBitPattern-Self.exponentBias
+    var k = 0, c = RawSignificand(0)
     if self.isSpecial {
       if self.isInfinite {
         if !self.isNaN {
@@ -344,18 +342,30 @@ extension IntDecimal {
         let high = payload > Self.largestNumber/10 ? 0 : UInt64(payload)
         return (s, e, k, c, Self.nan(high))
       }
-      c = UInt64(self.sigBitPattern)
-      if UInt(c) > Self.largestNumber {
+      c = RawSignificand(self.sigBitPattern)
+      if c > Self.largestNumber {
         return (s, e, k, c, Self.dzero(s))
       }
       k = 0
     } else {
-      c = UInt64(self.sigBitPattern)
+      c = RawSignificand(self.sigBitPattern)
       if c == 0 { return (s, e, k, c, Self.dzero(s)) }
       k = UInt32(c).leadingZeroBitCount - 8
       c = c << k
     }
     return (s, e, k, c, nil)
+  }
+  
+  @inlinable
+  static func ovf<T:BinaryFloatingPoint>(_ s:Sign, _ r:Rounding) -> T {
+    if r == .towardZero || r == ((s == .minus) ? Rounding.up : .down) {
+      return max(s)
+    }
+    return inf(s)
+  }
+  
+  @inlinable static func max<T:BinaryFloatingPoint>(_ s:Sign) -> T {
+    s == .minus ? -T.greatestFiniteMagnitude : .greatestFiniteMagnitude
   }
   
   @inlinable static func dzero<T:BinaryFloatingPoint>(_ s:Sign) -> T {
@@ -390,11 +400,6 @@ extension IntDecimal {
     return T(sign: s, exponentBitPattern: T.RawExponent(e),
              significandBitPattern: T.RawSignificand(c))
   }
-  
-//  @inlinable static func float<T:BinaryFloatingPoint>(_ s:Sign, _ e:UInt, _ c:UInt64) -> T {
-//    T(sign: s, exponentBitPattern: e, significandBitPattern: c)
-//    // T(sign:s, exponentBitPattern:UInt(e), significandBitPattern:UInt32(c))
-//  }
   
   /// Return `dpd` pieces all at once
   static func unpack(dpd: RawData) ->
@@ -515,7 +520,6 @@ extension IntDecimal {
   
   private func checkNormalScale(_ exp: Int, _ mant: RawBitPattern) -> Bool {
     // if exponent is less than -95, the number may be subnormal
-    // let exp = exp - Self.exponentBias
     if exp < Self.minEncodedExponent+Self.maximumDigits-1 {
       let tenPower = _power(UInt64(10), to: exp)
       let mantPrime = UInt64(mant) * tenPower
@@ -2936,16 +2940,36 @@ extension IntDecimal {
   }
   
   func float<T:BinaryFloatingPoint>(_ rmode: Rounding) -> T {
-    var double:T?, s:Sign, e:Int, k:Int, high:UInt64
-    (s, e, k, high, double) = self.unpack()
-    if let x = double { return x }
-    // if let res = unpack_bid32(x, &s, &e, &k, &c.hi) { return res }
+    if T.self == Double.self { return T(float64(rmode)) }
+    else if T.self == Float.self { return T(float32(rmode)) }
+    return T(float64(rmode))
+  }
+  
+  /// Convert the active decimal floating-point number (any size) to a 64-bit
+  /// Double and return this value.
+  func float64(_ rmode: Rounding) -> Double {
+    var fp:Double?, s:Sign, e:Int, k:Int, high:RawSignificand
+    (s, e, k, high, fp) = self.unpack()
+    if let x = fp { return x }
+    
+    let size = Self.signBit+1
+    let shift: Int, offset: Int, maxExp: Int, minExp: Int
+    switch size {
+      case  32: shift = 31; offset = 89; maxExp = .max; minExp = .min
+      case  64: shift = 1; offset = 59; maxExp = 309; minExp = -358
+      case 128: shift = 6; offset = 0; maxExp = 309; minExp = -358
+      default:  shift = 31; offset = 89; maxExp = .max; minExp = .min
+    }
     
     // Correct to 2^112 <= c < 2^113 with corresponding exponent adding 113-24=89
     // In fact shift a further 6 places ready for reciprocal multiplication
     // Thus (113-24)+6=95, a shift of 31 given that we've already upacked in c.hi
-    let c = UInt128(high: UInt64(high) << 31, low: 0)
-    k += 89
+    let c = UInt128(high: UInt64(high), low: 0) << shift
+    k += offset
+    
+    // check for underflow and overflow
+    if e >= maxExp { return Self.ovf(s, rmode) }
+    if e <= minExp { e = minExp }
     
     // Check for "trivial" overflow, when 10^e * 1 > 2^{sci_emax+1}, just to
     // keep tables smaller (it would be intercepted later otherwise).
@@ -2963,7 +2987,7 @@ extension IntDecimal {
     
     // Choose provisional exponent and reciprocal multiplier based on breakpoint
     var r = UInt256()
-    if c.components.high < m_min.components.high {
+    if c <= m_min {
       r = Tables.bid_multipliers1_binary64[e+358]
     } else {
       r = Tables.bid_multipliers2_binary64[e+358]
@@ -2978,15 +3002,32 @@ extension IntDecimal {
     
     // Check for exponent underflow and compensate by shifting the product
     // Cut off the process at precision+2, since we can't really shift further
+    if e_out < 1 {
+      var d = 1 - e_out
+      if d > 55 { d = 55 }
+      e_out = 1
+      let sz = Self.srl256_short(z.w[5], z.w[4], z.w[3], z.w[2], d)
+      z.w[2...5] = sz.w[0...3]
+    }
     var c_prov = Int64(z.w[5])
     
     // Round using round-sticky words
     // If we spill into the next binade, correct
     let rind = rmode.index(negative:s == .minus, lsb:Int(c_prov))
     if Self.bid_roundbound_128[rind] < UInt128(high: z.w[4], low: z.w[3]) {
-      c_prov = c_prov + 1
+      c_prov += 1
+      if c_prov == (1 << 53) {
+        c_prov = 1 << 52
+        e_out += 1
+      }
     }
-    c_prov = c_prov & ((1 << 52) - 1)
+
+    // Check for overflow
+    if e_out >= 2047 { return Self.ovf(s, rmode) }
+    
+    // Modify the exponent for a tiny result, otherwise chop the implicit bit
+    if c_prov < (1 << 52) { e_out = 0 }
+    else { c_prov &= (1 << 52) - 1 }
     
     // Set the inexact and underflow flag as appropriate
     //      if (z.w[4] != 0) || (z.w[3] != 0) {
@@ -2995,7 +3036,107 @@ extension IntDecimal {
     // Package up the result as a binary floating-point number
     return Self.float(s, e_out, UInt64(bitPattern:c_prov))
   }
+  
+  /// Convert the active decimal floating-point number (any size) to a 64-bit
+  /// Double and return this value.
+  func float32(_ rmode: Rounding) -> Float {
+    var fp:Float?, s:Sign, e:Int, k:Int, high:RawSignificand
+    (s, e, k, high, fp) = self.unpack()
+    if let x = fp { return x }
+    
+    let size = Self.signBit+1
+    let shift: Int, offset: Int, maxExp: Int, minExp: Int
+    switch size {
+      case  32: shift = 25; offset = 89; maxExp = 39; minExp = -80
+      case  64: shift = 59; offset = 59; maxExp = 39; minExp = -80
+      case 128: shift = 0; offset = 0; maxExp = 39; minExp = -80
+      default:  shift = 31; offset = 89; maxExp = .max; minExp = .min
+    }
+    
+    // Correct to 2^112 <= c < 2^113 with corresponding exponent adding 113-24=89
+    // In fact shift a further 6 places ready for reciprocal multiplication
+    // Thus (113-24)+6=95, a shift of 31 given that we've already upacked in c.hi
+    let c = UInt128(high: UInt64(high), low: 0) << shift
+    k += offset
+    
+    // check for underflow and overflow
+    if e >= maxExp { return Self.ovf(s, rmode) }
+    if e <= minExp { e = minExp }
+    
+    // Check for "trivial" overflow, when 10^e * 1 > 2^{sci_emax+1}, just to
+    // keep tables smaller (it would be intercepted later otherwise).
+    //
+    // (Note that we may have normalized the coefficient, but we have a
+    //  corresponding exponent postcorrection to account for; this can
+    //  afford to be conservative anyway.)
+    //
+    // We actually check if e >= ceil((sci_emax + 1) * log_10(2))
+    // which in this case is e >= ceil(1024 * log_10(2)) = ceil(308.25) = 309
+    
+    // Look up the breakpoint and approximate exponent
+    let m_min = Tables.bid_breakpoints_binary32[e+80]
+    var e_out = Tables.bid_exponents_binary32[e+80] - Int(k)
+    
+    // Choose provisional exponent and reciprocal multiplier based on breakpoint
+    var r = UInt256()
+    if c <= m_min {
+      r = Tables.bid_multipliers1_binary32[e+80]
+    } else {
+      r = Tables.bid_multipliers2_binary32[e+80]
+      e_out += 1
+    }
+    
+    // Do the reciprocal multiplication
+    var z = UInt384()
+    Self.mul128x256to384(&z, c, r)
+    
+    // Check for exponent underflow and compensate by shifting the product
+    // Cut off the process at precision+2, since we can't really shift further
+    if e_out < 1 {
+      var d = 1 - e_out
+      if d > 26 { d = 26 }
+      e_out = 1
+      let sz = Self.srl256_short(z.w[5], z.w[4], z.w[3], z.w[2], d)
+      z.w[2...5] = sz.w[0...3]
+    }
+    var c_prov = Int64(z.w[5])
+    
+    // Round using round-sticky words
+    // If we spill into the next binade, correct
+    let rind = rmode.index(negative:s == .minus, lsb:Int(c_prov))
+    if Self.bid_roundbound_128[rind] < UInt128(high: z.w[4], low: z.w[3]) {
+      c_prov += 1
+      if c_prov == (1 << 24) {
+        c_prov = 1 << 23
+        e_out += 1
+      }
+    }
 
+    // Check for overflow
+    if e_out >= 255 { return Self.ovf(s, rmode) }
+    
+    // Modify the exponent for a tiny result, otherwise chop the implicit bit
+    if c_prov < (1 << 23) { e_out = 0 }
+    else { c_prov &= (1 << 23) - 1 }
+    
+    // Set the inexact and underflow flag as appropriate
+    //      if (z.w[4] != 0) || (z.w[3] != 0) {
+    //          pfpsf.insert(.inexact)
+    //      }
+    // Package up the result as a binary floating-point number
+    return Self.float(s, e_out, UInt64(bitPattern:c_prov))
+  }
+  
+  // Shift 4-part 2^196 * x3 + 2^128 * x2 + 2^64 * x1 + x0
+  // right by "c" bits (must have c < 64)
+  static func srl256_short(_ x3:UInt64, _ x2:UInt64,
+                           _ x1:UInt64, _ x0:UInt64, _ c:Int) -> UInt256 {
+    let _x0 = (x1 << (64 - c)) + (x0 >> c)
+    let _x1 = (x2 << (64 - c)) + (x1 >> c)
+    let _x2 = (x3 << (64 - c)) + (x2 >> c)
+    let _x3 = x3 >> c
+    return UInt256(w: [_x0, _x1, _x2, _x3])
+  }
   
   static func round(_ x: Self, _ rmode: Rounding) -> Self {
     var res = RawBitPattern(0)
