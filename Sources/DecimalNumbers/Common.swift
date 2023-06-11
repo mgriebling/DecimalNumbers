@@ -580,6 +580,13 @@ extension IntDecimal {
     else { self.init(sign: sign, expBitPattern: exp, sigBitPattern: mant) }
   }
   
+  var quantum: Self {
+    if self.isInfinite { return Self.infinite() }
+    if self.isNaN { return Self.nan() }
+    let exp = self.expBitPattern - Self.exponentBias
+    return Self(RawData(exp << 23 + 0x3280_0001))
+  }
+  
   /// Convert `self` to a DPD number.
   var dpd: RawData {
     var res : RawData = 0

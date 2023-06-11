@@ -2941,7 +2941,7 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_to_int64_int", 0, "0x6BD86F70", 0, 00), // 0.999
       TestCase("bid32_to_int64_int", 0, "0x6CB89680", 0, 00), // 70 --
       TestCase("bid32_to_int64_int", 0, "0x6E2CBCCC", 9223372000000000000, 00), // 2^63
-      // These cause the program to crash for infinity, Nan, etc.
+      // These cause the program to crash intentionally for infinity, Nan, etc.
 //      TestCase("bid32_to_int64_int", 0, "0x78000000", UInt64(bitPattern:-9223372036854775808), 01),
 //      TestCase("bid32_to_int64_int", 0, "0x7c000000", UInt64(bitPattern:-9223372036854775808), 01),
 //      TestCase("bid32_to_int64_int", 0, "0x7e000000", UInt64(bitPattern:-9223372036854775808), 01),
@@ -2981,7 +2981,7 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_to_uint64_int", 0, "0x6BD86F70", 0, 0x00), // 0.999
       TestCase("bid32_to_uint64_int", 0, "0x6CB89680", 0, 0x00),
       TestCase("bid32_to_uint64_int", 0, "0x6E2CBCCC", 9223372000000000000, 0x00), // 2^63
-      // These cause the program to crash for infinity, Nan, etc.
+      // These cause the program to crash intentionally for infinity, Nan, etc.
 //      TestCase("bid32_to_uint64_int", 0, "0x78000000", 9223372036854775808, 0x01),
 //      TestCase("bid32_to_uint64_int", 0, "0x7c000000", 9223372036854775808, 0x01),
 //      TestCase("bid32_to_uint64_int", 0, "0x7e000000", 9223372036854775808, 0x01),
@@ -5373,7 +5373,7 @@ final class Decimal32Tests: XCTestCase {
           "bcd = \(y.significandBitPattern)")
     XCTAssert(y.significandDigitCount == 4 && y.significandBitPattern == 2345)
     
-    print(x, y, x*y, y/x, /* x.int, y.int, */ x.decade, y.decade)
+    print(x, y, x*y, y/x, Int(x), Int(y), x.decade, y.decade)
     print(x.significand, x.exponent, y.significand, y.exponent)
     var b = Decimal32.leastNormalMagnitude
     print(Decimal32.greatestFiniteMagnitude,b,Decimal32.leastNonzeroMagnitude)
@@ -5390,6 +5390,11 @@ final class Decimal32Tests: XCTestCase {
     XCTAssert(x5.bidBitPattern == 0x32002713)
     XCTAssert(x5.dpdBitPattern == 0x22404003)
     print(String(x5.dpdBitPattern, radix: 16))
+    
+//    let exact = Decimal32(exactly: 100.1)
+//    if exact != nil {
+//      print(exact!)
+//    }
     
     a = "-21.5"; b = "305.15"
     let c = Decimal32(signOf: a, magnitudeOf: b)

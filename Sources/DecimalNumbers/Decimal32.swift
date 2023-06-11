@@ -132,7 +132,7 @@ extension Decimal32 : CustomStringConvertible {
 
 extension Decimal32 : ExpressibleByFloatLiteral {
   public init(floatLiteral value: Double) {
-    self.init(bid: ID.bid(from: value, .toNearestOrEven))
+    self.init(value, rounding: .toNearestOrEven)
   }
 }
 
@@ -420,20 +420,7 @@ extension Decimal32 : DecimalFloatingPoint {
   /// decade as this value, but with a unit significand.
   ///
   /// In this example, `x` has a value of `21.5`, which is stored as
-  /// `2.15 * 10**1`, where `**` is exponentiation. Therefore, `x.decade` is
-  /// equal to `1.0 * 10**1`, or `10.0`.
-  ///```
-  /// let x = 21.5
-  /// // x.significand == 2.15
-  /// // x.exponent == 1
-  ///
-  /// let y = x.decade
-  /// // y == 10.0
-  /// // y.significand == 1.0
-  /// // y.exponent == 1
-  ///```
-  public var decade: Self {
-    guard bid.isValid else { return self } // For infinity, Nan, sNaN
-    return Self(bid: ID(expBitPattern: bid.expBitPattern, sigBitPattern: 1))
-  }
+  /// `215 * 10**(-1)`, where `**` is exponentiation. Therefore, `x.decade` is
+  /// equal to `1 * 10**(-1)`, or `0.1`.
+  public var decade: Self { Self(bid: bid.quantum) }
 }

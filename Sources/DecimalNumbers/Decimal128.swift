@@ -107,7 +107,7 @@ extension Decimal128 : CustomStringConvertible {
 
 extension Decimal128 : ExpressibleByFloatLiteral {
   public init(floatLiteral value: Double) {
-    self.init(bid: ID.bid(from: value, .toNearestOrEven))
+    self.init(value, rounding: .toNearestOrEven)
   }
 }
 

@@ -288,6 +288,42 @@ extension DecimalFloatingPoint {
     return nil
   }
   
+  /// Creates a new instance from the given value, rounded to the closest
+  /// possible representation.
+  ///
+  /// If two representable values are equally close, the result is the value
+  /// with more trailing zeros in its significand bit pattern.
+  ///
+  /// - Parameter value: A decimal floating-point value to be converted.
+  public init<Source:BinaryFloatingPoint>(_ value:Source, rounding: Rounding) {
+    self.init(0)
+    if let x = value as? Double {
+      if Self.self == Decimal32.self {
+        self = Self(Decimal32(bid:IntDecimal32.bid(from: x, .toNearestOrEven)))
+      } else if Self.self == Decimal64.self {
+        self = Self(Decimal64(bid:IntDecimal64.bid(from: x, .toNearestOrEven)))
+      } else if Self.self == Decimal128.self {
+        self = Self(Decimal128(bid:IntDecimal128.bid(from:x,.toNearestOrEven)))
+      }
+    }
+  }
+  
+  /// Creates a new instance from the given value, if it can be represented
+  /// exactly.
+  ///
+  /// If the given floating-point value cannot be represented exactly, the
+  /// result is `nil`.
+  ///
+  /// - Parameter value: A floating-point value to be converted.
+  public init?<Source:BinaryFloatingPoint>(exactly value: Source) {
+    if let x = value as? Double {
+      self.init(value, rounding: .toNearestOrEven)
+      guard Double(self) == x else { return nil }
+      return
+    }
+    return nil
+  }
+  
   /// Returns a Boolean value indicating whether this instance should precede
   /// or tie positions with the given value in an ascending sort.
   ///

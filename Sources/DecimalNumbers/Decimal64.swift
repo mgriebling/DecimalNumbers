@@ -123,7 +123,7 @@ extension Decimal64 : CustomStringConvertible {
 
 extension Decimal64 : ExpressibleByFloatLiteral {
   public init(floatLiteral value: Double) {
-    self.init(bid: ID.bid(from: value, .toNearestOrEven))
+    self.init(value, rounding: .toNearestOrEven)
   }
 }
 

@@ -31,19 +31,18 @@ extension BinaryFloatingPoint {
   @inline(__always)
   public init<T: DecimalFloatingPoint>(_ source: T,
                                        round: Rounding = .toNearestOrEven) {
+    let t: Self
     if let x = source as? Decimal32 {
-      let t:Self = x.bid.float(round)
-      self = t
+      t = x.bid.float(round)
     } else if let x = source as? Decimal64 {
-      let t:Self = x.bid.float(round)
-      self = t
+      t = x.bid.float(round)
     } else if let x = source as? Decimal128 {
-      let t:Self = x.bid.float(round)
-      self = t
+      t = x.bid.float(round)
     } else {
-      self = Self.nan
+      t = Self.nan
       assertionFailure("Unknown Decimal Floating Point type \(T.self)")
     }
+    self = t
   }
 }
 
