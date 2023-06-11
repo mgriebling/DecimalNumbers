@@ -357,7 +357,7 @@ extension IntDecimal {
   }
   
   @inlinable
-  static func ovf<T:BinaryFloatingPoint>(_ s:Sign, _ r:Rounding) -> T {
+  static func overflow<T:BinaryFloatingPoint>(_ s:Sign, _ r:Rounding) -> T {
     if r == .towardZero || r == ((s == .minus) ? Rounding.up : .down) {
       return max(s)
     }
@@ -634,29 +634,21 @@ extension IntDecimal {
   
   static func bid(from x:Double, _ rndMode:Rounding) -> Self {
     // Unpack the input
-    let expMask = (1 << Double.exponentBitCount) - 1
-    let sigBits = Double.significandBitCount + 1 // including invisible bit
-    let dBits = x.bitPattern.bitWidth
-    let shift = 113 - sigBits // from (2^{113-53} * c * r) >> 320
-    let elimit = -450         // floor(emin * log_2(10) - 115)
-    let minNormExp = -1074    // minimum normal exponent
-    
-    var s = x.sign, e = Int(x.exponentBitPattern), t = 0
-    var c = UInt128(high: 0, low: x.significandBitPattern)
-    
+    let s = x.sign, expMask = (1<<11) - 1
+    var e = Int(x.exponentBitPattern), t = 0, c = x.significandBitPattern
     if e == 0 {
-      if x.isZero { return zero(s) }
+      if c == 0 { return zero(s) }
       
       // denormalizd number
-      let l = c.leadingZeroBitCount - (dBits - sigBits)
+      let l = c.leadingZeroBitCount - (64 - 53)
       c <<= 1
-      e = -(l - minNormExp)
+      e = -(l + 1074)
     } else if e == expMask {
-      if x.isInfinite { return infinite(s) }
-      if x.isNaN { return nan(s, Int(c._lowWord)) }
+      if c == 0 { return infinite(s) }
+      return nan(s, Int(c))
     } else {
-      c.set(bit: sigBits-1)  // set upper bit
-      e += (minNormExp - 1)
+      c.set(bit: 52)  // set upper bit
+      e -= 1075
       t = c.trailingZeroBitCount
     }
     
@@ -668,9 +660,10 @@ extension IntDecimal {
     // five 64-bit words. So we shift 113-53=60 places
     //
     // Remember to compensate for the fact that exponents are integer for quad
-    c = c << shift
-    t += shift
-    e -= shift // Now e belongs [-1186;911].
+    var cf = UInt128(high: 0, low: c)
+    cf <<= (113 - 53)
+    t += (113 - 53)
+    e -= (113 - 53) // Now e belongs [-1186;911].
     
     // Check for "trivial" overflow, when 2^e * 2^112 > 10^emax * 10^d.
     // We actually check if e >= ceil((emax + d) * log_2(10) - 112)
@@ -702,12 +695,12 @@ extension IntDecimal {
     //     a, and if so get the multiplier also from a table based on a.
     if e <= 0 {
       let a = -(e + t)
-      var cint = c
+      var cint = cf
       if a <= 0 {
         cint = cint >> -e
-        if cint < largestNumber+1 {
+        if cint.components.high == 0 && cint.components.low < largestNumber+1 {
           return Self(sign: s, expBitPattern: exponentBias,
-                      sigBitPattern: RawBitPattern(cint._lowWord))
+                      sigBitPattern: RawBitPattern(cint.components.low))
         }
       } else if a <= 48 {
         var pow5 = Self.coefflimitsBID32(a)
@@ -717,7 +710,7 @@ extension IntDecimal {
           pow5 = power5(a)
           cc = mul128x128Low(cc, pow5)
           return Self(sign: s, expBitPattern: exponentBias-a,
-                      sigBitPattern: RawBitPattern(cc._lowWord))
+                      sigBitPattern: RawBitPattern(cc.components.low))
         }
       }
     }
@@ -728,26 +721,24 @@ extension IntDecimal {
     //
     // This is important not only to keep the tables small but to maintain the
     // testing of the round/sticky words as a correct rounding method
-    if e <= elimit {
-      e = elimit
-    }
+    if e <= -450 { e = -450 }
     
     // Now look up our exponent e, and the breakpoint between e and e+1
-    let m_min = Tables.bid_breakpoints_bid32[e-elimit]
-    var e_out = Int(Tables.bid_exponents_bid32[e-elimit])
+    let m_min = Tables.bid_breakpoints_bid32[e+450]
+    var e_out = Int(Tables.bid_exponents_bid32[e+450])
     
     // Choose exponent and reciprocal multiplier based on breakpoint
     var r:UInt256
-    if c <= m_min {
-      r = Tables.bid_multipliers1_bid32[e-elimit]
+    if cf <= m_min {
+      r = Tables.bid_multipliers1_bid32[e+450]
     } else {
-      r = Tables.bid_multipliers2_bid32[e-elimit]
+      r = Tables.bid_multipliers2_bid32[e+450]
       e_out += 1
     }
     
     // Do the reciprocal multiplication
-    var z=UInt384()
-    Self.mul128x256to384(&z, c, r)
+    var z = UInt384()
+    Self.mul128x256to384(&z, cf, r)
     var c_prov = RawBitPattern(z.w[5])
     
     // Test inexactness and underflow (when testing tininess before rounding)
@@ -780,7 +771,7 @@ extension IntDecimal {
     }
     
     // Check for overflow
-    if e_out > 90 {
+    if e_out > 90+exponentBias {
       // state.formUnion([.overflow, .inexact])
       return overflow(s, rndMode: rndMode)
     }
@@ -795,7 +786,7 @@ extension IntDecimal {
     //    }
     
     // Package up the result
-    return Self(sign: s, expBitPattern: e_out+exponentBias, sigBitPattern: c_prov)
+    return Self(sign: s, expBitPattern: e_out, sigBitPattern: c_prov)
   }
   
   static func bid(from x:UInt64, _ rndMode:Rounding) -> Self {
@@ -1306,7 +1297,7 @@ extension IntDecimal {
     if i == 0 { return 0 }
     switch rnd {
       case 0, 4: return 5 * power10(i-1)
-      case 2: return power10(i-1)-1
+      case 2: return power10(i)-1
       case 1, 3: return 0
       default: assertionFailure("Illegal rounding mode")
     }
@@ -2031,7 +2022,7 @@ extension IntDecimal {
       } else if exponentX < 0 {
         exponentX = 0
       }
-      return Self(sign: sign, expBitPattern: exponentX, sigBitPattern: 0) // UInt32(UInt64(signX ^ sign_y) | (UInt64(exponentX) << 23))
+      return Self(sign: sign, expBitPattern: exponentX, sigBitPattern: 0)
     }
     
     // multiplication
@@ -2043,21 +2034,21 @@ extension IntDecimal {
     let bin_expon_p = tempx.exponent 
     var n_digits = Int(estimateDecDigits(bin_expon_p))
     if P >= power10(n_digits) {
-      n_digits+=1
+      n_digits += 1
     }
     
     exponentX += exponentY - exponentBias
-    let extra_digits = (n_digits<=maximumDigits) ? 0 : n_digits-maximumDigits
+    let extra_digits = (n_digits <= maximumDigits) ? 0 : n_digits-maximumDigits
     exponentX += extra_digits
     
     if extra_digits == 0 {
       return Self(Self.adjustOverflowUnderflow(sign, exponentX, P, rmode))
     }
     
-    var rmode1 = rmode.index(negative: sign == .minus, lsb: 0) >> 2
-//    if sign == .minus && (UInt32(rmode1) &- 1) < 2 {
-//      rmode1 = 3 - rmode1
-//    }
+    var rmode1 = rmode.raw
+    if sign == .minus && (UInt32(rmode1) &- 1) < 2 {
+      rmode1 = 3 - rmode1
+    }
     
     if exponentX < 0 { rmode1 = 3 }  // RZ
     
@@ -2087,17 +2078,17 @@ extension IntDecimal {
     }
     
     if exponentX == -1 && Q == largestNumber && rmode != .towardZero {
-      rmode1 = rmode.index(negative: sign == .minus, lsb: 0)
+      rmode1 = rmode.raw
       if sign == .minus && (UInt32(rmode1) &- 1) < 2 {
         rmode1 = 3 - rmode1
       }
       
-      if ((R != 0) && (rmode1 == 2)) ||
-         ((rmode1&3 == 0) && (R+R>=power10(extra_digits))) {
-        return Self(sign: sign, expBitPattern:0, sigBitPattern:largestSignificand)
+      if (R != 0 && rmode1 == 2) ||
+         (rmode1&3 == 0 && R+R>=power10(extra_digits)) {
+        return Self(sign: sign, expBitPattern:0,
+                    sigBitPattern:largestSignificand)
       }
     }
-    
     return Self(adjustOverflowUnderflow(sign, exponentX, Q, rmode))
     // return get_BID32_UF (signX^sign_y, Int(exponentX), Q, Int(R), rmode)
   }
@@ -2705,9 +2696,9 @@ extension IntDecimal {
     // var P = Tmp &+ CB
     var P = add_128_128(Tmp, CB)
     if Int64(bitPattern: P.components.high) < 0 {
-      sign_a = sign_a == .minus ? .plus : .minus
+      sign_a = sign_a.toggle //  == .minus ? .plus : .minus
       var Phigh = 0 &- P.components.high
-      if P.components.low != 0 { Phigh -= 1 }
+      if P.components.low != 0 { Phigh &-= 1 }
       P.components = (Phigh, 0 &- P.components.low)
     }
     
@@ -2726,7 +2717,7 @@ extension IntDecimal {
         let tempx = Double(PC.low)
         bin_expon = tempx.exponent
         n_digits = estimateDecDigits(bin_expon)
-        if PC.low >= power10(n_digits) {
+        if PC.low >= Int128(power10(n_digits)).components.low {
           n_digits += 1
         }
       } else { // result = 0
@@ -2739,13 +2730,16 @@ extension IntDecimal {
     
     if n_digits <= maximumDigits {
       return Self(
-        adjustOverflowUnderflow(sign_a, exponent_b, RawBitPattern(PC.low), rmode))
+      adjustOverflowUnderflow(sign_a,exponent_b,RawBitPattern(PC.low),rmode))
       //bid32Underflow(sign_a, exponent_b, PC.low, 0, rmode)
     }
     
     let extra_digits = n_digits - maximumDigits
-    var rmode1 = rmode.raw // rnd_mode;
-    if exponent_b+extra_digits < 0 { rmode1=3 }  // RZ
+    var rmode1 = rmode.raw
+    if sign_a == .minus && (UInt32(rmode1) &- 1) < 2 {
+      rmode1 = 3 - rmode1
+    }
+    if exponent_b+extra_digits < 0 { rmode1 = 3 }  // RZ
     
     // add a constant to P, depending on rounding mode
     // 0.5*10^(digits_p - 16) for round-to-nearest
@@ -2755,7 +2749,8 @@ extension IntDecimal {
       P = add_128_64(P, bid_round_const_table(rmode1, extra_digits))
     } else {
       // Stemp = bid_round_const_table(rmode1, 18).multipliedFullWidth(by: power10(extra_digits-18))
-      Stemp = mul64x64to128(bid_round_const_table(rmode1, 18), power10(extra_digits-18))
+      Stemp = mul64x64to128(bid_round_const_table(rmode1, 18),
+                            UInt128(power10(extra_digits-18)).components.low)
       // P += Stemp
       P = add_128_128(P, Stemp)
       if rmode == .up {
@@ -2837,10 +2832,6 @@ extension IntDecimal {
         let Qlow = Q_low.components
         (low, CY) = add_carry_out(Qlow.low, recip.low)
         (high, carry) = add_carry_in_out(Qlow.high, recip.high, CY)
-//        addCarryOut(&low, &CY, Q_low.components.low,
-//                        reciprocals10(extra_digits))
-//        __add_carry_in_out(&high, &carry, Q_low.components.high,
-//                           reciprocals10(extra_digits), CY)
         Stemp = UInt128(high: high, low: low)
         if amount < 64 {
 //          if (remainder_h >> (64 - amount)) + carry >= (UInt64(1) << amount) {
@@ -2875,7 +2866,8 @@ extension IntDecimal {
 //        Stemp.components = bid_round_const_table(rmode1, 18)
 //                           .multipliedFullWidth(by: power10(extra_digits-18))
 //        P += Stemp
-        Stemp = mul64x64to128(bid_round_const_table(rmode1, 18), power10(extra_digits-18))
+        Stemp = mul64x64to128(bid_round_const_table(rmode1, 18),
+                              UInt128(power10(extra_digits-18)).components.low)
         P = add_128_128(P, Stemp)
         if rmode == .up {
           // P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits-18))
@@ -2968,7 +2960,7 @@ extension IntDecimal {
     k += offset
     
     // check for underflow and overflow
-    if e >= maxExp { return Self.ovf(s, rmode) }
+    if e >= maxExp { return Self.overflow(s, rmode) }
     if e <= minExp { e = minExp }
     
     // Check for "trivial" overflow, when 10^e * 1 > 2^{sci_emax+1}, just to
@@ -3023,7 +3015,7 @@ extension IntDecimal {
     }
 
     // Check for overflow
-    if e_out >= 2047 { return Self.ovf(s, rmode) }
+    if e_out >= 2047 { return Self.overflow(s, rmode) }
     
     // Modify the exponent for a tiny result, otherwise chop the implicit bit
     if c_prov < (1 << 52) { e_out = 0 }
@@ -3060,7 +3052,7 @@ extension IntDecimal {
     k += offset
     
     // check for underflow and overflow
-    if e >= maxExp { return Self.ovf(s, rmode) }
+    if e >= maxExp { return Self.overflow(s, rmode) }
     if e <= minExp { e = minExp }
     
     // Check for "trivial" overflow, when 10^e * 1 > 2^{sci_emax+1}, just to
@@ -3113,7 +3105,7 @@ extension IntDecimal {
     }
 
     // Check for overflow
-    if e_out >= 255 { return Self.ovf(s, rmode) }
+    if e_out >= 255 { return Self.overflow(s, rmode) }
     
     // Modify the exponent for a tiny result, otherwise chop the implicit bit
     if c_prov < (1 << 23) { e_out = 0 }

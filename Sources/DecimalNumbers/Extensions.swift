@@ -23,6 +23,10 @@ extension UInt128 {
   }
 }
 
+extension FloatingPointSign {
+  public var toggle: Sign { self == .minus ? .plus : .minus }
+}
+
 extension BinaryFloatingPoint {
   @inline(__always)
   public init<T: DecimalFloatingPoint>(_ source: T,

@@ -348,9 +348,9 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_div", 0, "0xfe000000", "1.0", 0xfc000000, 0x01),
       TestCase("bid32_div", 0, "Infinity", "Infinity", 0x7c000000, 0x01),
       TestCase("bid32_div", 0, "Infinity", "NaN", 0x7c000000, 0x00),
-//      TestCase("bid32_div", 1, "0x803c6719", "0xa77f173f", 0x08488551, 0x20),   // 65
-//      TestCase("bid32_div", 2, "0x803c6719", "0xa77f173f", 0x08488552, 0x20),
-//      TestCase("bid32_div", 2, "0xc27912d4", "0x6c2e0ad6", 0xf0220ff5, 0x20),
+      TestCase("bid32_div", 1, "0x803c6719", "0xa77f173f", 0x08488551, 0x20),   // 65
+      TestCase("bid32_div", 2, "0x803c6719", "0xa77f173f", 0x08488552, 0x20),
+      TestCase("bid32_div", 2, "0xc27912d4", "0x6c2e0ad6", 0xf0220ff5, 0x20),
       
       TestCase("bid32_sqrt", 0, "0x00000001", 0x163040A6, 0x20),   // ulp=-3.3983162067e-01
       TestCase("bid32_sqrt", 0, "0x00000001", 0x163040a6, 0x20),   // ulp=-3.398316e-01
@@ -1059,103 +1059,22 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_fma", 0, "SNaN", "0", "Infinity", 0x7c000000, 01),
       TestCase("bid32_fma", 0, "SNaN", "+56858.E0", "SNaN", 0x7c000000, 01),
       TestCase("bid32_fma", 0, "SNaN", "-Infinity", "QNaN", 0x7c000000, 01),
-//      TestCase("bid32_fma", 1, "0x00000010", "0x8f464f29", "0x40000001", 0x6f38967f, 0x20),
-//      TestCase("bid32_fma", 1, "-0", "0", "SNaN", 0x7c000000, 01),
-//      TestCase("bid32_fma", 1, "0x812f6fda", "0x175cbe7d", "0x3ffaffff", 0x3ffafffe, 0x20),
-//      TestCase("bid32_fma", 1, "0xdf800000", "0x55966da3", "0x20000000", 0xa0000000, 0x00),
-//      TestCase("bid32_fma", 2, "0x04436437", "0x971895d0", "0x00000001", 0x00000001, 0x30), // 570
-//      TestCase("bid32_fma", 2, "0x05cc9cb1", "0x800420a2", "0x00001000", 0x00001000, 0x30),
-//      TestCase("bid32_fma", 2, "0x80104200", "0xa1480040", "0x264b785d", 0x264b785e, 0x20),
+      TestCase("bid32_fma", 1, "0x00000010", "0x8f464f29", "0x40000001", 0x6f38967f, 0x20),
+      TestCase("bid32_fma", 1, "-0", "0", "SNaN", 0x7c000000, 01),
+      TestCase("bid32_fma", 1, "0x812f6fda", "0x175cbe7d", "0x3ffaffff", 0x3ffafffe, 0x20),
+      TestCase("bid32_fma", 1, "0xdf800000", "0x55966da3", "0x20000000", 0xa0000000, 0x00),
+      TestCase("bid32_fma", 2, "0x04436437", "0x971895d0", "0x00000001", 0x00000001, 0x30), // 570
+      TestCase("bid32_fma", 2, "0x05cc9cb1", "0x800420a2", "0x00001000", 0x00001000, 0x30),
+      TestCase("bid32_fma", 2, "0x80104200", "0xa1480040", "0x264b785d", 0x264b785e, 0x20),
       TestCase("bid32_fma", 4, "0x030ab023", "0x2b260b0c", "0x10090200", 0x0fda1400, 0x20),
       TestCase("bid32_fma", 4, "0x29314e22", "0x00000462", "0x89102128", 0x89102128, 0x20),
       TestCase("bid32_fma", 4, "0x3de1a7d1", "0x20010465", "0x9fe7fd9f", 0x2dc11921, 0x20),
- //     TestCase("bid32_fma", 4, "0x40890002", "0x02800028", "0x90db8353", 0x111ad94d, 0x20),
+      // FIXME: - Off by 1 bit
+   //   TestCase("bid32_fma", 4, "0x40890002", "0x02800028", "0x90db8353", 0x111ad94d, 0x20),
       TestCase("bid32_fma", 4, "0x8000000b", "0x07e8eaec", "0x0280000a", 0x000f4240, 0x30), // underflow_before_only
       TestCase("bid32_fma", 4, "0x80000a0a", "0x86080300", "0xa3800000", 0x00000000, 0x30),
       TestCase("bid32_fma", 4, "0xa2bc202e", "0xd7ff3fcd", "0x3c41374e", 0x4b322429, 0x20),
       TestCase("bid32_fma", 4, "0xbab75018", "0x6f6e1473", "0x72458bf5", 0x49520b01, 0x20), // 580
-      
-//      TestCase("bid32_fmod", 0, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
-//      TestCase("bid32_fmod", 0, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
-//      // fmod
-//      TestCase("bid32_fmod", 0, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
-//      TestCase("bid32_fmod", 0, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
-//      TestCase("bid32_fmod", 0, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
-//      TestCase("bid32_fmod", 0, "0x78000000", "0x3200000a", 0x7c000000, 01),
-//      TestCase("bid32_fmod", 0, "0x78000001", "0x609896ff", 0x7c000000, 01),
-//      TestCase("bid32_fmod", 0, "0x78000001", "0x7e001100", 0x7c001100, 01),
-//      TestCase("bid32_fmod", 0, "0x78000001", "0xf8000011", 0x7c000000, 01),
-//      TestCase("bid32_fmod", 0, "0x78000001", "0xfc000110", 0xfc000110, 0x00),
-//      TestCase("bid32_fmod", 0, "0x78a00000", "0x3200000a", 0x7c000000, 01),
-//      TestCase("bid32_fmod", 0, "0x7c000000", "0x3200000a", 0x7c000000, 0x00),
-//      TestCase("bid32_fmod", 0, "0x7c8f4241", "0x3200000a", 0x7c000000, 0x00),
-//      TestCase("bid32_fmod", 0, "0x7e000000", "0x3200000a", 0x7c000000, 01),
-//      TestCase("bid32_fmod", 0, "0x7ea00000", "0x3200000a", 0x7c000000, 01),
-//      TestCase("bid32_fmod", 0, "0x7effffff", "0x3200000a", 0x7c000000, 01),
-//      TestCase("bid32_fmod", 0, "0xfe001000", "0x609896ff", 0xfc001000, 01),
-//      TestCase("bid32_fmod", 0, "0xfe001000", "0x7e001100", 0xfc001000, 01),
-//      TestCase("bid32_fmod", 0, "0xfe001000", "0xf8000011", 0xfc001000, 01),
-//      TestCase("bid32_fmod", 0, "0xfe001000", "0xfc000110", 0xfc001000, 01),
-//      TestCase("bid32_fmod", 1, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
-//      TestCase("bid32_fmod", 1, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
-//      TestCase("bid32_fmod", 1, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
-//      TestCase("bid32_fmod", 1, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
-//      TestCase("bid32_fmod", 1, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
-//      TestCase("bid32_fmod", 2, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
-//      TestCase("bid32_fmod", 2, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
-//      TestCase("bid32_fmod", 2, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
-//      TestCase("bid32_fmod", 2, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
-//      TestCase("bid32_fmod", 2, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
-//      TestCase("bid32_fmod", 3, "0x00000001", "0x77F8967F", 0x00000001, 00), // ulp=0.0000000000 -- x=MinDen,y=Max
-//      TestCase("bid32_fmod", 3, "0x32800001", "0x6BD8967F", 0x2F000001, 00), // ulp=0.0000000000 -- x=1,y=1-ulp
-//      TestCase("bid32_fmod", 3, "0x6BD8967F", "0x32800001", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=1
-//      TestCase("bid32_fmod", 3, "0x6BD8967F", "0x77F8967F", 0x6BD8967F, 00), // ulp=0.0000000000 -- x=1-ulp,y=Max
-//      TestCase("bid32_fmod", 3, "0x77F8967F", "0x00000001", 0x00000000, 00), // ulp=0.0000000000 -- x=Max,y=MinDen
-               
-//      TestCase("bid32_frexp", 0, "0x78000000", "0", 0x78000000, 0x00),
-//      TestCase("bid32_frexp", 0, "0x7c000000", "0", 0x7c000000, 0x00),
-//      TestCase("bid32_frexp", 0, "0xf8000000", "0", 0xf8000000, 0x00),
-//      TestCase("bid32_frexp", 0, "0xfc000000", "0", 0xfc000000, 0x00),
-//      bid32_frexp 0 [00000001]  -100 [32000001] 00 ulp=0.0000000000 -- MinDen
-//      bid32_frexp 0 [03000001]  -94  [32000001] 00 ulp=0.0000000000 -- MinNorm
-//      bid32_frexp 0 [6BD8967F]  0    [6BD8967F] 00 ulp=0.0000000000 -- 1-ulp
-//      bid32_frexp 0 [77F8967F]  97   [6BD8967F] 00 ulp=0.0000000000 -- Max
-//      bid32_frexp 0 [80000001]  -100 [B2000001] 00 ulp=0.0000000000 -- -MinDen
-//      bid32_frexp 0 [83000001]  -94  [B2000001] 00 ulp=0.0000000000 -- -MinNorm
-//      bid32_frexp 0 [EBD8967F]  0    [EBD8967F] 00 ulp=0.0000000000 -- -(1-ulp)
-//      bid32_frexp 0 [F7F8967F]  97   [EBD8967F] 00 ulp=0.0000000000 -- -Max
-//      bid32_frexp 1 [00000001]  -100 [32000001]  00 ulp=0.0000000000 -- MinDen
-//      bid32_frexp 1 [03000001]  -94  [32000001]  00 ulp=0.0000000000 -- MinNorm
-//      bid32_frexp 1 [6BD8967F]  0    [6BD8967F]  00 ulp=0.0000000000 -- 1-ulp
-//      bid32_frexp 1 [77F8967F]  97   [6BD8967F]  00 ulp=0.0000000000 -- Max
-//      bid32_frexp 1 [80000001]  -100 [B2000001]  00 ulp=0.0000000000 -- -MinDen
-//      bid32_frexp 1 [83000001]  -94  [B2000001]  00 ulp=0.0000000000 -- -MinNorm
-//      bid32_frexp 1 [EBD8967F]  0    [EBD8967F]  00 ulp=0.0000000000 -- -(1-ulp)
-//      bid32_frexp 1 [F7F8967F]  97   [EBD8967F]  00 ulp=0.0000000000 -- -Max
-//      bid32_frexp 2 [00000001]  -100 [32000001]  00 ulp=0.0000000000 -- MinDen
-//      bid32_frexp 2 [03000001]  -94  [32000001]  00 ulp=0.0000000000 -- MinNorm
-//      bid32_frexp 2 [6BD8967F]  0    [6BD8967F]  00 ulp=0.0000000000 -- 1-ulp
-//      bid32_frexp 2 [77F8967F]  97   [6BD8967F]  00 ulp=0.0000000000 -- Max
-//      bid32_frexp 2 [80000001]  -100 [B2000001]  00 ulp=0.0000000000 -- -MinDen
-//      bid32_frexp 2 [83000001]  -94  [B2000001]  00 ulp=0.0000000000 -- -MinNorm
-//      bid32_frexp 2 [EBD8967F]  0    [EBD8967F]  00 ulp=0.0000000000 -- -(1-ulp)
-//      bid32_frexp 2 [F7F8967F]  97   [EBD8967F]  00 ulp=0.0000000000 -- -Max
-//      bid32_frexp 3 [00000001]  -100 [32000001]  00 ulp=0.0000000000 -- MinDen
-//      bid32_frexp 3 [03000001]  -94  [32000001]  00 ulp=0.0000000000 -- MinNorm
-//      bid32_frexp 3 [6BD8967F]  0    [6BD8967F]  00 ulp=0.0000000000 -- 1-ulp
-//      bid32_frexp 3 [77F8967F]  97   [6BD8967F]  00 ulp=0.0000000000 -- Max
-//      bid32_frexp 3 [80000001]  -100 [B2000001]  00 ulp=0.0000000000 -- -MinDen
-//      bid32_frexp 3 [83000001]  -94  [B2000001]  00 ulp=0.0000000000 -- -MinNorm
-//      bid32_frexp 3 [EBD8967F]  0    [EBD8967F]  00 ulp=0.0000000000 -- -(1-ulp)
-//      bid32_frexp 3 [F7F8967F]  97   [EBD8967F]  00 ulp=0.0000000000 -- -Max
-//      bid32_frexp 0 [0401c880] -87 [2f81c880] 00
-//      bid32_frexp 0 [7c8f423f] 0 [7c8f423f] 00
-//      bid32_frexp 0 [7c8f4240] 0 [7c8f4240] 00
-//      bid32_frexp 0 [7c8f4241] 0 [7c8f4241] 00
-//      bid32_frexp 0 [607fffff] 0 [01800000] 00
-//      bid32_frexp 0 [f71fffff] 0 [dc000000] 00
-//      bid32_frexp 0 [f420b31f] 67 [ebc0b31f] 00
-//      bid32_frexp 0 [658c3437] -50 [6bcc3437] 00
       
       TestCase("bid32_from_int32", 0, "0", 0x32800000, 0x00),
       TestCase("bid32_from_int32", 0, "100000000", 0x338f4240, 0x00),
@@ -1703,7 +1622,7 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_mul", 0, "0xfe000000", "1.0", 0xfc000000, 0x01),
       TestCase("bid32_mul", 0, "Infinity", "NaN", 0x7c000000, 0x00),
       TestCase("bid32_mul", 0, "0x07040000", "0xa7cce69c", 0x8000339b, 0x30),
-//      TestCase("bid32_mul", 2, "0x07040000", "0xa7cce69c", 0x8000339b, 0x30), // 50
+      TestCase("bid32_mul", 2, "0x07040000", "0xa7cce69c", 0x8000339b, 0x30), // 50
       TestCase("bid32_mul", 0, "0xa09d5d70", "0x78000000", 0xf8000000, 0x00),
       TestCase("bid32_mul", 0, "0x04000000", "0x1a172eeb", 0x00000000, 0x00),
       TestCase("bid32_mul", 0, "0x78000000", "0x3fff3da3", 0x78000000, 0x00),
@@ -1713,17 +1632,17 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_mul", 0, "0x5b800000", "0x6be1f78a", 0x58800000, 0x00),
       TestCase("bid32_mul", 0, "0x1f800000", "0x78000000", 0x7c000000, 0x01),
       TestCase("bid32_mul", 0, "0xf8000000", "0x00000000", 0x7c000000, 0x01),
-      // TestCase("bid32_mul", 0, "0xb186347f", "0x3200014a", 0xb2147a0a, 0x20), // 60
+      TestCase("bid32_mul", 0, "0xb186347f", "0x3200014a", 0xb2147a0a, 0x20), // 60
       TestCase("bid32_mul", 0, "1010101E-95",  "99E-8", "1000000E-101", 0x30), //  underflow_before_only
-      // TestCase("bid32_mul", 1, "1010101E-95",  "99E-8", "999999E-101", 0x30), //
-//      TestCase("bid32_mul", 2, "1010101E-95",  "99E-8", "1000000E-101", 0x30), //  underflow_before_only
-//      TestCase("bid32_mul", 3, "1010101E-95",  "99E-8", "999999E-101", 0x30), //
-//      TestCase("bid32_mul", 4, "1010101E-95",  "99E-8", "1000000E-101", 0x30), //  underflow_before_only
+      TestCase("bid32_mul", 1, "1010101E-95",  "99E-8", "999999E-101", 0x30), //
+      TestCase("bid32_mul", 2, "1010101E-95",  "99E-8", "1000000E-101", 0x30), //  underflow_before_only
+      TestCase("bid32_mul", 3, "1010101E-95",  "99E-8", "999999E-101", 0x30), //
+      TestCase("bid32_mul", 4, "1010101E-95",  "99E-8", "1000000E-101", 0x30), //  underflow_before_only
       TestCase("bid32_mul", 0, "1010101E-95", "-99E-8", "-1000000E-101", 0x30), //  underflow_before_only
-      // TestCase("bid32_mul", 1, "1010101E-95", "-99E-8", "-1000000E-101", 0x30), //  underflow_before_only
-//      TestCase("bid32_mul", 2, "1010101E-95", "-99E-8", "-999999E-101", 0x30), //
-//      TestCase("bid32_mul", 3, "1010101E-95", "-99E-8", "-999999E-101", 0x30), //
-//      TestCase("bid32_mul", 4, "1010101E-95", "-99E-8", "-1000000E-101", 0x30), // underflow_before_only
+      TestCase("bid32_mul", 1, "1010101E-95", "-99E-8", "-1000000E-101", 0x30), //  underflow_before_only
+      TestCase("bid32_mul", 2, "1010101E-95", "-99E-8", "-999999E-101", 0x30), //
+      TestCase("bid32_mul", 3, "1010101E-95", "-99E-8", "-999999E-101", 0x30), //
+      TestCase("bid32_mul", 4, "1010101E-95", "-99E-8", "-1000000E-101", 0x30), // underflow_before_only
       
       TestCase("bid32_negate", 0, "0x00000001", 0x80000001, 0x00),    // 1
       TestCase("bid32_negate", 0, "0x00080001", 0x80080001, 0x00),
@@ -3022,6 +2941,7 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_to_int64_int", 0, "0x6BD86F70", 0, 00), // 0.999
       TestCase("bid32_to_int64_int", 0, "0x6CB89680", 0, 00), // 70 --
       TestCase("bid32_to_int64_int", 0, "0x6E2CBCCC", 9223372000000000000, 00), // 2^63
+      // These cause the program to crash for infinity, Nan, etc.
 //      TestCase("bid32_to_int64_int", 0, "0x78000000", UInt64(bitPattern:-9223372036854775808), 01),
 //      TestCase("bid32_to_int64_int", 0, "0x7c000000", UInt64(bitPattern:-9223372036854775808), 01),
 //      TestCase("bid32_to_int64_int", 0, "0x7e000000", UInt64(bitPattern:-9223372036854775808), 01),
@@ -3061,6 +2981,7 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_to_uint64_int", 0, "0x6BD86F70", 0, 0x00), // 0.999
       TestCase("bid32_to_uint64_int", 0, "0x6CB89680", 0, 0x00),
       TestCase("bid32_to_uint64_int", 0, "0x6E2CBCCC", 9223372000000000000, 0x00), // 2^63
+      // These cause the program to crash for infinity, Nan, etc.
 //      TestCase("bid32_to_uint64_int", 0, "0x78000000", 9223372036854775808, 0x01),
 //      TestCase("bid32_to_uint64_int", 0, "0x7c000000", 9223372036854775808, 0x01),
 //      TestCase("bid32_to_uint64_int", 0, "0x7e000000", 9223372036854775808, 0x01),
@@ -4713,6 +4634,419 @@ final class Decimal32Tests: XCTestCase {
       TestCase("bid32_rem", 0, "0xfe000000", "1.0", 0xfc000000, 0x01),
       TestCase("bid32_rem", 0, "Infinity", "0E+89", 0x7c000000, 0x01),
       TestCase("bid32_rem", 0, "Infinity", "NaN", 0x7c000000, 0x00),
+      
+//      TestCase("binary32_to_bid32", 0, "0x00000000", 0x32800000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x00000000", 0x32800000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x00000001", 0x191561d2, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000001", 0x191561D2, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000002", 0x192AC3A5, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000004", 0x1955874A, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000008", 0x19911B0F, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000010", 0x19A2361E, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000020", 0x19C46C3B, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000040", 0x6668D876, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000080", 0x1A1B5E7E, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000100", 0x1A36BCFC, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x000001ac", 0x1a5b83f5, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000200", 0x1A6D79F8, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000400", 0x1A95E532, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00000800", 0x1AABCA63, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00001000", 0x1AD794C7, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00002000", 0x1B118428, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00004000", 0x1B23084F, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00008000", 0x1B46109F, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00010000", 0x66CC213E, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00020000", 0x1B9C06A6, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00040000", 0x1BB80D4C, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x0006c605", 0x1bdeeaca, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00080000", 0x1BF01A98, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00100000", 0x1C166BB8, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00200000", 0x1C2CD770, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00400000", 0x1C59AEE0, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x007fffff", 0x1C91EFC6, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x00800000", 0x1c91efc6, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x00800000", 0x1C91EFC6, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x01000000", 0x1ca3df8d, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x03b16b00", 0x1d8fe951, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x09df9550", 0x1f5221ab, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x0fc7a2b8", 0x211e09af, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x14be59d0", 0x229d5404, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x1a49a610", 0x243fa10d, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x21e82446", 0x269800bd, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x26d907ec", 0x2816faa3, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x2c013e62", 0x299c0677, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x32229e99", 0x6ad06f66, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x37656336", 0x2d14dcd8, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x3ca2c726", 0x2e9e51db, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x3d500000", 0x2ecd7c6d, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x3F000000", 0x32000005, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x3f800000", 0x32800001, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x3fc00000", 0x3200000f, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x40000000", 0x32800002, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x42800000", 0x32800040, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x42fff9e3", 0x30938789, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x4479c000", 0x328003e7, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x447a0000", 0x328003e8, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x48434ff7", 0x321e847f, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x4d3ebc1e", 0x339e8480, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x537ff477", 0x3590c636, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x58e348a9", 0x371e816a, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x5dd35452", 0x389d0b7e, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x63f6e3b3", 0x6e8afc85, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x6958416e", 0x3c18eebd, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x6ee5ca5b", 0x3db641fb, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x74700765", 0x3f741223, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x797e8434", 0x40fe07ca, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x7CF0BDC2", 0x420F4240, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x7E000000", 0x4240E75A, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x7E800000", 0x7081CEB3, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x7E967699", 0x428F4240, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x7F000000", 0x4299F624, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x7f7fffff", 0x42b3ec47, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x7f7fffff", 0x42B3EC47, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x7f800000", 0x78000000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x7f800000", 0x78000000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x7fc00000", 0x7c000000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x7fc00001", 0x7c000000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x7fc00004", 0x7c000001, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x7fcfffff", 0x7c03ffff, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x7fe00000", 0x7c080000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x7ffd08fc", 0x7c0f423f, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x7ffd0900", 0x7c000000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x7fffffff", 0x7c000000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x80000000", 0xB2800000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x80000001", 0x991561d2, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x80000001", 0x991561D2, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x800001ac", 0x9a5b83f5, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x8006c605", 0x9bdeeaca, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x807fffff", 0x9C91EFC6, 0x22),
+//      TestCase("binary32_to_bid32", 0, "0x80800000", 0x9c91efc6, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x80800000", 0x9C91EFC6, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x81000000", 0x9ca3df8d, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x83b16b00", 0x9d8fe951, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x89df9550", 0x9f5221ab, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x8fc7a2b8", 0xa11e09af, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x94be59d0", 0xa29d5404, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0x9a49a610", 0xa43fa10d, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xa1e82446", 0xa69800bd, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xa6d907ec", 0xa816faa3, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xac013e62", 0xa99c0677, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xb2229e99", 0xead06f66, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xb7656336", 0xad14dcd8, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xbca2c726", 0xae9e51db, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xbd500000", 0xaecd7c6d, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0xbf800000", 0xb2800001, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0xbfc00000", 0xb200000f, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0xc2800000", 0xb2800040, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0xc2fff9e3", 0xb0938789, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xc479c000", 0xb28003e7, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0xc47a0000", 0xb28003e8, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0xc8434ff7", 0xb21e847f, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xcd3ebc1e", 0xb39e8480, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xd37ff477", 0xb590c636, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xd8e348a9", 0xb71e816a, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xddd35452", 0xb89d0b7e, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xe3f6e3b3", 0xee8afc85, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xe958416e", 0xbc18eebd, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xeee5ca5b", 0xbdb641fb, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xf4700765", 0xbf741223, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xf97e8434", 0xc0fe07ca, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xff7fffff", 0xc2b3ec47, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xff7fffff", 0xC2B3EC47, 0x20),
+//      TestCase("binary32_to_bid32", 0, "0xff800000", 0xf8000000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0xff800000", 0xf8000000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0xffc00000", 0xfc000000, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0x00000000", 0x32800000, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0x00000001", 0x191561d2, 0x22),
+//      TestCase("binary32_to_bid32", 1, "0x000001ac", 0x1a5b83f5, 0x22),
+//      TestCase("binary32_to_bid32", 1, "0x0006c605", 0x1bdeeac9, 0x22),
+//      TestCase("binary32_to_bid32", 1, "0x00800000", 0x1c91efc6, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x01000000", 0x1ca3df8c, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x03b16b00", 0x1d8fe951, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x09df9550", 0x1f5221aa, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x0fc7a2b8", 0x211e09af, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x14be59d0", 0x229d5404, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x1a49a610", 0x243fa10d, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x21e82446", 0x269800bd, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x26d907ec", 0x2816faa2, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x2c013e62", 0x299c0677, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x32229e99", 0x6ad06f65, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x37656336", 0x2d14dcd8, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x3ca2c726", 0x2e9e51db, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x3d500000", 0x2ecd7c6d, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0x3f800000", 0x32800001, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0x3fc00000", 0x3200000f, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0x42800000", 0x32800040, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0x42fff9e3", 0x30938788, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x4479c000", 0x328003e7, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0x447a0000", 0x328003e8, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0x48434ff7", 0x321e847e, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x4d3ebc1e", 0x339e847f, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x537ff477", 0x3590c636, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x58e348a9", 0x371e8169, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x5dd35452", 0x389d0b7d, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x63f6e3b3", 0x6e8afc84, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x6958416e", 0x3c18eebc, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x6ee5ca5b", 0x3db641fb, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x74700765", 0x3f741222, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x797e8434", 0x40fe07c9, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x7f7fffff", 0x42b3ec47, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x7f800000", 0x78000000, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0x80000001", 0x991561d3, 0x22),
+//      TestCase("binary32_to_bid32", 1, "0x800001ac", 0x9a5b83f6, 0x22),
+//      TestCase("binary32_to_bid32", 1, "0x8006c605", 0x9bdeeaca, 0x22),
+//      TestCase("binary32_to_bid32", 1, "0x80800000", 0x9c91efc7, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x81000000", 0x9ca3df8d, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x83b16b00", 0x9d8fe952, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x89df9550", 0x9f5221ab, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x8fc7a2b8", 0xa11e09b0, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x94be59d0", 0xa29d5405, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0x9a49a610", 0xa43fa10e, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xa1e82446", 0xa69800be, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xa6d907ec", 0xa816faa3, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xac013e62", 0xa99c0678, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xb2229e99", 0xead06f66, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xb7656336", 0xad14dcd9, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xbca2c726", 0xae9e51dc, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xbd500000", 0xaecd7c6d, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0xbf800000", 0xb2800001, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0xbfc00000", 0xb200000f, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0xc2800000", 0xb2800040, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0xc2fff9e3", 0xb0938789, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xc479c000", 0xb28003e7, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0xc47a0000", 0xb28003e8, 0x00),
+//      TestCase("binary32_to_bid32", 1, "0xc8434ff7", 0xb21e847f, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xcd3ebc1e", 0xb39e8480, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xd37ff477", 0xb590c637, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xd8e348a9", 0xb71e816a, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xddd35452", 0xb89d0b7e, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xe3f6e3b3", 0xee8afc85, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xe958416e", 0xbc18eebd, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xeee5ca5b", 0xbdb641fc, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xf4700765", 0xbf741223, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xf97e8434", 0xc0fe07ca, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xff7fffff", 0xc2b3ec48, 0x20),
+//      TestCase("binary32_to_bid32", 1, "0xff800000", 0xf8000000, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0x00000000", 0x32800000, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0x00000001", 0x191561d3, 0x22),
+//      TestCase("binary32_to_bid32", 2, "0x000001ac", 0x1a5b83f6, 0x22),
+//      TestCase("binary32_to_bid32", 2, "0x0006c605", 0x1bdeeaca, 0x22),
+//      TestCase("binary32_to_bid32", 2, "0x00800000", 0x1c91efc7, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x01000000", 0x1ca3df8d, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x03b16b00", 0x1d8fe952, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x09df9550", 0x1f5221ab, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x0fc7a2b8", 0x211e09b0, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x14be59d0", 0x229d5405, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x1a49a610", 0x243fa10e, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x21e82446", 0x269800be, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x26d907ec", 0x2816faa3, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x2c013e62", 0x299c0678, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x32229e99", 0x6ad06f66, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x37656336", 0x2d14dcd9, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x3ca2c726", 0x2e9e51dc, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x3d500000", 0x2ecd7c6d, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0x3f800000", 0x32800001, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0x3fc00000", 0x3200000f, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0x42800000", 0x32800040, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0x42fff9e3", 0x30938789, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x4479c000", 0x328003e7, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0x447a0000", 0x328003e8, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0x48434ff7", 0x321e847f, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x4d3ebc1e", 0x339e8480, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x537ff477", 0x3590c637, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x58e348a9", 0x371e816a, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x5dd35452", 0x389d0b7e, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x63f6e3b3", 0x6e8afc85, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x6958416e", 0x3c18eebd, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x6ee5ca5b", 0x3db641fc, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x74700765", 0x3f741223, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x797e8434", 0x40fe07ca, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x7f7fffff", 0x42b3ec48, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x7f800000", 0x78000000, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0x80000001", 0x991561d2, 0x22),
+//      TestCase("binary32_to_bid32", 2, "0x800001ac", 0x9a5b83f5, 0x22),
+//      TestCase("binary32_to_bid32", 2, "0x8006c605", 0x9bdeeac9, 0x22),
+//      TestCase("binary32_to_bid32", 2, "0x80800000", 0x9c91efc6, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x81000000", 0x9ca3df8c, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x83b16b00", 0x9d8fe951, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x89df9550", 0x9f5221aa, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x8fc7a2b8", 0xa11e09af, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x94be59d0", 0xa29d5404, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0x9a49a610", 0xa43fa10d, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xa1e82446", 0xa69800bd, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xa6d907ec", 0xa816faa2, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xac013e62", 0xa99c0677, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xb2229e99", 0xead06f65, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xb7656336", 0xad14dcd8, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xbca2c726", 0xae9e51db, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xbd500000", 0xaecd7c6d, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0xbf800000", 0xb2800001, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0xbfc00000", 0xb200000f, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0xc2800000", 0xb2800040, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0xc2fff9e3", 0xb0938788, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xc479c000", 0xb28003e7, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0xc47a0000", 0xb28003e8, 0x00),
+//      TestCase("binary32_to_bid32", 2, "0xc8434ff7", 0xb21e847e, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xcd3ebc1e", 0xb39e847f, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xd37ff477", 0xb590c636, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xd8e348a9", 0xb71e8169, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xddd35452", 0xb89d0b7d, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xe3f6e3b3", 0xee8afc84, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xe958416e", 0xbc18eebc, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xeee5ca5b", 0xbdb641fb, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xf4700765", 0xbf741222, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xf97e8434", 0xc0fe07c9, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xff7fffff", 0xc2b3ec47, 0x20),
+//      TestCase("binary32_to_bid32", 2, "0xff800000", 0xf8000000, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0x00000000", 0x32800000, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0x00000001", 0x191561d2, 0x22),
+//      TestCase("binary32_to_bid32", 3, "0x000001ac", 0x1a5b83f5, 0x22),
+//      TestCase("binary32_to_bid32", 3, "0x0006c605", 0x1bdeeac9, 0x22),
+//      TestCase("binary32_to_bid32", 3, "0x00800000", 0x1c91efc6, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x01000000", 0x1ca3df8c, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x03b16b00", 0x1d8fe951, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x09df9550", 0x1f5221aa, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x0fc7a2b8", 0x211e09af, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x14be59d0", 0x229d5404, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x1a49a610", 0x243fa10d, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x21e82446", 0x269800bd, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x26d907ec", 0x2816faa2, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x2c013e62", 0x299c0677, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x32229e99", 0x6ad06f65, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x37656336", 0x2d14dcd8, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x3ca2c726", 0x2e9e51db, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x3d500000", 0x2ecd7c6d, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0x3f800000", 0x32800001, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0x3fc00000", 0x3200000f, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0x42800000", 0x32800040, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0x42fff9e3", 0x30938788, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x4479c000", 0x328003e7, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0x447a0000", 0x328003e8, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0x48434ff7", 0x321e847e, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x4d3ebc1e", 0x339e847f, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x537ff477", 0x3590c636, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x58e348a9", 0x371e8169, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x5dd35452", 0x389d0b7d, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x63f6e3b3", 0x6e8afc84, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x6958416e", 0x3c18eebc, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x6ee5ca5b", 0x3db641fb, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x74700765", 0x3f741222, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x797e8434", 0x40fe07c9, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x7f7fffff", 0x42b3ec47, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x7f800000", 0x78000000, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0x80000001", 0x991561d2, 0x22),
+//      TestCase("binary32_to_bid32", 3, "0x800001ac", 0x9a5b83f5, 0x22),
+//      TestCase("binary32_to_bid32", 3, "0x8006c605", 0x9bdeeac9, 0x22),
+//      TestCase("binary32_to_bid32", 3, "0x80800000", 0x9c91efc6, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x81000000", 0x9ca3df8c, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x83b16b00", 0x9d8fe951, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x89df9550", 0x9f5221aa, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x8fc7a2b8", 0xa11e09af, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x94be59d0", 0xa29d5404, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0x9a49a610", 0xa43fa10d, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xa1e82446", 0xa69800bd, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xa6d907ec", 0xa816faa2, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xac013e62", 0xa99c0677, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xb2229e99", 0xead06f65, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xb7656336", 0xad14dcd8, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xbca2c726", 0xae9e51db, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xbd500000", 0xaecd7c6d, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0xbf800000", 0xb2800001, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0xbfc00000", 0xb200000f, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0xc2800000", 0xb2800040, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0xc2fff9e3", 0xb0938788, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xc479c000", 0xb28003e7, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0xc47a0000", 0xb28003e8, 0x00),
+//      TestCase("binary32_to_bid32", 3, "0xc8434ff7", 0xb21e847e, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xcd3ebc1e", 0xb39e847f, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xd37ff477", 0xb590c636, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xd8e348a9", 0xb71e8169, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xddd35452", 0xb89d0b7d, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xe3f6e3b3", 0xee8afc84, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xe958416e", 0xbc18eebc, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xeee5ca5b", 0xbdb641fb, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xf4700765", 0xbf741222, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xf97e8434", 0xc0fe07c9, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xff7fffff", 0xc2b3ec47, 0x20),
+//      TestCase("binary32_to_bid32", 3, "0xff800000", 0xf8000000, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0x00000000", 0x32800000, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0x00000001", 0x191561d2, 0x22),
+//      TestCase("binary32_to_bid32", 4, "0x000001ac", 0x1a5b83f5, 0x22),
+//      TestCase("binary32_to_bid32", 4, "0x0006c605", 0x1bdeeaca, 0x22),
+//      TestCase("binary32_to_bid32", 4, "0x00800000", 0x1c91efc6, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x01000000", 0x1ca3df8d, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x03b16b00", 0x1d8fe951, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x09df9550", 0x1f5221ab, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x0fc7a2b8", 0x211e09af, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x14be59d0", 0x229d5404, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x1a49a610", 0x243fa10d, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x21e82446", 0x269800bd, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x26d907ec", 0x2816faa3, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x2c013e62", 0x299c0677, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x32229e99", 0x6ad06f66, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x37656336", 0x2d14dcd8, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x3ca2c726", 0x2e9e51db, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x3d500000", 0x2ecd7c6d, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0x3f800000", 0x32800001, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0x3fc00000", 0x3200000f, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0x42800000", 0x32800040, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0x42fff9e3", 0x30938789, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x4479c000", 0x328003e7, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0x447a0000", 0x328003e8, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0x48434ff7", 0x321e847f, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x4d3ebc1e", 0x339e8480, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x537ff477", 0x3590c636, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x58e348a9", 0x371e816a, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x5dd35452", 0x389d0b7e, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x63f6e3b3", 0x6e8afc85, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x6958416e", 0x3c18eebd, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x6ee5ca5b", 0x3db641fb, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x74700765", 0x3f741223, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x797e8434", 0x40fe07ca, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x7f7fffff", 0x42b3ec47, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x7f800000", 0x78000000, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0x80000001", 0x991561d2, 0x22),
+//      TestCase("binary32_to_bid32", 4, "0x800001ac", 0x9a5b83f5, 0x22),
+//      TestCase("binary32_to_bid32", 4, "0x8006c605", 0x9bdeeaca, 0x22),
+//      TestCase("binary32_to_bid32", 4, "0x80800000", 0x9c91efc6, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x81000000", 0x9ca3df8d, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x83b16b00", 0x9d8fe951, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x89df9550", 0x9f5221ab, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x8fc7a2b8", 0xa11e09af, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x94be59d0", 0xa29d5404, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0x9a49a610", 0xa43fa10d, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xa1e82446", 0xa69800bd, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xa6d907ec", 0xa816faa3, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xac013e62", 0xa99c0677, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xb2229e99", 0xead06f66, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xb7656336", 0xad14dcd8, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xbca2c726", 0xae9e51db, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xbd500000", 0xaecd7c6d, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0xbf800000", 0xb2800001, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0xbfc00000", 0xb200000f, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0xc2800000", 0xb2800040, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0xc2fff9e3", 0xb0938789, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xc479c000", 0xb28003e7, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0xc47a0000", 0xb28003e8, 0x00),
+//      TestCase("binary32_to_bid32", 4, "0xc8434ff7", 0xb21e847f, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xcd3ebc1e", 0xb39e8480, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xd37ff477", 0xb590c636, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xd8e348a9", 0xb71e816a, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xddd35452", 0xb89d0b7e, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xe3f6e3b3", 0xee8afc85, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xe958416e", 0xbc18eebd, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xeee5ca5b", 0xbdb641fb, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xf4700765", 0xbf741223, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xf97e8434", 0xc0fe07ca, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xff7fffff", 0xc2b3ec47, 0x20),
+//      TestCase("binary32_to_bid32", 4, "0xff800000", 0xf8000000, 0x00),
+//      TestCase("binary32_to_bid32", 0, "0x7f800001", 0x7c000000, 0x01),
+//      TestCase("binary32_to_bid32", 0, "0x7f800004", 0x7c000001, 0x01),
+//      TestCase("binary32_to_bid32", 0, "0x7f8fffff", 0x7c03ffff, 0x01),
+//      TestCase("binary32_to_bid32", 0, "0x7fa00000", 0x7c080000, 0x01),
+//      TestCase("binary32_to_bid32", 0, "0x7fbd08fc", 0x7c0f423f, 0x01),
+//      TestCase("binary32_to_bid32", 0, "0x7fbd0900", 0x7c000000, 0x01),
+//      TestCase("binary32_to_bid32", 0, "0x7fbfffff", 0x7c000000, 0x01),
     ]
     
     var testID = 1
@@ -4767,6 +5101,14 @@ final class Decimal32Tests: XCTestCase {
         return Decimal32(stringLiteral: s, rounding:test.roundMode)
       }
       
+      func getFloat(_ s: String) -> Float {
+        if s.hasPrefix("0x") {
+          var s = s; s.removeFirst(2)
+          return Float(bitPattern: UInt32(s, radix:16) ?? 0)
+        }
+        return Float(s)!
+      }
+      
       switch test.id {
         case "bid32_from_string":
           let t1 = getNumber(test.istr)
@@ -4786,6 +5128,12 @@ final class Decimal32Tests: XCTestCase {
           let d1 = Float(bitPattern: UInt32(test.res))
           let error = "\(d1) != \(t1f)"
           checkValues(test, UInt64(t1f.bitPattern), state, error)
+//        case "binary32_to_bid32":
+//          let float = getFloat(test.istr)
+//          let t1 = Decimal32()
+//          let d1 = Decimal32(bidBitPattern: UInt32(test.res))
+//          let error = "\(d1) != \(t1)"
+//          checkValues(test, UInt64(t1.bidBitPattern), state, error)
         case "bid32_to_int64_int":
           let t1 = getNumber(test.istr)
           let error = "\(Int64(bitPattern:test.res)) != \(Int64(t1))"
@@ -4931,15 +5279,15 @@ final class Decimal32Tests: XCTestCase {
           let t2 = getNumber(test.istr2)
           var res: Decimal32
           if test.id.hasSuffix("add") {
-            res = t1 + t2
+            res = t1.adding(other: t2, rounding: test.roundMode)
           } else if test.id.hasSuffix("sub") {
-            res = t1 - t2
+            res = t1.subtracting(other: t2, rounding: test.roundMode)
           } else if test.id.hasSuffix("mul") {
-            res = t1 * t2
+            res = t1.multiplied(by: t2, rounding: test.roundMode)
           } else if test.id.hasSuffix("rem") {
-            res = t1; res.formRemainder(dividingBy: t2)
+            res = t1.remainder(dividingBy: t2)
           } else {
-            res = t1 / t2
+            res = t1.divided(by: t2, rounding: test.roundMode)
           }
           let dtest = Decimal32(bid: UInt32(test.res))
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(res)]",
@@ -4976,13 +5324,14 @@ final class Decimal32Tests: XCTestCase {
           let t1 = getNumber(test.istr)
           let t2 = getNumber(test.istr2)
           let t3 = getNumber(test.istr3)
-          let res = t3.addingProduct(t1, t2)
+          if testID == 576 {
+            print(t3, "+", t1, "*", t2)
+          }
+          let res = t3.addingProduct(t1, t2, rounding: test.roundMode)
           let dtest = Decimal32(bid:UInt32(test.res))
           let error = String(format: "0x%08X[\(dtest)] != 0x%08X[\(res)]",
                              test.res, res.bid.data)
           checkValues(test, UInt64(res.bid.data), state, error)
-        case "bid32_fmod", "bid32_inf", "bid32_frexp":
-          break
         default:
           XCTAssert(false, "Unknown test identifier: \(test.id)")
       }
@@ -5037,12 +5386,12 @@ final class Decimal32Tests: XCTestCase {
     XCTAssert(Decimal32.leastNormalMagnitude.exponent == -95 - 7 + 1)
     
     let x5 = Decimal32("1000.3")
-    print(String(x5.bidBitPattern, radix: 16))
+    print(String(x5.bidBitPattern, radix: 16), x5)
     XCTAssert(x5.bidBitPattern == 0x32002713)
     XCTAssert(x5.dpdBitPattern == 0x22404003)
     print(String(x5.dpdBitPattern, radix: 16))
     
-    a = -21.5; b = 305.15
+    a = "-21.5"; b = "305.15"
     let c = Decimal32(signOf: a, magnitudeOf: b)
     print(c); XCTAssert((-b) == c)
     
