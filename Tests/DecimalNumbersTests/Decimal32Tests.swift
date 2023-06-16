@@ -5435,12 +5435,10 @@ final class Decimal32Tests: XCTestCase {
     
     // let x2 = Decimal32(56.7)
       
-//    for n in 0...1023 {
-//      for i in 0...1 {
-//        let calc = ID32.bid_factors(n, i)
-//        let table = Tables.bid_factors[n][i]
-//        XCTAssert(calc == table, "\(n),\(i) -> Calculated (\(calc)) != Table (\(table))")
-//      }
+//    for n in -450..<Tables.bid_exponents_bid32.count-450 {
+//      let calc = Tables.exponents_bid32(n+450)
+//      let table = Tables.bid_exponents_bid32[n+450]
+//      XCTAssert(calc == table, "\(n) -> Calculated (\(calc)) != Table (\(table))")
 //    }
     
 //    // int to dpd algorithm vs table

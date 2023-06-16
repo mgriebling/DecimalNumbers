@@ -560,10 +560,10 @@ extension IntDecimal {
     // Convert the dpd number to a bid number
     var (sign, exp, high, trailing) = Self.unpack(dpd: dpd)
     var nan = false
-    
-    if getNan() & Self.nanPattern == Self.infinitePattern {
+    let nanValue = getNan()
+    if (nanValue & Self.nanPattern) == (Self.infinitePattern<<1) {
       self = Self.infinite(sign); return
-    } else if getNan() & Self.nanPattern == Self.nanPattern {
+    } else if (nanValue & Self.nanPattern) == Self.nanPattern {
       nan = true; exp = 0
     }
     
@@ -732,7 +732,7 @@ extension IntDecimal {
     
     // Now look up our exponent e, and the breakpoint between e and e+1
     let m_min = Tables.bid_breakpoints_bid32[e+450]
-    var e_out = Int(Tables.bid_exponents_bid32[e+450])
+    var e_out = exponents_bid32(e+450)
     
     // Choose exponent and reciprocal multiplier based on breakpoint
     var r:UInt256
@@ -1330,6 +1330,63 @@ extension IntDecimal {
     let twoPower = recip_scale32[i] + 32
     return UInt64(UInt128(1) << twoPower / power10(i)) + 1
   }
+  
+  /// Returns trunc((exp10 - 80) × recipLog₁₀2) + 238 for exp10 ≤ 80
+  ///         round((exp10 - 80) × recipLog₁₀2) + 238 for exp10 > 80
+  static func exponents_binary32(_ exp10: Int) -> Int {
+    let actualExp = Double(exp10 - 80)
+    let recipLog₁₀2 = 3.321_928_094_887_362_347_870_319_429_489_390_175_864
+    if actualExp <= 0 {
+      return Int(actualExp * recipLog₁₀2) + 238
+    } else {
+      return Int(actualExp * recipLog₁₀2) + 239
+    }
+  }
+  
+  /// Returns trunc((exp10 - 358) × recipLog₁₀2) + 1134 for exp10 ≤ 358
+  ///         trunc((exp10 - 358) × recipLog₁₀2) + 1135 for exp10 > 358
+  static func exponents_binary64(_ exp10: Int) -> Int {
+    let actualExp = Double(exp10 - 358)
+    let recipLog₁₀2 = 3.321_928_094_887_362_347_870_319_429_489_390_175_864
+    if actualExp <= 0 {
+      return Int(actualExp * recipLog₁₀2) + 1134
+    } else {
+      return Int(actualExp * recipLog₁₀2) + 1135
+    }
+  }
+  
+  /// Returns trunc((exp10 - 450) × recipLog₂10) + 127 for exp10 ≤ 450
+  ///         trunc((exp10 - 450) × recipLog₂10) + 128 for exp10 > 450
+  // FIXME: - There seem to be errors? in this table, it is inconsistent with
+  //          the calculated values. For now, I've stubbed the original values
+  //          from the table in the calculated results.
+  static func exponents_bid32(_ exp10: Int) -> Int {
+    let actualExp = Double(exp10 - 450)
+    let recipLog₂10 = 0.301_029_995_663_981_195_213_738_894_724_493_026_768
+    
+    // Exceptional cases that don't match the calculated values
+    switch actualExp {
+      case -402: return 7 // calculates to 6
+      case -392: return 10 // calculates to 9
+      case -299: return 38 // calculates to 37
+      case -206: return 66 // calculates to 65
+      case -196: return 69 // calculates to 68
+      case -103: return 97 // calculates to 96
+      case  -10: return 125 // calculates to 124
+      case    0: return 128 // calculates to 127
+      case   83: return 153 // calculates to 152
+      case   93: return 156 // calculates to 155
+      case  186: return 184 // calculates to 183
+      default: break
+    }
+    
+    if actualExp <= 0 {
+      return Swift.max(Int(actualExp * recipLog₂10) + 127, -1)
+    } else {
+      return Int(actualExp * recipLog₂10) + 128
+    }
+  }
+  
   
   // Values of 10^(-x) truncated to Ex bits beyond the binary point, and
   // in the right position to be compared with the fraction from C * kx,
@@ -2982,7 +3039,7 @@ extension IntDecimal {
     
     // Look up the breakpoint and approximate exponent
     let m_min = Tables.bid_breakpoints_binary64[e+358]
-    var e_out = Tables.bid_exponents_binary64[e+358] - Int(k)
+    var e_out = Self.exponents_binary64(e+358) - Int(k)
     
     // Choose provisional exponent and reciprocal multiplier based on breakpoint
     var r = UInt256()
@@ -3074,7 +3131,7 @@ extension IntDecimal {
     
     // Look up the breakpoint and approximate exponent
     let m_min = Tables.bid_breakpoints_binary32[e+80]
-    var e_out = Tables.bid_exponents_binary32[e+80] - Int(k)
+    var e_out = Self.exponents_binary32(e+80) - Int(k)
     
     // Choose provisional exponent and reciprocal multiplier based on breakpoint
     var r = UInt256()
@@ -3833,8 +3890,10 @@ internal func addDecimalPointAndExponent(_ ps:String, _ exponent:Int,
   var ps = ps
   var exponentX = exponent
   if exponentX == 0 {
-    ps.insert(".", at: ps.index(ps.startIndex, offsetBy: exponentX+1))
-  } else if abs(exponentX) > maxDigits {
+    if ps.count > 1 {
+      ps.insert(".", at: ps.index(ps.startIndex, offsetBy: exponentX+1))
+    }
+  } else if abs(exponentX) > maxDigits || exponentX < -6 {
     if ps.count > 1 {
       ps.insert(".", at: ps.index(after: ps.startIndex))
     }
