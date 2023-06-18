@@ -124,6 +124,16 @@ extension Decimal32 : Comparable {
   }
 }
 
+extension Decimal32 : LosslessStringConvertible {
+  public init?(_ description: String) {
+    if let x:ID=numberFromString(description, round: .toNearestOrEven) {
+      bid = x
+    } else {
+      return nil
+    }
+  }
+}
+
 extension Decimal32 : CustomStringConvertible {
   public var description: String {
     string(from: bid)

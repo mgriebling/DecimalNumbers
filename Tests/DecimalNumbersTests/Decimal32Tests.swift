@@ -5379,22 +5379,19 @@ final class Decimal32Tests: XCTestCase {
     print(Decimal32.greatestFiniteMagnitude,b,Decimal32.leastNonzeroMagnitude)
 
     let exponentBias = Decimal32.zero.exponentBitPattern
-    XCTAssert(101 == exponentBias)
+    let maxDigits = Decimal32.significandDigitCount
+    XCTAssert(exponentBias == 101)
+    XCTAssert(maxDigits == 7)
     print(Decimal32.greatestFiniteMagnitude.exponent)
     print(Decimal32.leastNormalMagnitude.exponent)
-    XCTAssert(Decimal32.greatestFiniteMagnitude.exponent == 96 - 7 + 1)
-    XCTAssert(Decimal32.leastNormalMagnitude.exponent == -95 - 7 + 1)
+    XCTAssert(Decimal32.greatestFiniteMagnitude.exponent == 96 - maxDigits + 1)
+    XCTAssert(Decimal32.leastNormalMagnitude.exponent == -95 - maxDigits + 1)
     
     let x5 = Decimal32("1000.3")
     print(String(x5.bidBitPattern, radix: 16), x5)
     XCTAssert(x5.bidBitPattern == 0x32002713)
     XCTAssert(x5.dpdBitPattern == 0x22404003)
     print(String(x5.dpdBitPattern, radix: 16))
-    
-//    let exact = Decimal32(exactly: 100.1)
-//    if exact != nil {
-//      print(exact!)
-//    }
     
     a = "-21.5"; b = "305.15"
     let c = Decimal32(signOf: a, magnitudeOf: b)

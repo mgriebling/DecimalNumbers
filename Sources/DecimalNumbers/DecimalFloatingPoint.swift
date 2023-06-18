@@ -386,7 +386,6 @@ extension DecimalFloatingPoint {
     //  Sign, exponent, and significand all match.
     return true
   }
-  
 }
 
 extension DecimalFloatingPoint where Self.RawSignificand: FixedWidthInteger {

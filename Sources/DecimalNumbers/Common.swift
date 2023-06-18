@@ -30,7 +30,7 @@ protocol IntDecimal : Codable, Hashable {
   
   associatedtype RawData : UnsignedInteger & FixedWidthInteger
   associatedtype RawBitPattern : UnsignedInteger & FixedWidthInteger
-  associatedtype RawSignificand : UnsignedInteger
+  associatedtype RawSignificand : UnsignedInteger & FixedWidthInteger
   
   /// Storage of the Decimal number in a raw binary integer decimal
   /// encoding as per IEEE STD 754-2008
@@ -521,8 +521,8 @@ extension IntDecimal {
   private func checkNormalScale(_ exp: Int, _ mant: RawBitPattern) -> Bool {
     // if exponent is less than -95, the number may be subnormal
     if exp < Self.minEncodedExponent+Self.maximumDigits-1 {
-      let tenPower = _power(UInt64(10), to: exp)
-      let mantPrime = UInt64(mant) * tenPower
+      let tenPower = _power(RawBitPattern(10), to: exp)
+      let mantPrime = mant * tenPower
       return mantPrime > Self.largestNumber/10 // normal test
     }
     return true // normal
@@ -607,9 +607,9 @@ extension IntDecimal {
     
     let mils = ((Self.maximumDigits - 1) / 3) - 1
     let shift = 10
-    var dmant = 0
+    var dmant = RawSignificand(0)
     for i in stride(from: 0, through: shift*mils, by: shift) {
-      dmant |= Self.intToDPD(Int(significand) % 1000) << i
+      dmant |= RawSignificand(Self.intToDPD(Int(significand % 1000))) << i
       significand /= 1000
     }
     
@@ -969,7 +969,7 @@ extension IntDecimal {
 //          fpsc.formUnion(status)
 //        }
 //      }
-      return Self(sign: s, expBitPattern: exponentBias, sigBitPattern: RawBitPattern(_C64))
+      return Self(sign: s, expBitPattern: 0, sigBitPattern: RawBitPattern(_C64))
     }
     var exp = exp, c = c
     if c == 0 { if exp > maxEncodedExponent { exp = maxEncodedExponent } }
@@ -4162,7 +4162,7 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
   
   var expon_x = 0
   while c.isNumber {
-    if expon_x < (1 << T.smallSignificandBits.upperBound) {
+    if expon_x < (1 << 20) {
       expon_x = (expon_x << 1) + (expon_x << 3)
       expon_x += c.wholeNumberValue ?? 0
     }

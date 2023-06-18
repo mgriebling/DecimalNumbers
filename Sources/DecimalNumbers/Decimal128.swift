@@ -99,6 +99,16 @@ extension Decimal128 : Comparable {
   }
 }
 
+extension Decimal128 : LosslessStringConvertible {
+  public init?(_ description: String) {
+    if let x:ID=numberFromString(description, round: .toNearestOrEven) {
+      bid = x
+    } else {
+      return nil
+    }
+  }
+}
+
 extension Decimal128 : CustomStringConvertible {
   public var description: String {
     string(from: bid)

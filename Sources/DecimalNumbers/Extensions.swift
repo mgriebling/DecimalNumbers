@@ -27,6 +27,23 @@ extension FloatingPointSign {
   public var toggle: Sign { self == .minus ? .plus : .minus }
 }
 
+extension FloatingPointClassification : CustomStringConvertible {
+  public var description: String {
+    switch self {
+      case .negativeInfinity: return "Negative Infinity"
+      case .negativeNormal: return "Negative Normal"
+      case .negativeSubnormal: return "Negative Subnormal"
+      case .negativeZero: return "Negative Zero"
+      case .positiveInfinity: return "Positive Infinity"
+      case .positiveNormal: return "Positive Normal"
+      case .positiveSubnormal: return "Positive Subnormal"
+      case .positiveZero: return "Positive Zero"
+      case .signalingNaN: return "Signaling Nan"
+      case .quietNaN: return "Quiet Nan"
+    }
+  }
+}
+
 extension BinaryFloatingPoint {
   @inline(__always)
   public init<T: DecimalFloatingPoint>(_ source: T,
