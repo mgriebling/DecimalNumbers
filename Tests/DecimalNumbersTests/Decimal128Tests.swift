@@ -127,10 +127,7 @@ final class Decimal128Tests: XCTestCase {
     var testNumber = 0
     
     func test(_ value: String, result: String) {
-      testNumber += 1
-      if testNumber == 2 {
-        print()
-      }
+      testNumber += 1  
       if let n = Decimal128(value) {
         var nstr = String(n.dpdBitPattern, radix:16)
         nstr = "".padding(toLength: result.count-nstr.count, withPad: "0", startingAt: 0) + nstr

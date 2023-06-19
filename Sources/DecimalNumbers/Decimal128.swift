@@ -77,6 +77,27 @@ extension Decimal128 : AdditiveArithmetic {
   }
   
   public static var zero: Self { Self(bid: ID.zero()) }
+  
+  /// Creates a NaN ("not a number") value with the specified payload.
+  ///
+  /// NaN values compare not equal to every value, including themselves. Most
+  /// operations with a NaN operand produce a NaN result. Don't use the
+  /// equal-to operator (`==`) to test whether a value is NaN. Instead, use
+  /// the value's `isNaN` property.
+  ///
+  ///     let x = Decimal32(nan: 0, signaling: false)
+  ///     print(x == .nan)
+  ///     // Prints "false"
+  ///     print(x.isNaN)
+  ///     // Prints "true"
+  ///
+  /// - Parameters:
+  ///   - payload: The payload to use for the new NaN value.
+  ///   - signaling: Pass `true` to create a signaling NaN or `false` to create
+  ///     a quiet NaN.
+  public init(nan payload: RawSignificand, signaling: Bool) {
+    self.bid = ID.init(nan: payload, signaling: signaling)
+  }
 }
 
 extension Decimal128 : Equatable {

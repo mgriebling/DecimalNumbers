@@ -128,9 +128,6 @@ final class Decimal64Tests: XCTestCase {
     
     func test(_ value: String, result: String) {
       testNumber += 1
-      if testNumber == 59 {
-        print()
-      }
       if let n = Decimal64(value) {
         print("Test \(testNumber): \"\(value)\" [\(n)] = \(result.lowercased()) - \(n.floatingPointClass.description)")
         var nstr = String(n.dpdBitPattern, radix:16)

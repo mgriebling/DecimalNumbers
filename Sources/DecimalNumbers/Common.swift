@@ -78,7 +78,7 @@ protocol IntDecimal : Codable, Hashable {
   static var snan: Self { get }
   
   static func zero(_ sign: Sign) -> Self
-  static func nan(_ sign: Sign, _ payload: Int) -> Self
+  static func nan(_ sign: Sign, _ payload: RawSignificand) -> Self
   static func infinite(_ sign: Sign) -> Self
   static func max(_ sign: Sign) -> Self
   
@@ -455,7 +455,7 @@ extension IntDecimal {
   }
   
   @inlinable
-  static func nan(_ sign: Sign = .plus, _ payload: Int = 0) -> Self {
+  static func nan(_ sign:Sign = .plus, _ payload:RawSignificand = 0) -> Self {
     let man = payload > largestNumber/10 ? 0 : RawBitPattern(payload)
     return Self(sign:sign, expBitPattern:nanPattern<<(exponentBits-6),
                 sigBitPattern:man)
@@ -576,7 +576,7 @@ extension IntDecimal {
       mant += RawBitPattern(Self.intFrom(dpd: Int(trailing >> i) & mask))
     }
     
-    if nan { self = Self.nan(sign, Int(mant)) }
+    if nan { self = Self.nan(sign, RawSignificand(mant)) }
     else { self.init(sign: sign, expBitPattern: exp, sigBitPattern: mant) }
   }
   
@@ -652,7 +652,7 @@ extension IntDecimal {
       e = -(l + 1074)
     } else if e == expMask {
       if c == 0 { return infinite(s) }
-      return nan(s, Int(c))
+      return nan(s, RawSignificand(c))
     } else {
       c.set(bit: 52)  // set upper bit
       e -= 1075
@@ -3987,8 +3987,8 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
       return T.snan
     } else {
       // return qNaN & any coefficient
-      let coeff = Int(ps.dropFirst(2)) ?? 0 // drop "AN"
-      return T.nan(.plus, coeff)
+      let coeff = T.RawSignificand(ps.dropFirst(2)) // drop "AN"
+      return T.nan(.plus, coeff ?? 0)
     }
   }
   
