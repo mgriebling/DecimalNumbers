@@ -3957,97 +3957,64 @@ internal func string<T:IntDecimal>(from x: T) -> String {
 /// Converts a decimal number string of the form:
 /// `[+|-] digit {digit} [. digit {digit}] [e [+|-] digit {digit} ]`
 /// to a Decimal<n> number
-internal func numberFromString<T:IntDecimal>(_ s: String,
-                                                 round: Rounding) -> T? {
+func numberFromString<T:IntDecimal>(_ s: String, round: Rounding) -> T? {
   // keep consistent character case for "infinity", "nan", etc.
-  var ps = s.lowercased()
-  
-  // get first non-whitespace character
   let eos = Character("\0")
-  var c = ps.isEmpty ? eos : ps.removeFirst()
-  var right_radix_leading_zeros = 0
+  var ps = s.lowercased()
+  var rightRadixLeadingZeros = 0
   
   func handleEmpty() -> T {
-    right_radix_leading_zeros = T.exponentBias - right_radix_leading_zeros
-    if right_radix_leading_zeros < 0 {
-      right_radix_leading_zeros = T.exponentBias
+    rightRadixLeadingZeros = T.exponentBias - rightRadixLeadingZeros
+    if rightRadixLeadingZeros < 0 {
+      rightRadixLeadingZeros = T.exponentBias
     }
-    return T(sign: sign, expBitPattern: right_radix_leading_zeros, sigBitPattern: 0)
+    return T(sign:sign, expBitPattern:rightRadixLeadingZeros, sigBitPattern:0)
   }
   
-  // detect special cases (INF or NaN)
-  if c == eos || (c != "." && c != "-" && c != "+" && !c.isNumber) {
-    // Infinity?
-    if c == "i" && (ps.hasPrefix("nfinity") || ps.hasPrefix("nf")) {
-      return T.infinite()
-    }
-    // return sNaN
-    if c == "s" && ps.hasPrefix("nan") {
-      // case insensitive check for snan
-      return T.snan
-    } else {
-      // return qNaN & any coefficient
-      let coeff = T.RawSignificand(ps.dropFirst(2)) // drop "AN"
-      return T.nan(.plus, coeff ?? 0)
-    }
-  }
-  
-  // detect +INF or -INF
-  if ps.hasPrefix("infinity") || ps.hasPrefix("inf") {
-    if c == "+" {
-      return T.infinite()
-    } else if c == "-" {
-      return T.infinite(.minus)
-    } else {
-      return T.nan()
-    }
-  }
-  
-  // if +sNaN, +SNaN, -sNaN, or -SNaN
-  if ps.hasPrefix("snan") {
-    if c == "-" {
-      var x = T.snan; x.sign = .minus
-      return x
-    } else {
-      return T.snan
-    }
-  }
+  var getChar: Character { ps.isEmpty ? eos : ps.removeFirst() }
+
+  // get first character
+  var c = getChar
   
   // determine sign
   var sign = Sign.plus
-  if c == "-" {
-    sign = .minus
+  if c == "-" { sign = .minus; c = getChar }
+  else if c == "+" { c = getChar }
+
+  // detect special cases (INF or NaN)
+  // Infinity?
+  if c == "i" && (ps.hasPrefix("nfinity") || ps.hasPrefix("nf")) {
+    return T.infinite(sign)
   }
-  
-  // get next character if leading +/- sign
-  if c == "-" || c == "+" {
-    c = ps.isEmpty ? eos : ps.removeFirst()
+  // return sNaN
+  if c == "s" && ps.hasPrefix("nan") {
+    // case insensitive check for snan
+    var x = T.snan; x.sign = sign
+    return x
+  } else if c == "n" && ps.hasPrefix("an") {
+    // return qNaN & any coefficient
+    let coeff = T.RawSignificand(ps.dropFirst(2)) // drop "AN"
+    return T.nan(sign, coeff ?? 0)
   }
-  
-  // if c isn"t a decimal point or a decimal digit, return NaN
-  if c != "." && !c.isNumber {
-    // return NaN
-    return T.nan(sign, 0)
-  }
-  
+
   var rdx_pt_enc = false
-  var significandX = T.RawBitPattern(0)
-  
+  var significand = T.RawBitPattern(0)
+
   // detect zero (and eliminate/ignore leading zeros)
   if c == "0" || c == "." {
     if c == "." {
       rdx_pt_enc = true
-      c = ps.isEmpty ? eos : ps.removeFirst()
+      c = getChar
     }
     // if all numbers are zeros (with possibly 1 radix point, the number
     // is zero
     // should catch cases such as: 000.0
     while c == "0" {
-      c = ps.isEmpty ? eos : ps.removeFirst()
+      c = getChar
       // for numbers such as 0.0000000000000000000000000000000000001001,
       // we want to count the leading zeros
       if rdx_pt_enc {
-        right_radix_leading_zeros+=1
+        rightRadixLeadingZeros+=1
       }
       // if this character is a radix point, make sure we haven't already
       // encountered one
@@ -4059,141 +4026,119 @@ internal func numberFromString<T:IntDecimal>(_ s: String,
           if ps.isEmpty {
             return handleEmpty()
           }
-          c = ps.isEmpty ? eos : ps.removeFirst()
+          c = getChar
         } else {
           // if 2 radix points, return NaN
-          return T.nan(sign, 0)
+          return T.nan(sign)
         }
       } else if ps.isEmpty {
         return handleEmpty()
       }
     }
   }
-  
-  var ndigits = 0
-  var dec_expon_scale = 0
-  var midpoint = 0
-  var rounded_up = 0
-  var add_expon = 0
+
+  var ndigits = 0, exponScale = 0, addExpon = 0
+  var midpoint = false, roundedUp = false
 
   while c.isNumber || c == "." {
     if c == "." {
       if rdx_pt_enc {
         // return NaN
-        return T.nan(sign, 0)
+        return T.nan(sign)
       }
       rdx_pt_enc = true
-      c = ps.isEmpty ? eos : ps.removeFirst()
+      c = getChar
       continue
     }
-    if rdx_pt_enc { dec_expon_scale += 1 }
-    
+    if rdx_pt_enc { exponScale += 1 }
+
     ndigits+=1
     if ndigits <= T.maximumDigits {
-      significandX = (significandX << 1) + (significandX << 3);
-      significandX += T.RawBitPattern(c.wholeNumberValue ?? 0)
+      significand = (significand << 1) + (significand << 3)
+      significand += T.RawBitPattern(c.wholeNumberValue ?? 0)
     } else if ndigits == T.maximumDigits+1 {
       // coefficient rounding
       switch round {
         case .toNearestOrEven:
-          midpoint = (c == "5" && (significandX & 1 == 0)) ? 1 : 0;
-          // if coefficient is even and c is 5, prepare to round up if
-          // subsequent digit is nonzero
-          // if str[MAXDIG+1] > 5, we MUST round up
-          // if str[MAXDIG+1] == 5 and coefficient is ODD, ROUND UP!
-          if c > "5" || (c == "5" && (significandX & 1) != 0) {
-            significandX += 1
-            rounded_up = 1
+          midpoint = c == "5" && significand.isMultiple(of: 2)
+          if c > "5" || (c == "5" && !significand.isMultiple(of: 2)) {
+            significand += 1
+            roundedUp = true
           }
         case .down:
-          if sign == .minus { significandX+=1; rounded_up=1 }
+          if sign == .minus { significand+=1; roundedUp=true }
         case .up:
-          if sign != .minus { significandX+=1; rounded_up=1 }
+          if sign != .minus { significand+=1; roundedUp=true }
         case .toNearestOrAwayFromZero:
-          if c >= "5" { significandX+=1; rounded_up=1 }
+          if c >= "5" { significand+=1; roundedUp=true }
         default: break
       }
-      if significandX == T.largestNumber+1 {
-        significandX = (T.largestNumber+1)/10
-        add_expon = 1
+      if significand == T.largestNumber+1 {
+        significand = (T.largestNumber+1)/10
+        addExpon = 1
       }
-//      if c > "0" {
-//        rounded = 1
-//      }
-      add_expon += 1
+      addExpon += 1
     } else { // ndigits > 8
-      add_expon += 1
-      if midpoint != 0 && c > "0" {
-        significandX += 1
-        midpoint = 0
-        rounded_up = 1
+      addExpon += 1
+      if midpoint && c > "0" {
+        significand += 1
+        midpoint = false
+        roundedUp = true
       }
-//      if c > "0" {
-//        rounded = 1;
-//      }
     }
-    c = ps.isEmpty ? eos : ps.removeFirst()
+    c = getChar
   }
-  
-  add_expon -= dec_expon_scale + Int(right_radix_leading_zeros)
-  
+
+  addExpon -= exponScale + Int(rightRadixLeadingZeros)
+
   if c == eos {
-//    if rounded != 0 {
-//      T.state.insert(.inexact)
-//    }
-    return T(sign: sign, expBitPattern: add_expon+T.exponentBias,
-             sigBitPattern: T.RawBitPattern(significandX))
+    return T(sign: sign, expBitPattern: addExpon+T.exponentBias,
+             sigBitPattern: T.RawBitPattern(significand))
   }
-  
+
   if c != "e" {
     // return NaN
-    return T.nan(sign, 0)
+    return T.nan(sign)
   }
-  c = ps.isEmpty ? eos : ps.removeFirst()
-  
+  c = getChar
+
   let sgn_expon = c == "-"
   if c == "-" || c == "+" {
-    c = ps.isEmpty ? eos : ps.removeFirst()
+    c = getChar
   }
   if c == eos || !c.isNumber {
     // return NaN
-    return T.nan(sign, 0)
+    return T.nan(sign)
   }
-  
+
   var expon_x = 0
   while c.isNumber {
     if expon_x < (1 << 20) {
       expon_x = (expon_x << 1) + (expon_x << 3)
       expon_x += c.wholeNumberValue ?? 0
     }
-    c = ps.isEmpty ? eos : ps.removeFirst()
+    c = getChar
   }
-  
+
   if c != eos {
     // return NaN
-    return T.nan(sign, 0)
+    return T.nan(sign)
   }
-  
-//  if rounded != 0 {
-//    T.state.insert(.inexact)
-//  }
-  
+
   if sgn_expon {
     expon_x = -expon_x
   }
-  
-  expon_x += add_expon + T.exponentBias
-  
+
+  expon_x += addExpon + T.exponentBias
+
   if expon_x < 0 {
-    if rounded_up != 0 {
-      significandX -= 1
+    if roundedUp {
+      significand -= 1
     }
-    return T.handleRounding(sign, expon_x, Int(significandX),
-                            rounded_up, round)
+    return T.handleRounding(sign, expon_x, Int(significand),
+                            roundedUp ? 1 : 0, round)
   }
-  let mant = T.RawBitPattern(significandX)
-  // return T.handleRounding(sign, expon_x, Int(mant), 0, round)
+  let mant = T.RawBitPattern(significand)
   let result = T.adjustOverflowUnderflow(sign, expon_x, mant, round)
   return T(result)
 }
-
