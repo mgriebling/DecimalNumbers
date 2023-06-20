@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+import Foundation  // for Locale
 import UInt128
 
 ///
@@ -25,6 +26,8 @@ import UInt128
 public typealias Sign = FloatingPointSign
 public typealias Rounding = FloatingPointRoundingRule
 public typealias IntRange = ClosedRange<Int>
+
+public enum DecimalEncoding { case bid, dpd }
 
 protocol IntDecimal : Codable, Hashable {
   
@@ -230,7 +233,7 @@ extension IntDecimal {
         
         // get digits to be shifted out
         let extraDigits = -exp
-        mant += RawBitPattern(bid_round_const_table(roundIndex, extraDigits))
+        mant += RawBitPattern(roundConstTable(roundIndex, extraDigits))
         
         let Q = mul64x64to128(UInt64(mant), reciprocals10(extraDigits))
         let amount = shortReciprocalScale[extraDigits]
@@ -906,7 +909,7 @@ extension IntDecimal {
       
       // get digits to be shifted out
       let extra_digits = 1-exp
-      c += Int(bid_round_const_table(roundIndex, extra_digits))
+      c += Int(roundConstTable(roundIndex, extra_digits))
       
       // get coeff*(2^M[extra_digits])/10^extra_digits
       let Q = mul64x64to128(UInt64(c), reciprocals10(extra_digits))
@@ -1300,7 +1303,7 @@ extension IntDecimal {
     
   /// Returns rounding constants for a given rounding mode `rnd` and
   /// power of ten given by `10^(i-1)`.
-  static func bid_round_const_table(_ rnd:Int, _ i:Int) -> UInt64 {
+  static func roundConstTable(_ rnd:Int, _ i:Int) -> UInt64 {
     if i == 0 { return 0 }
     switch rnd {
       case 0, 4: return 5 * power10(i-1)
@@ -1946,7 +1949,7 @@ extension IntDecimal {
     var S = Int64(bitPattern: SU &+ CB)
     
     if S < 0 {
-      signA = signA == .minus ? .plus : .minus // toggle the sign
+      signA = signA.toggle // == .minus ? .plus : .minus // toggle the sign
       S = -S
     }
     var P = UInt64(S)
@@ -1978,7 +1981,7 @@ extension IntDecimal {
     
     // add a constant to P, depending on rounding mode
     // 0.5*10^(digits_p - 16) for round-to-nearest
-    P += bid_round_const_table(irmode, extra_digits)
+    P += roundConstTable(irmode, extra_digits)
     //var Tmp = UInt128()
     let Tmp = mul64x64to128(P, reciprocals10(extra_digits))
     // __mul_64x64_to_128(&Tmp, P, bid_reciprocals10_64(extra_digits))
@@ -1989,7 +1992,7 @@ extension IntDecimal {
     
     // remainder
     let R = P - Q * power10(extra_digits)
-//    if R == ID.bid_round_const_table(irmode, extra_digits) {
+//    if R == ID.roundConstTable(irmode, extra_digits) {
 //      status = []
 //    } else {
 //      status.insert(.inexact)
@@ -2118,7 +2121,7 @@ extension IntDecimal {
     
     // add a constant to P, depending on rounding mode
     // 0.5*10^(digits_p - 16) for round-to-nearest
-    P += RawBitPattern(bid_round_const_table(rmode1, extra_digits))
+    P += RawBitPattern(roundConstTable(rmode1, extra_digits))
     let Tmp = mul64x64to128(UInt64(P), reciprocals10(extra_digits))
     
     // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-64
@@ -2128,7 +2131,7 @@ extension IntDecimal {
     // remainder
     let R = P - Q * power10(extra_digits)
     
-//    if R == bid_round_const_table[rmode1][extra_digits] {
+//    if R == roundConstTable[rmode1][extra_digits] {
 //      status = []
 //    } else {
 //      status.insert(.inexact)
@@ -2513,7 +2516,7 @@ extension IntDecimal {
       let R2 = R + R
       if R2 > CY || (R2 == CY && (Q & 1) != 0) {
         R = CY - R
-        signX = signX == .minus ? .plus : .minus
+        signX = signX.toggle // == .minus ? .plus : .minus
         // signX ^= 0x80000000
       }
       
@@ -2557,7 +2560,7 @@ extension IntDecimal {
     let R2 = significandX + significandX
     if R2 > significandY || (R2 == significandY && (Q64 & 1) != 0) {
       significandX = significandY - significandX
-      signX = signX == .minus ? .plus : .minus // signX ^= 0x80000000
+      signX = signX.toggle // == .minus ? .plus : .minus // signX ^= 0x80000000
     }
     
     return Self(sign: signX, expBitPattern: exponentY, sigBitPattern: significandX)
@@ -2745,9 +2748,6 @@ extension IntDecimal {
         diff_dec_expon = d2
         exponent_b = exponent_a - diff_dec_expon
       }
-//      if coefficient_b != 0 {
-//        inexact=true
-//      }
     }
     
     let sign_ab = Int64(sign_a != sign_b ? -1 : 0)
@@ -2755,12 +2755,12 @@ extension IntDecimal {
     let high = Int64(bitPattern: low) >> 63
     let CB = UInt128(high: UInt64(bitPattern: high), low: low)
     
-    // let Tmp = mul64x128(coefficient_a,
-    let Tmp = mul64x128Low(coefficient_a, power10(diff_dec_expon))
-    // var P = Tmp &+ CB
-    var P = add_128_128(Tmp, CB)
+    var Tmp = UInt128()
+    (Tmp, _) = UInt128(power10(diff_dec_expon))
+                              .multipliedReportingOverflow(by: coefficient_a)
+    var P = Tmp &+ CB
     if Int64(bitPattern: P.components.high) < 0 {
-      sign_a = sign_a.toggle //  == .minus ? .plus : .minus
+      sign_a = sign_a.toggle
       var Phigh = 0 &- P.components.high
       if P.components.low != 0 { Phigh &-= 1 }
       P.components = (Phigh, 0 &- P.components.low)
@@ -2809,17 +2809,13 @@ extension IntDecimal {
     // 0.5*10^(digits_p - 16) for round-to-nearest
     var Stemp = UInt128()
     if extra_digits <= 18 {
-      // P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits))
-      P = add_128_64(P, bid_round_const_table(rmode1, extra_digits))
+      P += UInt128(high:0, low:roundConstTable(rmode1, extra_digits))
     } else {
-      // Stemp = bid_round_const_table(rmode1, 18).multipliedFullWidth(by: power10(extra_digits-18))
-      Stemp = mul64x64to128(bid_round_const_table(rmode1, 18),
-                            UInt128(power10(extra_digits-18)).components.low)
-      // P += Stemp
-      P = add_128_128(P, Stemp)
+      Stemp.components = roundConstTable(rmode1, 18)
+                            .multipliedFullWidth(by: power10(extra_digits-18))
+      P += Stemp
       if rmode == .up {
-        // P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits-18))
-        P = add_128_64(P, bid_round_const_table(rmode1, extra_digits-18))
+        P += UInt128(high:0, low:roundConstTable(rmode1, extra_digits-18))
       }
     }
     
@@ -2871,23 +2867,9 @@ extension IntDecimal {
     
     switch rmode {
       case .awayFromZero, .toNearestOrAwayFromZero:
-        // BID_ROUNDING_TO_NEAREST, BID_ROUNDING_TIES_AWAY:
-        // test whether fractional part is 0
         break
-//        if ((remainder_h == 0x8000000000000000 && rem_l == 0)
-//            && (Q_low.high < bid_reciprocals10_128(extra_digits).high
-//                || (Q_low.high == bid_reciprocals10_128(extra_digits).high
-//                    && Q_low.low < bid_reciprocals10_128(extra_digits).low))) {
-//          status = []
-//        }
-      case .down, .towardZero: // BID_ROUNDING_DOWN, BID_ROUNDING_TO_ZERO:
+      case .down, .towardZero:
         break
-//        if ((remainder_h | rem_l) == 0
-//            && (Q_low.high < bid_reciprocals10_128(extra_digits).high
-//                || (Q_low.high == bid_reciprocals10_128(extra_digits).high
-//                    && Q_low.low < bid_reciprocals10_128(extra_digits).low))) {
-//          status = []
-//        }
       default:
         // round up
         var carry = UInt64(), CY:UInt64
@@ -2898,24 +2880,13 @@ extension IntDecimal {
         (high, carry) = add_carry_in_out(Qlow.high, recip.high, CY)
         Stemp = UInt128(high: high, low: low)
         if amount < 64 {
-//          if (remainder_h >> (64 - amount)) + carry >= (UInt64(1) << amount) {
-//            if !inexact {
-//              status = []
-//            }
-//          }
+          // status update
         } else {
           rem_l += carry
           remainder_h >>= (128 - amount)
           if carry != 0 && rem_l == 0 { remainder_h += 1 }
-//          if remainder_h >= (UInt64(1) << (amount-64)) && !inexact {
-//            status = []
-//          }
         }
     }
-    
-//    pfpsf = status
-    
-//    let R = !status.isEmpty ? 1 : 0
     
     if (UInt32(C64) == largestNumber) && (exponent_b+extra_digits == -1) &&
         (rmode != .towardZero) {
@@ -2924,24 +2895,19 @@ extension IntDecimal {
         rmode1 = 3 - rmode1
       }
       if extra_digits <= 18 {
-        // P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits))
-        P = add_128_64(P, bid_round_const_table(rmode1, extra_digits))
+        P += UInt128(high:0, low:roundConstTable(rmode1, extra_digits))
       } else {
-//        Stemp.components = bid_round_const_table(rmode1, 18)
-//                           .multipliedFullWidth(by: power10(extra_digits-18))
-//        P += Stemp
-        Stemp = mul64x64to128(bid_round_const_table(rmode1, 18),
-                              UInt128(power10(extra_digits-18)).components.low)
-        P = add_128_128(P, Stemp)
+        Stemp.components = roundConstTable(rmode1, 18)
+                           .multipliedFullWidth(by: power10(extra_digits-18))
+        P += Stemp
         if rmode == .up {
-          // P += UInt128(high:0, low:bid_round_const_table(rmode1, extra_digits-18))
-          P = add_128_64(P, bid_round_const_table(rmode1, extra_digits-18))
+          P += UInt128(high:0, low:roundConstTable(rmode1, extra_digits-18))
         }
       }
       
       // get P*(2^M[extra_digits])/10^extra_digits
-      // (Q_high, Q_low) = P.multipliedFullWidth(by: reciprocals10(extra_digits))
-      mul128x128Full(&Q_high, &Q_low, P, reciprocals10(extra_digits))
+      (Q_high, Q_low) = P.multipliedFullWidth(by: reciprocals10(extra_digits))
+
       // now get P/10^extra_digits: shift Q_high right by M(extra_digits)-128
       amount = Int(reciprocalScale[extra_digits])
       C128 = Q_high >> amount
@@ -2953,7 +2919,6 @@ extension IntDecimal {
     }
     return Self(adjustOverflowUnderflow(sign_a, exponent_b+extra_digits,
                                         RawBitPattern(C64), rmode))
-    // return bid32Underflow(sign_a, exponent_b+extra_digits, C64, R, rmode)
   }
   
   @inlinable static func add_carry_out(_ X:UInt64, _ Y:UInt64) ->
@@ -3222,11 +3187,10 @@ extension IntDecimal {
     // the preferred exponent of MAX(Q(x), 0)
     exp = exp - exponentBias
     if C1 == 0 {
-      if exp < 0 {
-        exp = 0
-      }
-      return Self(sign:x_sign, expBitPattern:exp+exponentBias, sigBitPattern: 0)
+      if exp < 0 { exp = 0 }
+      return Self(sign:x_sign, expBitPattern:exp+exponentBias, sigBitPattern:0)
     }
+    
     // x is a finite non-zero number (not 0, non-canonical, or special)
     switch rmode {
       case .toNearestOrEven, .toNearestOrAwayFromZero:
@@ -3239,29 +3203,25 @@ extension IntDecimal {
       case .down:
         // return 0 if (exp <= -p)
         if exp <= -maximumDigits {
-          if x_sign != .plus {
-            return Self(sign: .minus, expBitPattern: exponentBias, sigBitPattern: 1)
-            //res = (zero+1) | SIGN_MASK64  // 0xb1c0000000000001
+          if x_sign == .minus {
+            return Self(sign:.minus,expBitPattern:exponentBias,sigBitPattern:1)
           } else {
             return zero()
           }
-          //pfpsf.insert(.inexact)
         }
       case .up:
         // return 0 if (exp <= -p)
         if exp <= -maximumDigits {
-          if x_sign != .plus {
-            return zero(.minus) // res = zero | SIGN_MASK64  // 0xb1c0000000000000
+          if x_sign == .minus {
+            return zero(.minus)
           } else {
-            return Self(sign: .plus, expBitPattern: exponentBias, sigBitPattern: 1) // res = zero+1
+            return Self(sign:.plus,expBitPattern:exponentBias,sigBitPattern:1) // res = zero+1
           }
-          //pfpsf.insert(.inexact)
         }
       case .towardZero:
         // return 0 if (exp <= -p)
         if exp <= -maximumDigits {
-          return zero(x_sign) // x_sign | zero
-          //pfpsf.insert(.inexact)
+          return zero(x_sign)
         }
       default: break
     }    // end switch ()
@@ -3596,13 +3556,7 @@ extension IntDecimal {
         res.clear(range: g6tog10Range)  // x.ma & 0xfe0f_ffff // clear G6-G10
       }
       if x.isSNaN { // SNaN
-        // set invalid flag
-        // pfpsf.insert(.invalidOperation)
-        // pfpsf |= BID_INVALID_EXCEPTION;
-        // return quiet (SNaN)
         res.clear(bit: Self.nanBitRange.lowerBound)
-      } else {    // QNaN
-        // res = x.data
       }
       return Self(res)
     } else if x.isInfinite { // check for Infinity
@@ -3617,7 +3571,7 @@ extension IntDecimal {
     // let x_sign = x & SIGN_MASK // 0 for positive, SIGN_MASK for negative
     // var x_exp, C1:UInt32
     // if steering bits are 11 (condition will be 0), then exponent is G[0:7]
-    var (x_sign, x_exp, C1, _) = x.unpack() // extractExpSig(x)
+    var (x_sign, x_exp, C1, _) = x.unpack()
     
     // check for zeros (possibly from non-canonical values)
     if C1 == 0 || (x.isSpecial && C1 > Self.largestNumber) {
@@ -3683,64 +3637,53 @@ extension IntDecimal {
   
   static func sqrt(_ x: Self, _ rmode:Rounding) -> Self {
     // unpack arguments, check for NaN or Infinity
-    var (signX, exponentX, significandX, valid) = x.unpack()
+    var (sign, exponent, significand, valid) = x.unpack()
     if !valid {
       // x is Inf. or NaN or 0
       if x.isInfinite {
-        let res = significandX.clearing(range: g6tog10Range)
-        if x.isNaNInf && signX == .minus {
-          return Self.nan(signX, 0)
-          //status.insert(.invalidOperation)
-        }
-//        if isSNaN(x) {
-//          // status.insert(.invalidOperation)
-//        }
+        let res = significand.clearing(range: g6tog10Range)
+        if x.isNaNInf && sign == .minus { return Self.nan(sign) }
         return Self.nanQuiet(res)
       }
       // x is 0
-      exponentX = (exponentX + exponentBias) >> 1
-      return Self(sign: signX, expBitPattern: exponentX, sigBitPattern: 0)
+      exponent = (exponent + exponentBias) >> 1
+      return Self(sign: sign, expBitPattern: exponent, sigBitPattern: 0)
     }
     // x<0?
-    if signX == .minus && significandX != 0 {
-      // status.insert(.invalidOperation)
-      return Self.nan()
-    }
+    if sign == .minus && significand != 0 { return Self.nan() }
     
     //--- get number of bits in the coefficient of x ---
-    let tempx = Float32(significandX)
-    let bin_expon_cx = Int(((tempx.bitPattern >> 23) & 0xff) - 0x7f)
-    var digits_x = estimateDecDigits(bin_expon_cx)
+    let tempx = Float32(significand)
+    let bin_expon_cx = tempx.exponent // Int(((tempx.bitPattern >> 23) & 0xff) - 0x7f)
+    var digits = estimateDecDigits(bin_expon_cx)
     // add test for range
-    if significandX >= bid_power10_index_binexp(bin_expon_cx) {
-      digits_x+=1
+    if significand >= bid_power10_index_binexp(bin_expon_cx) {
+      digits += 1
     }
     
-    var A10 = significandX
-    if exponentX & 1 == 0 {
-      A10 = (A10 << 2) + A10;
-      A10 += A10;
+    var A10 = significand
+    if exponent.isMultiple(of: 2) {
+      A10 = (A10 << 2) + A10 // A10 * 5
+      A10 += A10             // A10 * 2
     }
     
     let dqe = Double(A10).squareRoot()
     let QE = UInt32(dqe)
     if QE * QE == A10 {
-      return Self(sign: .plus, expBitPattern: (exponentX + exponentBias) >> 1,
+      return Self(sign: .plus, expBitPattern: (exponent + exponentBias) >> 1,
                   sigBitPattern: RawBitPattern(QE))
     }
     // if exponent is odd, scale coefficient by 10
-    var scale = Int(13 - digits_x)
-    var exponent_q = exponentX + exponentBias - scale
+    var scale = Int(13 - digits)
+    var exponent_q = exponent + exponentBias - scale
     scale += (exponent_q & 1)   // exp. bias is even
     
     let CT = UInt128(power10(scale)).components.low
-    let CA = UInt64(significandX) * CT
+    let CA = UInt64(significand) * CT
     let dq = Double(CA).squareRoot()
     
     exponent_q = exponent_q >> 1  // square root of 10^x = 10^(x/2)
     
-//    status.insert(.inexact)
-
     let rndMode = rmode.raw
     var Q:UInt32
     if rndMode & 3 == 0 {
@@ -3789,7 +3732,8 @@ extension Rounding {
       case .up                     : return 0x00002
       case .towardZero             : return 0x00003
       case .toNearestOrAwayFromZero: return 0x00004
-      default: assertionFailure("Illegal rounding mode"); return 0
+      case .awayFromZero           : return 0x00000
+      @unknown default: fatalError("Unknown rounding mode")
     }
   }
   
@@ -3797,20 +3741,6 @@ extension Rounding {
     return self.raw << 2 + (lsb & 1) + (negative ? 2 : 0)
   }
 }
-
-// So we add a directive here to double-check that this is the case
-//internal func roundboundIndex(_ round:Rounding, _ negative:Bool=false,
-//                              _ lsb:Int=0) -> Int {
-//  var index = (lsb & 1) + (negative ? 2 : 0)
-//  switch round {
-//    case .toNearestOrEven: index += 0
-//    case .down: index += 4
-//    case .up: index += 8
-//    case .towardZero: index += 12
-//    default: index += 16
-//  }
-//  return index
-//}
 
 public struct Status: OptionSet, CustomStringConvertible {
   
@@ -3884,51 +3814,38 @@ public struct Status: OptionSet, CustomStringConvertible {
 
 // MARK: - Common Utility Functions
 
-internal func addDecimalPointAndExponent(_ ps:String, _ exponent:Int,
-                                         _ maxDigits:Int) -> String {
-  var digits = ps.count
-  var ps = ps
-  var exponentX = exponent
-  if exponentX == 0 {
-    if ps.count > 1 {
-      ps.insert(".", at: ps.index(ps.startIndex, offsetBy: exponentX+1))
-    }
-  } else if abs(exponentX) > maxDigits || exponentX < -6 {
-    if ps.count > 1 {
-      ps.insert(".", at: ps.index(after: ps.startIndex))
-    }
-    ps += "e"
-    if exponentX < 0 {
-      ps += "-"
-      exponentX = -exponentX
-    } else {
-      ps += "+"
-    }
-    ps += String(exponentX)
-  } else if digits <= exponentX {
+func addDPAndExponent(_ s:String, _ exp:Int, _ maxDigits:Int) -> String {
+  let dp = Locale.current.decimalSeparator ?? "."
+  let digits = s.count
+  var s = s // mutable argument
+  
+  func addDP(at pos: Int) {
+    s.insert(contentsOf: dp, at: s.index(s.startIndex, offsetBy: pos))
+  }
+  
+  if exp == 0 {
+    if digits > 1 { addDP(at: exp+1) }
+  } else if abs(exp) > maxDigits || exp < -6 {
+    let sign = exp < 0 ? "" : "+"
+    if digits > 1 { addDP(at: 1) }
+    s += "e" + sign + String(exp) // add plus sign since String suppresses it
+  } else if digits <= exp {
     // format the number without an exponent
-    while digits <= exponentX {
-      // pad the number with zeros
-      ps += "0"; digits += 1
-    }
-  } else if exponentX < 0 {
-    while exponentX < -1 {
-      // insert leading zeros
-      ps = "0" + ps; exponentX += 1
-    }
-    ps = "0." + ps
+    return s.padding(toLength: exp+1, withPad: "0", startingAt: 0)
+  } else if exp < 0 {
+    return "0" + dp + "".padding(toLength:-1-exp,withPad:"0",startingAt:0) + s
   } else {
     // insert the decimal point
-    ps.insert(".", at: ps.index(ps.startIndex, offsetBy: exponentX+1))
-    if ps.hasSuffix(".") { ps.removeLast() }
+    addDP(at: exp+1)
+    if s.hasSuffix(dp) { s.removeLast() }
   }
-  return ps
+  return s
 }
 
 // MARK: - Generic String Conversion functions
 
 /// Converts a decimal floating point number `x` into a string
-internal func string<T:IntDecimal>(from x: T) -> String {
+func string<T:IntDecimal>(from x: T) -> String {
   // unpack arguments, check for NaN or Infinity
   let (sign, exp, coeff, valid) = x.unpack()
   let s = sign == .minus ? "-" : ""
@@ -3936,31 +3853,27 @@ internal func string<T:IntDecimal>(from x: T) -> String {
     // x is not special
     let ps = String(coeff)
     let exponentX = Int(exp) - T.exponentBias + (ps.count - 1)
-    return s + addDecimalPointAndExponent(ps, exponentX, T.maximumDigits)
+    return s + addDPAndExponent(ps, exponentX, T.maximumDigits)
   } else {
     // x is Inf. or NaN or 0
     var ps = s
     if x.isNaN {
-      if x.isSNaN { ps.append("S") }
-      ps.append("NaN")
-      return ps
+      if x.isSNaN { ps += "S" }
+      return ps + "NaN"
     }
-    if x.isInfinite {
-      ps.append("Inf")
-      return ps
-    }
-    ps.append("0")
-    return ps
+    if x.isInfinite { return ps + "Inf" }
+    return ps + "0"
   }
 }
 
 /// Converts a decimal number string of the form:
-/// `[+|-] digit {digit} [. digit {digit}] [e [+|-] digit {digit} ]`
-/// to a Decimal<n> number
+/// `[+|-] [inf | nan | snan] digit {digit} [. digit {digit}]`
+/// `[e [+|-] digit {digit} ]` to a Decimal<n> number `T.maximumDigits`.
 func numberFromString<T:IntDecimal>(_ s: String, round: Rounding) -> T? {
   // keep consistent character case for "infinity", "nan", etc.
-  let eos = Character("\0")
   var ps = s.lowercased()
+  
+  let eos = Character("\0")
   var rightRadixLeadingZeros = 0
   
   func handleEmpty() -> T {
@@ -3997,13 +3910,13 @@ func numberFromString<T:IntDecimal>(_ s: String, round: Rounding) -> T? {
     return T.nan(sign, coeff ?? 0)
   }
 
-  var rdx_pt_enc = false
+  var dpPresent = false
   var significand = T.RawBitPattern(0)
 
   // detect zero (and eliminate/ignore leading zeros)
   if c == "0" || c == "." {
     if c == "." {
-      rdx_pt_enc = true
+      dpPresent = true
       c = getChar
     }
     // if all numbers are zeros (with possibly 1 radix point, the number
@@ -4013,14 +3926,14 @@ func numberFromString<T:IntDecimal>(_ s: String, round: Rounding) -> T? {
       c = getChar
       // for numbers such as 0.0000000000000000000000000000000000001001,
       // we want to count the leading zeros
-      if rdx_pt_enc {
+      if dpPresent {
         rightRadixLeadingZeros+=1
       }
       // if this character is a radix point, make sure we haven't already
       // encountered one
       if c == "." {
-        if !rdx_pt_enc {
-          rdx_pt_enc = true
+        if !dpPresent {
+          dpPresent = true
           // if this is the first radix point, and the next character is
           // NULL, we have a zero
           if ps.isEmpty {
@@ -4042,48 +3955,43 @@ func numberFromString<T:IntDecimal>(_ s: String, round: Rounding) -> T? {
 
   while c.isNumber || c == "." {
     if c == "." {
-      if rdx_pt_enc {
-        // return NaN
-        return T.nan(sign)
-      }
-      rdx_pt_enc = true
+      if dpPresent { return T.nan(sign) } // two radix points
+      dpPresent = true
       c = getChar
       continue
     }
-    if rdx_pt_enc { exponScale += 1 }
+    if dpPresent { exponScale += 1 }
 
     ndigits+=1
     if ndigits <= T.maximumDigits {
-      significand = (significand << 1) + (significand << 3)
-      significand += T.RawBitPattern(c.wholeNumberValue ?? 0)
+      significand = (significand << 1) + (significand << 3)   // * 10
+      significand += T.RawBitPattern(c.wholeNumberValue ?? 0) // + digit
     } else if ndigits == T.maximumDigits+1 {
       // coefficient rounding
       switch round {
         case .toNearestOrEven:
           midpoint = c == "5" && significand.isMultiple(of: 2)
           if c > "5" || (c == "5" && !significand.isMultiple(of: 2)) {
-            significand += 1
-            roundedUp = true
+            significand += 1; roundedUp = true
           }
         case .down:
-          if sign == .minus { significand+=1; roundedUp=true }
+          if sign == .minus { significand += 1; roundedUp = true }
         case .up:
-          if sign != .minus { significand+=1; roundedUp=true }
+          if sign == .plus  { significand += 1; roundedUp = true }
         case .toNearestOrAwayFromZero:
-          if c >= "5" { significand+=1; roundedUp=true }
-        default: break
+          if c >= "5" { significand += 1; roundedUp = true }
+        default:
+          break
       }
       if significand == T.largestNumber+1 {
         significand = (T.largestNumber+1)/10
         addExpon = 1
       }
       addExpon += 1
-    } else { // ndigits > 8
+    } else { // ndigits > T.maximumDigits+1
       addExpon += 1
       if midpoint && c > "0" {
-        significand += 1
-        midpoint = false
-        roundedUp = true
+        significand += 1; midpoint = false; roundedUp = true
       }
     }
     c = getChar
@@ -4096,45 +4004,29 @@ func numberFromString<T:IntDecimal>(_ s: String, round: Rounding) -> T? {
              sigBitPattern: T.RawBitPattern(significand))
   }
 
-  if c != "e" {
-    // return NaN
-    return T.nan(sign)
-  }
+  if c != "e" { return T.nan(sign) }
   c = getChar
 
   let sgn_expon = c == "-"
-  if c == "-" || c == "+" {
-    c = getChar
-  }
-  if c == eos || !c.isNumber {
-    // return NaN
-    return T.nan(sign)
-  }
+  if c == "-" || c == "+" { c = getChar }
+  if c == eos || !c.isNumber { return T.nan(sign) }
 
   var expon_x = 0
   while c.isNumber {
     if expon_x < (1 << 20) {
-      expon_x = (expon_x << 1) + (expon_x << 3)
-      expon_x += c.wholeNumberValue ?? 0
+      expon_x = (expon_x << 1) + (expon_x << 3) // * 10
+      expon_x += c.wholeNumberValue ?? 0        // + digit
     }
     c = getChar
   }
 
-  if c != eos {
-    // return NaN
-    return T.nan(sign)
-  }
+  if c != eos { return T.nan(sign) }
 
-  if sgn_expon {
-    expon_x = -expon_x
-  }
-
+  if sgn_expon { expon_x = -expon_x }
   expon_x += addExpon + T.exponentBias
 
   if expon_x < 0 {
-    if roundedUp {
-      significand -= 1
-    }
+    if roundedUp { significand -= 1 }
     return T.handleRounding(sign, expon_x, Int(significand),
                             roundedUp ? 1 : 0, round)
   }

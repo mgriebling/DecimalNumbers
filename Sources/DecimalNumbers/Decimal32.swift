@@ -95,7 +95,7 @@ extension Decimal32 : AdditiveArithmetic {
     lhs.subtracting(other: rhs, rounding: .toNearestOrEven)
   }
   
-  public mutating func negate() { self.bid.data.toggle(bit: ID.signBit) }
+  public mutating func negate() { bid.data.toggle(bit: ID.signBit) }
   
   public static func + (lhs: Self, rhs: Self) -> Self {
     lhs.adding(other: rhs, rounding: .toNearestOrEven)
@@ -211,7 +211,7 @@ extension Decimal32 : FloatingPoint {
   
   public static var pi: Self {
     Self(bid: ID(expBitPattern: ID.exponentBias-ID.maximumDigits+1,
-                 sigBitPattern: 3_141_593))
+                 sigBitPattern: 3_141593))
   }
   
   ///////////////////////////////////////////////////////////////////////////
@@ -384,14 +384,14 @@ extension Decimal32 : DecimalFloatingPoint {
   //  If we want them in a protocol at some future point, that protocol should
   //  be "InterchangeFloatingPoint" or "PortableFloatingPoint" or similar, and
   //  apply to IEEE 754 "interchange types".
-  /// The bit pattern of the value's encoding. A `bid` prefix indicates a
-  /// binary integer decimal encoding; while a `dpd` prefix indicates a
-  /// densely packed decimal encoding.
+  /// The bit pattern of the value's encoding. A `.bid` encoding value
+  /// indicates a binary integer decimal encoding; while a `.dpd` encoding
+  /// value indicates a densely packed decimal encoding.
   ///
-  /// The bit patterns are extracted using the `bidBitPattern` and
-  /// `dpdBitPattern` accessors. A new decimal floating point number is
-  /// created by passing an appropriate bit pattern to the
-  /// `init(bidBitPattern:)` and `init(dpdBitPattern:)` initializers.
+  /// The bit patterns are extracted using the `bitPattern` accessors with
+  /// an appropriate `encoding` argument. A new decimal floating point number
+  /// is created by passing an bit pattern to the
+  /// `init(bitPattern:encoding:)` initializers.
   /// If incorrect bit encodings are used, there are no guarantees about
   /// the resultant decimal floating point number.
   ///
@@ -399,22 +399,25 @@ extension Decimal32 : DecimalFloatingPoint {
   /// [IEEE 754 specification][spec].
   ///
   /// For example, a Decimal32 number has been created with the value "1000.3".
-  /// Using the `bidBitPattern` accessor, a 32-bit unsigned integer encoded
-  /// value of `0x32002713` is returned.  The `dpdBitPattern` returns the
-  /// 32-bit unsigned integer encoded value of `0x22404003`. Passing these
-  /// numbers to the appropriate initializer recreates the original value
+  /// Using the `bitPattern` accessor with a `.bid` encoding value, a
+  /// 32-bit unsigned integer encoded
+  /// value of `0x32002713` is returned.  The `bitPattern` with a `.dpd`
+  /// encoding value returns the 32-bit unsigned integer encoded value of
+  /// `0x22404003`. Passing these
+  /// numbers to the appropriate initialize recreates the original value
   /// "1000.3".
   ///
   /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
-  public var bidBitPattern: RawSignificand { bid.data }
-  public var dpdBitPattern: RawSignificand { bid.dpd }
-  
-  public init(bidBitPattern: RawSignificand) {
-    bid.data = bidBitPattern
+  public func bitPattern(_ encoding: DecimalEncoding) -> RawSignificand {
+    encoding == .bid ? bid.data : bid.dpd
   }
   
-  public init(dpdBitPattern: RawSignificand) {
-    bid = ID(dpd: ID.RawData(dpdBitPattern))
+  public init(bitPattern: RawSignificand, encoding: DecimalEncoding) {
+    if encoding == .bid {
+      bid.data = bitPattern
+    } else {
+      bid = ID(dpd: ID.RawData(bitPattern))
+    }
   }
   
   public var significandDigitCount: Int {

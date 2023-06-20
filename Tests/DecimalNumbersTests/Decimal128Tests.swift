@@ -35,10 +35,10 @@ final class Decimal128Tests: XCTestCase {
     XCTAssert(x.description == "345.5")
     
     let n = UInt128(0xa207_8000_0000_0000_0000_0000_0000_03d0) // DPD
-    var a = Decimal128(dpdBitPattern: Decimal128.RawSignificand(n))
+    var a = Decimal128(bitPattern:Decimal128.RawSignificand(n), encoding: .dpd)
     XCTAssert(a.description == "-7.50")
-    print(a, a.dpdBitPattern == n ? "a = n" : "a != n")
-    XCTAssert(a.dpdBitPattern == n)
+    print(a, a.bitPattern(.dpd) == n ? "a = n" : "a != n")
+    XCTAssert(a.bitPattern(.dpd) == n)
     
     print("\(x) -> digits = \(x.significandDigitCount), " +
           "bcd = \(x.significandBitPattern)")
@@ -62,10 +62,10 @@ final class Decimal128Tests: XCTestCase {
     XCTAssert(Decimal128.leastNormalMagnitude.exponent == -6143 - maxDigits + 1)
     
     let x5 = Decimal128("1000.3")
-    print(String(x5.bidBitPattern, radix: 16), x5)
-    XCTAssert(x5.bidBitPattern == 0x303e0000_00000000_00000000_00002713)
-    XCTAssert(x5.dpdBitPattern == 0x2207c000_00000000_00000000_00004003)
-    print(String(x5.dpdBitPattern, radix: 16))
+    print(String(x5.bitPattern(.bid), radix: 16), x5)
+    XCTAssert(x5.bitPattern(.bid) == 0x303e0000_00000000_00000000_00002713)
+    XCTAssert(x5.bitPattern(.dpd) == 0x2207c000_00000000_00000000_00004003)
+    print(String(x5.bitPattern(.dpd), radix: 16))
     
     a = "-21.5"; b = "305.15"
     let c = Decimal128(signOf: a, magnitudeOf: b)
@@ -129,7 +129,7 @@ final class Decimal128Tests: XCTestCase {
     func test(_ value: String, result: String) {
       testNumber += 1  
       if let n = Decimal128(value) {
-        var nstr = String(n.dpdBitPattern, radix:16)
+        var nstr = String(n.bitPattern(.dpd), radix:16)
         nstr = "".padding(toLength: result.count-nstr.count, withPad: "0", startingAt: 0) + nstr
         print("Test \(testNumber): \"\(value)\" [\(n)] = \(result.lowercased()) - \(n.floatingPointClass.description)")
 
@@ -143,7 +143,7 @@ final class Decimal128Tests: XCTestCase {
       testNumber += 1
       let n = Decimal128(value)
       print("Test \(testNumber): \(value) [\(n)] = \(result.lowercased()) - \(n.floatingPointClass.description)")
-      XCTAssertEqual(String(n.dpdBitPattern, radix:16), result.lowercased())
+      XCTAssertEqual(String(n.bitPattern(.dpd), radix:16), result.lowercased())
     }
     
     /// Check min/max values

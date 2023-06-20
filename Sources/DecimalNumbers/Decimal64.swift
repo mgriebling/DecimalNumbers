@@ -309,12 +309,47 @@ extension Decimal64 : DecimalFloatingPoint {
 
   ///////////////////////////////////////////////////////////////////////////
   // MARK: - Initializers for DecimalFloatingPoint
-  public init(bidBitPattern: RawSignificand) {
-    bid.data = bidBitPattern
+  //  Conversions to/from binary integer decimal encoding.  These are not part
+  //  of the DecimalFloatingPoint prototype because there's no guarantee that
+  //  an integer type of the same size actually exists (e.g. Decimal128).
+  //
+  //  If we want them in a protocol at some future point, that protocol should
+  //  be "InterchangeFloatingPoint" or "PortableFloatingPoint" or similar, and
+  //  apply to IEEE 754 "interchange types".
+  /// The bit pattern of the value's encoding. A `.bid` encoding value
+  /// indicates a binary integer decimal encoding; while a `.dpd` encoding
+  /// value indicates a densely packed decimal encoding.
+  ///
+  /// The bit patterns are extracted using the `bitPattern` accessors with
+  /// an appropriate `encoding` argument. A new decimal floating point number
+  /// is created by passing an bit pattern to the
+  /// `init(bitPattern:encoding:)` initializers.
+  /// If incorrect bit encodings are used, there are no guarantees about
+  /// the resultant decimal floating point number.
+  ///
+  /// The bit patterns match the decimal interchange format defined by the
+  /// [IEEE 754 specification][spec].
+  ///
+  /// For example, a Decimal32 number has been created with the value "1000.3".
+  /// Using the `bitPattern` accessor with a `.bid` encoding value, a
+  /// 32-bit unsigned integer encoded
+  /// value of `0x32002713` is returned.  The `bitPattern` with a `.dpd`
+  /// encoding value returns the 32-bit unsigned integer encoded value of
+  /// `0x22404003`. Passing these
+  /// numbers to the appropriate initialize recreates the original value
+  /// "1000.3".
+  ///
+  /// [spec]: http://ieeexplore.ieee.org/servlet/opac?punumber=4610933
+  public func bitPattern(_ encoding: DecimalEncoding) -> RawSignificand {
+    encoding == .bid ? bid.data : bid.dpd
   }
   
-  public init(dpdBitPattern: RawSignificand) {
-    bid = ID(dpd: ID.RawData(dpdBitPattern))
+  public init(bitPattern: RawSignificand, encoding: DecimalEncoding) {
+    if encoding == .bid {
+      bid.data = bitPattern
+    } else {
+      bid = ID(dpd: ID.RawData(bitPattern))
+    }
   }
   
   public init(sign: Sign, exponentBitPattern: RawExponent,
@@ -328,8 +363,6 @@ extension Decimal64 : DecimalFloatingPoint {
   
   public var significandBitPattern: UInt64 { UInt64(bid.sigBitPattern) }
   public var exponentBitPattern: UInt      { UInt(bid.expBitPattern) }
-  public var bidBitPattern: UInt64         { bid.data }
-  public var dpdBitPattern: UInt64         { bid.dpd }
   
   public var significandDigitCount: Int {
     guard bid.isValid else { return -1 }

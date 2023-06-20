@@ -5361,10 +5361,10 @@ final class Decimal32Tests: XCTestCase {
     XCTAssert(x.description == "345.5")
     
     let n = UInt(0xA23003D0)
-    var a = Decimal32(dpdBitPattern: Decimal32.RawSignificand(n))
+    var a = Decimal32(bitPattern: Decimal32.RawSignificand(n), encoding: .dpd)
     XCTAssert(a.description == "-7.50")
-    print(a, a.dpdBitPattern == n ? "a = n" : "a != n")
-    XCTAssert(a.dpdBitPattern == n)
+    print(a, a.bitPattern(.dpd) == n ? "a = n" : "a != n")
+    XCTAssert(a.bitPattern(.dpd) == n)
     
     print("\(x) -> digits = \(x.significandDigitCount), " +
           "bcd = \(x.significandBitPattern)")
@@ -5388,10 +5388,10 @@ final class Decimal32Tests: XCTestCase {
     XCTAssert(Decimal32.leastNormalMagnitude.exponent == -95 - maxDigits + 1)
     
     let x5 = Decimal32("1000.3")
-    print(String(x5.bidBitPattern, radix: 16), x5)
-    XCTAssert(x5.bidBitPattern == 0x32002713)
-    XCTAssert(x5.dpdBitPattern == 0x22404003)
-    print(String(x5.dpdBitPattern, radix: 16))
+    print(String(x5.bitPattern(.bid), radix: 16), x5)
+    XCTAssert(x5.bitPattern(.bid) == 0x32002713)
+    XCTAssert(x5.bitPattern(.dpd) == 0x22404003)
+    print(String(x5.bitPattern(.dpd), radix: 16))
     
     a = "-21.5"; b = "305.15"
     let c = Decimal32(signOf: a, magnitudeOf: b)
@@ -5471,7 +5471,7 @@ final class Decimal32Tests: XCTestCase {
     func test(_ value: String, result: String) {
       testNumber += 1
       let n = Decimal32(stringLiteral: value)
-      var ns = String(n.dpdBitPattern, radix: 16, uppercase: true)
+      var ns = String(n.bitPattern(.dpd), radix: 16, uppercase: true)
       ns = String(repeating: "0", count: 8-ns.count) + ns
       print("Test \(testNumber): \"\(value)\" [\(ns)] = \(result.uppercased())")
             // - \(n.numberClass.description)")
@@ -5481,7 +5481,7 @@ final class Decimal32Tests: XCTestCase {
     func test(_ value: Int, result : String) {
       testNumber += 1
       let n = Decimal32(value)
-      let ns = String(n.dpdBitPattern, radix: 16, uppercase: true)
+      let ns = String(n.bitPattern(.dpd), radix: 16, uppercase: true)
       print("Test \(testNumber): \(value) [\(ns)] = \(result.uppercased())")
             // - \(n.numberClass.description)")
       XCTAssertEqual(ns, result.uppercased())

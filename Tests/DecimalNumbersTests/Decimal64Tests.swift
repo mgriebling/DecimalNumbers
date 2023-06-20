@@ -35,10 +35,10 @@ final class Decimal64Tests: XCTestCase {
     XCTAssert(x.description == "345.5")
     
     let n = UInt64(0xA2300000000003D0)
-    var a = Decimal64(dpdBitPattern: Decimal64.RawSignificand(n))
+    var a = Decimal64(bitPattern: Decimal64.RawSignificand(n), encoding: .dpd)
     XCTAssert(a.description == "-7.50")
-    print(a, a.dpdBitPattern == n ? "a = n" : "a != n")
-    XCTAssert(a.dpdBitPattern == n)
+    print(a, a.bitPattern(.dpd) == n ? "a = n" : "a != n")
+    XCTAssert(a.bitPattern(.dpd) == n)
     
     print("\(x) -> digits = \(x.significandDigitCount), " +
           "bcd = \(x.significandBitPattern)")
@@ -62,10 +62,10 @@ final class Decimal64Tests: XCTestCase {
     XCTAssert(Decimal64.leastNormalMagnitude.exponent == -383 - maxDigits + 1)
     
     let x5 = Decimal64("1000.3")
-    print(String(x5.bidBitPattern, radix: 16), x5)
-    XCTAssert(x5.bidBitPattern == 0x31a0000000002713)
-    XCTAssert(x5.dpdBitPattern == 0x2234000000004003)
-    print(String(x5.dpdBitPattern, radix: 16))
+    print(String(x5.bitPattern(.bid), radix: 16), x5)
+    XCTAssert(x5.bitPattern(.bid) == 0x31a0000000002713)
+    XCTAssert(x5.bitPattern(.dpd) == 0x2234000000004003)
+    print(String(x5.bitPattern(.dpd), radix: 16))
     
     a = "-21.5"; b = "305.15"
     let c = Decimal64(signOf: a, magnitudeOf: b)
@@ -130,7 +130,7 @@ final class Decimal64Tests: XCTestCase {
       testNumber += 1
       if let n = Decimal64(value) {
         print("Test \(testNumber): \"\(value)\" [\(n)] = \(result.lowercased()) - \(n.floatingPointClass.description)")
-        var nstr = String(n.dpdBitPattern, radix:16)
+        var nstr = String(n.bitPattern(.dpd), radix:16)
         nstr = "".padding(toLength: result.count-nstr.count, withPad: "0", startingAt: 0) + nstr
 
         XCTAssertEqual(nstr, result.lowercased())
@@ -143,7 +143,7 @@ final class Decimal64Tests: XCTestCase {
       testNumber += 1
       let n = Decimal64(value)
       print("Test \(testNumber): \(value) [\(n)] = \(result.lowercased()) - \(n.floatingPointClass.description)")
-      XCTAssertEqual(String(n.dpdBitPattern, radix:16), result.lowercased())
+      XCTAssertEqual(String(n.bitPattern(.dpd), radix:16), result.lowercased())
     }
     
     /// Check min/max values
@@ -388,8 +388,8 @@ final class Decimal64Tests: XCTestCase {
 
   func test1() throws {
       for t in tests1 {
-        XCTAssertEqual(Decimal64(dpdBitPattern: t.input), Decimal64(stringLiteral: t.result))
-        XCTAssertEqual(Decimal64(dpdBitPattern: t.input).description, t.result)
+        XCTAssertEqual(Decimal64(bitPattern: t.input, encoding: .dpd), Decimal64(stringLiteral: t.result))
+        XCTAssertEqual(Decimal64(bitPattern: t.input, encoding: .dpd).description, t.result)
       }
   }
   
@@ -413,9 +413,9 @@ final class Decimal64Tests: XCTestCase {
 
   func test2() {
     for t in tests1a {
-      XCTAssertEqual(Decimal64(dpdBitPattern:t.input), Decimal64(stringLiteral: t.result))
-      XCTAssertEqual(Decimal64(dpdBitPattern:t.input).description, t.result)
-      XCTAssertFalse(Decimal64(dpdBitPattern:t.input).isNaN)
+      XCTAssertEqual(Decimal64(bitPattern:t.input, encoding: .dpd), Decimal64(stringLiteral: t.result))
+      XCTAssertEqual(Decimal64(bitPattern:t.input, encoding: .dpd).description, t.result)
+      XCTAssertFalse(Decimal64(bitPattern:t.input, encoding: .dpd).isNaN)
     }
   }
 
@@ -432,9 +432,9 @@ final class Decimal64Tests: XCTestCase {
 
   func test3() {
       for t in tests2a {
-        XCTAssertEqual(Decimal64(dpdBitPattern:t.input), Decimal64(stringLiteral: t.result))
-        XCTAssertEqual(Decimal64(dpdBitPattern:t.input).description, t.result)
-        XCTAssertFalse(Decimal64(dpdBitPattern:t.input).isNaN)
+        XCTAssertEqual(Decimal64(bitPattern:t.input, encoding: .dpd), Decimal64(stringLiteral: t.result))
+        XCTAssertEqual(Decimal64(bitPattern:t.input, encoding: .dpd).description, t.result)
+        XCTAssertFalse(Decimal64(bitPattern:t.input, encoding: .dpd).isNaN)
       }
   }
 
@@ -451,7 +451,7 @@ final class Decimal64Tests: XCTestCase {
 
   func test4() {
       for t in tests3a {
-        let bd = Decimal64(dpdBitPattern:t.input)
+        let bd = Decimal64(bitPattern:t.input, encoding: .dpd)
         XCTAssertTrue(bd.isInfinite || bd.isNaN)
       }
   }
@@ -475,10 +475,10 @@ final class Decimal64Tests: XCTestCase {
     
     // basic DPD to BID conversion and BID to DPD
     let n = UInt64(0xA2300000000003D0)
-    let a = Decimal64(dpdBitPattern: n)
+    let a = Decimal64(bitPattern: n, encoding: .dpd)
     XCTAssert(a.description == "-7.50")
-    print(a, a.dpdBitPattern == n ? "a = n" : "a != n")
-    XCTAssert(a.dpdBitPattern == n)
+    print(a, a.bitPattern(.dpd) == n ? "a = n" : "a != n")
+    XCTAssert(a.bitPattern(.dpd) == n)
     
     let d32 = Decimal64("1000.1234"); print(d32, String(d32.bid.data,radix:16))
     let d64 = Decimal64(d32); print(d64, String(d64.bid.data,radix:16))
