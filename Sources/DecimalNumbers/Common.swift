@@ -163,9 +163,6 @@ extension IntDecimal {
   
   static var trailingPattern: Int { 0x3ff }
   
-  // Default rounding mode used by most methods
-  // static var rounding: Rounding { .toNearestOrEven }
-  
   public init?(_ s: String, rounding rule: Rounding = .toNearestOrEven) {
     self.init(0)
     if let n:Self = numberFromString(s, round: rule) { data = n.data }
@@ -235,9 +232,10 @@ extension IntDecimal {
         let extraDigits = -exp
         mant += RawBitPattern(roundConstTable(roundIndex, extraDigits))
         
-        let Q = mul64x64to128(UInt64(mant), reciprocals10(extraDigits))
+        //var Q = UInt128()
+        let Q = UInt64(mant).multipliedFullWidth(by:reciprocals10(extraDigits))
         let amount = shortReciprocalScale[extraDigits]
-        var C64 = Q.components.high >> amount
+        var C64 = Q.high >> amount
         var remainder_h = UInt128.High(0)
         if rmode == .toNearestOrAwayFromZero {
           if !C64.isMultiple(of: 2) {
@@ -245,8 +243,8 @@ extension IntDecimal {
             let amount2 = 64 - amount
             remainder_h &-= 1  // decrement without overflow check
             remainder_h >>= amount2
-            remainder_h &= Q.components.high
-            if remainder_h==0 && Q.components.low<reciprocals10(extraDigits) {
+            remainder_h &= Q.high
+            if remainder_h==0 && Q.low < reciprocals10(extraDigits) {
               C64 -= 1
             }
           }
@@ -478,19 +476,23 @@ extension IntDecimal {
     return (data & infinite != infinite)
   }
   
+  @inlinable
   var isSpecial: Bool {
     data.get(range: Self.specialBits) == Self.specialPattern
   }
   
+  @inlinable
   var isNaNInf: Bool {
     nanBits & Self.nanPattern == Self.infinitePattern<<1
   }
   
+  @inlinable
   var isInfinite: Bool {
     let data = data.getInt(range: Self.infBitRange)
     return (data & Self.infinitePattern) == Self.infinitePattern
   }
   
+  @inlinable
   var isValid: Bool {
     if isNaN { return false }
     if isSpecial {
@@ -521,8 +523,8 @@ extension IntDecimal {
     }
   }
   
+  /// if exponent < `minEncodedExponent`, the number may be subnormal
   private func checkNormalScale(_ exp: Int, _ mant: RawBitPattern) -> Bool {
-    // if exponent is less than -95, the number may be subnormal
     if exp < Self.minEncodedExponent+Self.maximumDigits-1 {
       let tenPower = _power(RawBitPattern(10), to: exp)
       let mantPrime = mant * tenPower
@@ -586,8 +588,8 @@ extension IntDecimal {
   var quantum: Self {
     if self.isInfinite { return Self.infinite() }
     if self.isNaN { return Self.nan() }
-    let exp = self.expBitPattern - Self.exponentBias
-    return Self(RawData(exp << 23 + 0x3280_0001))
+    let exp = self.expBitPattern
+    return Self(sign: .plus, expBitPattern: exp, sigBitPattern: 1)
   }
   
   /// Convert `self` to a DPD number.
@@ -714,11 +716,11 @@ extension IntDecimal {
         }
       } else if a <= 48 {
         var pow5 = Self.coefflimitsBID32(a)
-        cint = cint >> t  // srl128(cint.hi, cint.low, t)
-        if cint <= pow5 { // le128(cint.hi, cint.low, pow5.hi, pow5.low) {
+        cint = cint >> t
+        if cint <= pow5 {
           var cc = cint
           pow5 = power5(a)
-          cc = mul128x128Low(cc, pow5)
+          (cc, _) = cc.multipliedReportingOverflow(by: pow5)
           return Self(sign: s, expBitPattern: exponentBias-a,
                       sigBitPattern: RawBitPattern(cc.components.low))
         }
@@ -912,12 +914,12 @@ extension IntDecimal {
       c += Int(roundConstTable(roundIndex, extra_digits))
       
       // get coeff*(2^M[extra_digits])/10^extra_digits
-      let Q = mul64x64to128(UInt64(c), reciprocals10(extra_digits))
-      
+      let Q = UInt64(c).multipliedFullWidth(by: reciprocals10(extra_digits))
+
       // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-128
       let amount = shortReciprocalScale[extra_digits]
       
-      var _C64 = Q.components.high >> amount
+      var _C64 = Q.high >> amount
       var remainder_h = UInt64(0)
       
       if r == .toNearestOrAwayFromZero {
@@ -930,10 +932,10 @@ extension IntDecimal {
           remainder_h = 0
           remainder_h &-= 1
           remainder_h >>= amount2
-          remainder_h = remainder_h & Q.components.high
+          remainder_h = remainder_h & Q.high
           
           if remainder_h == 0 &&
-              Q.components.low < reciprocals10(extra_digits) {
+              Q.low < reciprocals10(extra_digits) {
             _C64 -= 1
           }
         }
@@ -1032,8 +1034,9 @@ extension IntDecimal {
       // kx ~= 10^(-x), kx = bid_Kx64[ind] * 2^(-Ex), 0 <= ind <= 16
       // P128 = (C + 1/2 * 10^x) * kx * 2^Ex = (C + 1/2 * 10^x) * Kx
       // the approximation kx of 10^(-x) was rounded up to 64 bits
-      var P128 = UInt128().components
-      P128 = mul64x64to128(C, bid_Kx64(ind)).components
+      // var P128 = UInt128().components
+      let P128 = C.multipliedFullWidth(by:  bid_Kx64(ind))
+
       // calculate C* = floor (P128) and f*
       // Cstar = P128 >> Ex
       // fstar = low Ex bits of P128
@@ -1128,8 +1131,8 @@ extension IntDecimal {
       // (because the largest value is 99999999999999999999999999999999999999+
       // 5000000000000000000000000000000000000 =
       // 0x4efe43b0c573e7e68a043d8fffffffff, which fits is 127 bits)
-      var ind = x - 1;    // 0 <= ind <= 36
-      if (ind <= 18) {    // if 0 <= ind <= 18
+      var ind = x - 1    // 0 <= ind <= 36
+      if ind <= 18 {    // if 0 <= ind <= 18
         let tmp64 = C.low
         C.low = C.low + bid_midpoint64(ind)
         if (C.low < tmp64) { C.high+=1 }
@@ -1142,7 +1145,9 @@ extension IntDecimal {
       // kx ~= 10^(-x), kx = bid_Kx128[ind] * 2^(-Ex), 0 <= ind <= 36
       // P256 = (C + 1/2 * 10^x) * kx * 2^Ex = (C + 1/2 * 10^x) * Kx
       // the approximation kx of 10^(-x) was rounded up to 128 bits
-      mul128x128to256(&P256, UInt128(high: C.high, low: C.low), bid_Kx128(ind))
+      let (h, l) = UInt128(high: C.high, low: C.low).multipliedFullWidth(by: bid_Kx128(ind))
+      P256 = UInt256(w: [l.components.low, l.components.high,
+                         h.components.low, h.components.high])
       // calculate C* = floor (P256) and f*
       // Cstar = P256 >> Ex
       // fstar = low Ex bits of P256
@@ -1453,70 +1458,18 @@ extension IntDecimal {
     return UInt64(UInt128(1) << twoPower / power10(i)) + 1
   }
   
-  static func mul128x128Low(_ A:UInt128, _ B:UInt128) -> UInt128 {
-    // var ALBL = UInt128()
-    let a = A.components, b = B.components
-    let ALBL = mul64x64to128(a.low, b.low)
-    let QM64 = b.low*a.high + a.low*b.high
-    return UInt128(high: QM64 + ALBL.components.high, low: ALBL.components.low)
-  }
-  
-  static func mul64x64to128(_ CX:UInt64, _ CY:UInt64) -> UInt128 {
-    let res = CX.multipliedFullWidth(by: CY)
-    return UInt128(high: res.high, low: res.low)
-  }
-  
-  static func mul64x128Low(_ A:UInt64, _ B:UInt128) -> UInt128 {
-    let B = B.components
-    let ALBH = mul64x64to128(A, B.high)
-    let ALBL = mul64x64to128(A, B.low).components
-    let QM2 = add_128_64(ALBH, ALBL.high).components
-    return UInt128(high: QM2.low, low: ALBL.low)
-  }
-  
-  static func mul128x64to128(_ A64:UInt64, _ B128:UInt128) -> UInt128 {
-    let ALBH_L = A64 * B128.components.high
-    var Q128 = mul64x64to128(A64, B128.components.low)
-    Q128.components.high += ALBH_L
-    return Q128
-  }
-  
   static internal func mul64x256to320(_ P:inout UInt384, _ A:UInt64,
                                       _ B:UInt256) {
     var lC = false
-    let lP0 = mul64x64to128(A, B.w[0]).components
-    let lP1 = mul64x64to128(A, B.w[1]).components
-    let lP2 = mul64x64to128(A, B.w[2]).components
-    let lP3 = mul64x64to128(A, B.w[3]).components
+    let lP0 = A.multipliedFullWidth(by: B.w[0])
+    let lP1 = A.multipliedFullWidth(by: B.w[1])
+    let lP2 = A.multipliedFullWidth(by: B.w[2])
+    let lP3 = A.multipliedFullWidth(by: B.w[3])
     P.w[0] = lP0.low
-    (P.w[1],lC) = add(lP1.low,lP0.high)
+    (P.w[1],lC) = lP1.low.addingReportingOverflow(lP0.high)
     (P.w[2],lC) = add(lP2.low,lP1.high,lC)
     (P.w[3],lC) = add(lP3.low,lP2.high,lC)
     P.w[4] = lP3.high + (lC ? 1 : 0)
-  }
-  
-  static internal func mul128x128to256(_ P256: inout UInt256, _ A:UInt128,
-                                       _ B:UInt128) {
-    let (hi, lo) = A.multipliedFullWidth(by: B)
-    P256.w[0] = lo.components.low
-    P256.w[1] = lo.components.high
-    P256.w[2] = hi.components.low
-    P256.w[3] = hi.components.high
-  }
-  
-  static func mul128x128Full(_ Qh:inout UInt128, _ Ql:inout UInt128,
-                             _ A:UInt128, _ B:UInt128) {
-    let A = A.components, B = B.components
-    let ALBH = mul64x64to128(A.low, B.high)
-    let AHBL = mul64x64to128(B.low, A.high)
-    let ALBL = mul64x64to128(A.low, B.low)
-    let AHBH = mul64x64to128(A.high, B.high)
-    
-    let QM = add_128_128(ALBH, AHBL)
-    // Ql.components.low = ALBL.components.low
-    let QM2 = add_128_64(QM, ALBL.components.high)
-    Qh = add_128_64(AHBH, QM2.components.high)
-    Ql.components = (QM2.components.low, ALBL.components.low)
   }
   
   // 128x256->384 bit multiplication (missing from existing macros)
@@ -1528,32 +1481,11 @@ extension IntDecimal {
     mul64x256to320(&P0, A.components.low, B)
     mul64x256to320(&P1, A.components.high, B)
     P.w[0] = P0.w[0]
-    (P.w[1],CY) = add(P1.w[0],P0.w[1])
+    (P.w[1],CY) = P1.w[0].addingReportingOverflow(P0.w[1])
     (P.w[2],CY) = add(P1.w[1],P0.w[2],CY)
     (P.w[3],CY) = add(P1.w[2],P0.w[3],CY)
     (P.w[4],CY) = add(P1.w[3],P0.w[4],CY)
     P.w[5] = P1.w[4] + (CY ? 1 : 0)
-  }
-  
-  // add 64-bit value to 128-bit
-  static func add_128_64(_ A128:UInt128, _ B64:UInt64) -> UInt128 {
-    var R64H = A128.components.high
-    let R128low = B64 &+ A128.components.low
-    if R128low < B64 {
-      R64H += 1
-    }
-    return UInt128(high: R64H, low: R128low)
-  }
-  
-  // add 128-bit value to 128-bit
-  // assume no carry-out
-  static func add_128_128(_ A128:UInt128, _ B128:UInt128) -> UInt128 {
-    var hi = A128.components.high &+ B128.components.high
-    let lo = B128.components.low  &+ A128.components.low
-    if lo < B128.components.low {
-      hi &+= 1
-    }
-    return UInt128(high: hi, low: lo)
   }
   
   // bid_shiftright128[] contains the right shift count to obtain C2* from
@@ -1610,13 +1542,9 @@ extension IntDecimal {
   static func bid_mask128(_ i: Int) -> UInt64 {
     (UInt64(1) << bid_Ex128m128[i-1]) - 1
   }
-  
-  @inlinable static func add(_ X:UInt64, _ Y:UInt64) -> (UInt64, Bool) {
-    X.addingReportingOverflow(Y)
-  }
 
-  @inlinable static func add(_ X:UInt64, _ Y:UInt64, _ CI:Bool) ->
-                                                            (UInt64, Bool)  {
+  @inlinable
+  static func add(_ X:UInt64, _ Y:UInt64, _ CI:Bool) -> (UInt64, Bool)  {
     let (x1, over1) = X.addingReportingOverflow(CI ? 1 : 0)
     let (s , over2) = x1.addingReportingOverflow(Y)
     return (s, over1 || over2)
@@ -1969,7 +1897,8 @@ extension IntDecimal {
     }
     
     if n_digits <= maximumDigits {
-      return Self(sign: signA, expBitPattern: exponentB, sigBitPattern: RawBitPattern(P))
+      return Self(sign: signA, expBitPattern: exponentB,
+                  sigBitPattern: RawBitPattern(P))
     }
     
     let extra_digits = n_digits - maximumDigits
@@ -1982,21 +1911,14 @@ extension IntDecimal {
     // add a constant to P, depending on rounding mode
     // 0.5*10^(digits_p - 16) for round-to-nearest
     P += roundConstTable(irmode, extra_digits)
-    //var Tmp = UInt128()
-    let Tmp = mul64x64to128(P, reciprocals10(extra_digits))
-    // __mul_64x64_to_128(&Tmp, P, bid_reciprocals10_64(extra_digits))
+    let Tmp = P.multipliedFullWidth(by:  reciprocals10(extra_digits))
     
     // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-64
     let amount = shortReciprocalScale[extra_digits]
-    var Q = Tmp.components.high >> amount
+    var Q = Tmp.high >> amount
     
     // remainder
     let R = P - Q * power10(extra_digits)
-//    if R == ID.roundConstTable(irmode, extra_digits) {
-//      status = []
-//    } else {
-//      status.insert(.inexact)
-//    }
     
     if rounding == .toNearestOrEven {
       if R == 0 {
@@ -2014,18 +1936,10 @@ extension IntDecimal {
     // unpack arguments, check for NaN or Infinity
     let sign = signX != signY ? Sign.minus : .plus
     if !validX {
-//      if y.isSNaN {
-//        // y is sNaN
-//        status.insert(.invalidOperation)
-//      }
       // x is Inf. or NaN
       
       // test if x is NaN
       if x.isNaN {
-//        if x.isSNaN {   // sNaN
-//          status.insert(.invalidOperation)
-//          // __set_status_flags (pfpsf, BID_INVALID_EXCEPTION);
-//        }
         return Self.nanQuiet(significandX)
       }
       // x is Infinity?
@@ -2046,12 +1960,6 @@ extension IntDecimal {
       }
       // x is 0
       if !y.isInfinite {
-//        if (y & SPECIAL_ENCODING_MASK32) == SPECIAL_ENCODING_MASK32 {
-//          exponentY = Int(UInt32(y >> 21)) & 0xff
-//        } else {
-//          exponentY = Int(UInt32(y >> 23)) & 0xff
-//        }
-//        sign_y = y & SIGN_MASK32
         exponentX += exponentY - exponentBias
         if exponentX > maxEncodedExponent {
           exponentX = maxEncodedExponent
@@ -2065,10 +1973,6 @@ extension IntDecimal {
       // y is Inf. or NaN
       // test if y is NaN
       if y.isNaN {
-//        if y.isSNaN {
-//          // sNaN
-//          status.insert(.invalidOperation)
-//        }
         return Self.nanQuiet(significandY)
       }
       // y is Infinity?
@@ -2122,22 +2026,14 @@ extension IntDecimal {
     // add a constant to P, depending on rounding mode
     // 0.5*10^(digits_p - 16) for round-to-nearest
     P += RawBitPattern(roundConstTable(rmode1, extra_digits))
-    let Tmp = mul64x64to128(UInt64(P), reciprocals10(extra_digits))
-    
+    let Tmp = UInt64(P).multipliedFullWidth(by: reciprocals10(extra_digits))
+
     // now get P/10^extra_digits: shift Q_high right by M[extra_digits]-64
     let amount = shortReciprocalScale[extra_digits]
-    var Q = RawBitPattern(Tmp.components.high) >> amount
+    var Q = RawBitPattern(Tmp.high) >> amount
     
     // remainder
     let R = P - Q * power10(extra_digits)
-    
-//    if R == roundConstTable[rmode1][extra_digits] {
-//      status = []
-//    } else {
-//      status.insert(.inexact)
-//    }
-    
-    // __set_status_flags (pfpsf, status);
     if rmode1 == 0 {    //BID_ROUNDING_TO_NEAREST
       if R == 0 {
         Q.clear(bit: 0) // Q &= 0xffff_fffe
@@ -2157,7 +2053,6 @@ extension IntDecimal {
       }
     }
     return Self(adjustOverflowUnderflow(sign, exponentX, Q, rmode))
-    // return get_BID32_UF (signX^sign_y, Int(exponentX), Q, Int(R), rmode)
   }
   
   /**
@@ -2195,16 +2090,8 @@ extension IntDecimal {
     // unpack arguments, check for NaN or Infinity
     let sign = signX != signY ? Sign.minus : .plus
     if !validX {
-      // x is Inf. or NaN
-      //          if (y & SNAN_MASK32) == SNAN_MASK32 {   // y is sNaN
-      //              status.insert(.invalidOperation)
-      //          }
-      
       // test if x is NaN
       if x.isNaN {
-        //              if (x & SNAN_MASK32) == SNAN_MASK32 {    // sNaN
-        //                  status.insert(.invalidOperation)
-        //              }
         return Self.nanQuiet(significandX)
       }
       
@@ -2229,12 +2116,6 @@ extension IntDecimal {
         return nan()
       }
       if !y.isInfinite {
-//        if (y & SPECIAL_ENCODING_MASK32) == SPECIAL_ENCODING_MASK32 {
-//          exponentY = Int((UInt32(y >> 21)) & 0xff)
-//        } else {
-//          exponentY = Int((UInt32(y >> 23)) & 0xff)
-//          sign_y = y & SIGN_MASK32
-//        }
         exponentX = exponentX - exponentY + exponentBias
         if exponentX > maxEncodedExponent {
           exponentX = maxEncodedExponent
@@ -2242,7 +2123,6 @@ extension IntDecimal {
           exponentX = 0
         }
         return Self(sign: sign, expBitPattern: exponentX, sigBitPattern: 0)
-        //  UInt32(signX ^ sign_y) | UInt32(exponentX) << 23
       }
       
     }
@@ -2250,10 +2130,6 @@ extension IntDecimal {
       // y is Inf. or NaN
       // test if y is NaN
       if y.isNaN {
-//        if (y & SNAN_MASK32) == SNAN_MASK32 {
-//          // sNaN
-//          status.insert(.invalidOperation)
-//        }
         return Self.nanQuiet(significandY)
       }
       
@@ -2304,7 +2180,6 @@ extension IntDecimal {
       // exact result ?
       if R == 0 {
         return Self(Self.adjustOverflowUnderflow(sign, diff_expon, Q, rmode))
-        //get_BID32 (signX ^ sign_y, diff_expon, Q, rmode)
       }
       // get decimal digits of Q
       var DU = UInt32(bid_power10_index_binexp(bin_expon_cx)) - UInt32(Q) - 1
@@ -2370,9 +2245,6 @@ extension IntDecimal {
           if digit_h.isMultiple(of: 1000) { nzeros += 3 }
           else if digit_h.isMultiple(of: 100) { nzeros += 2 }
           else if digit_h.isMultiple(of: 10) { nzeros += 1 }
-//          nzeros += Int(3 & UInt32(
-//            bid_packed_10000_zeros[Int(digit_h >> 3)] >> (digit_h & 7)))
-//          nzeros += Int(3 & UInt32(bid_packed_10000_zeros[Int(digit_h >> 3)] >> (digit_h & 7)))
         }
         
         if nzeros != 0 {
@@ -2387,7 +2259,6 @@ extension IntDecimal {
       }
       if diff_expon >= 0 {
         return Self(Self.adjustOverflowUnderflow(sign, diff_expon, Q, rmode))
-        //get_BID32 (sign, diff_expon, Q, rmode)
       }
     }
     
@@ -2416,15 +2287,9 @@ extension IntDecimal {
           Q+=1
       }
       return Self(Self.adjustOverflowUnderflow(sign, diff_expon, Q, rmode))
-      //get_BID32 (sign, diff_expon, Q, rmode)
     } else {
       // UF occurs
-//      if diff_expon + 7 < 0 {
-//        // set status flags
-//        status.insert(.inexact)
-//      }
       return Self(Self.adjustOverflowUnderflow(sign, diff_expon, Q, rmode))
-      // return get_BID32_UF(sign, diff_expon, UInt64(Q), Int(R), rmode)
     }
   }
 
@@ -2434,41 +2299,22 @@ extension IntDecimal {
     
     // unpack arguments, check for NaN or Infinity
     if !validX {
-      // x is Inf. or NaN or 0
-      //          if ((y & SNAN_MASK32) == SNAN_MASK32) {   // y is sNaN
-      //              pfpsf.insert(.invalidOperation)
-      //          }
-      
       // test if x is NaN
       if x.isNaN {
-        //              if (x & SNAN_MASK32) == SNAN_MASK32 {
-        //                  pfpsf.insert(.invalidOperation)
-        //              }
         return Self.nanQuiet(significandX)
       }
       // x is Infinity?
       if x.isInfinite {
         if !y.isNaN {
-          // pfpsf.insert(.invalidOperation)
-          // return NaN
           return nan() // 0x7c000000
         }
       }
       // x is 0
       // return x if y != 0
       if !y.isInfinite && significandY != 0 {
-//        if (y & 0x60000000) == 0x60000000 {
-//          exponentY = Int(y >> 21) & 0xff;
-//        } else {
-//          exponentY = Int(y >> 23) & 0xff;
-//        }
-//
         if exponentY < exponentX {
           exponentX = exponentY
         }
-        
-//        var x = UInt32(exponentX)
-//        x <<= 23
         return Self(sign: signX, expBitPattern: exponentX, sigBitPattern: 0)
       }
       
@@ -2478,18 +2324,14 @@ extension IntDecimal {
       
       // test if y is NaN
       if y.isNaN {
-//        if (((y & SNAN_MASK32) == SNAN_MASK32)) {
-//          pfpsf.insert(.invalidOperation)
-//        }
         return Self.nanQuiet(significandY)
       }
       // y is Infinity?
       if y.isInfinite {
-        return Self(sign: signX, expBitPattern: exponentX, sigBitPattern: significandX)
-        // (signX, exponentX, significandX)
+        return Self(sign: signX, expBitPattern: exponentX,
+                    sigBitPattern: significandX)
       }
       // y is 0, return NaN
-      //pfpsf.insert(.invalidOperation)
       return nan() // 0x7c000000
     }
     
@@ -2516,8 +2358,7 @@ extension IntDecimal {
       let R2 = R + R
       if R2 > CY || (R2 == CY && (Q & 1) != 0) {
         R = CY - R
-        signX = signX.toggle // == .minus ? .plus : .minus
-        // signX ^= 0x80000000
+        signX = signX.toggle
       }
       
       return Self(sign: signX, expBitPattern: exponentX, sigBitPattern: R)
@@ -2530,10 +2371,6 @@ extension IntDecimal {
       let tempx = Float(CX)
       let bin_expon = tempx.exponent
       let digits_x = estimateDecDigits(bin_expon)
-      // will not use this test, dividend will have 18 or 19 digits
-      //if(CX >= power10[digits_x].lo)
-      //      digits_x++;
-      
       var e_scale = Int(18 - digits_x)
       if (diff_expon >= e_scale) {
         diff_expon -= e_scale;
@@ -2560,10 +2397,10 @@ extension IntDecimal {
     let R2 = significandX + significandX
     if R2 > significandY || (R2 == significandY && (Q64 & 1) != 0) {
       significandX = significandY - significandX
-      signX = signX.toggle // == .minus ? .plus : .minus // signX ^= 0x80000000
+      signX = signX.toggle
     }
     
-    return Self(sign: signX, expBitPattern: exponentY, sigBitPattern: significandX)
+    return Self(sign:signX,expBitPattern:exponentY,sigBitPattern:significandX)
   }
   
   /***************************************************************************
@@ -2589,21 +2426,12 @@ extension IntDecimal {
     let signxy = sign_x != sign_y ? Sign.minus : .plus
     if !valid_x || !valid_y || !valid_z {
       if y.isNaN {
-//        if isSNaN(x) || isSNaN(y) || isSNaN(z) { // sNaN
-//          pfpsf.insert(.invalidOperation)
-//        }
         return Self.nanQuiet(significandY)
       }
       if z.isNaN {
-//        if isSNaN(x) || isSNaN(z) {
-//          pfpsf.insert(.invalidOperation)
-//        }
         return Self.nanQuiet(significandZ)
       }
       if x.isNaN {
-//        if isSNaN(x) {
-//          pfpsf.insert(.invalidOperation)
-//        }
         return Self.nanQuiet(significandX)
       }
       
@@ -2614,27 +2442,21 @@ extension IntDecimal {
           // check if y is 0
           if significandY == 0 {
             // y==0, return NaN
-//            if (z & SNAN_MASK) != NAN_MASK {
-//              pfpsf.insert(.invalidOperation)
-//            }
-            return nan() // NAN_MASK
+            return nan()
           }
           // test if z is Inf of oposite sign
           if z.isNaNInf && signxy != sign_z {
             // return NaN
-//            pfpsf.insert(.invalidOperation)
-            return nan() // NAN_MASK
+            return nan()
           }
           // otherwise return +/-Inf
-          return Self.infinite(signxy) //((x ^ y) & SIGN_MASK) | INFINITY_MASK
+          return Self.infinite(signxy)
         }
         // x is 0
         if !y.isInfinite && !z.isInfinite {
           if significandZ != 0 {
             exponent_y = exponent_x - exponentBias + exponent_y
-            
-            // let sign_z = z & SIGN_MASK
-            
+   
             if exponent_y >= exponent_z {
               return z
             }
@@ -2658,15 +2480,12 @@ extension IntDecimal {
             return nan() // NAN_MASK
           }
           // otherwise return +/-Inf
-          return Self.infinite(signxy)  //(((x ^ y) & SIGN_MASK) | INFINITY_MASK)
+          return Self.infinite(signxy)
         }
         // y is 0
         if !z.isInfinite {
           if significandZ != 0 {
             exponent_y += exponent_x - exponentBias
-            
-            // let sign_z = z & SIGN_MASK
-            
             if exponent_y >= exponent_z {
               return z
             }
@@ -2683,7 +2502,7 @@ extension IntDecimal {
           return Self.nanQuiet(significandZ)
         }
         // z is 0, return x*y
-        if (significandX == 0) || (significandY == 0) {
+        if significandX == 0 || significandY == 0 {
           //0+/-0
           let exp: Int
           var sign = Sign.plus
@@ -2822,11 +2641,10 @@ extension IntDecimal {
     // get P*(2^M[extra_digits])/10^extra_digits
     var Q_high = UInt128(), Q_low = UInt128(), C128 = UInt128()
     (Q_high, Q_low) = P.multipliedFullWidth(by: reciprocals10(extra_digits))
-    // mul_128x128_full(&Q_high, &Q_low, P, bid_reciprocals10_128(extra_digits))
+
     // now get P/10^extra_digits: shift Q_high right by M(extra_digits)-128
     var amount = Int(reciprocalScale[extra_digits])
     C128 = Q_high >> amount
-    // __shr_128_long (&C128, Q_high, amount)
     
     var C64 = C128.components.low
     var remainder_h, rem_l: UInt64
@@ -2921,14 +2739,14 @@ extension IntDecimal {
                                         RawBitPattern(C64), rmode))
   }
   
-  @inlinable static func add_carry_out(_ X:UInt64, _ Y:UInt64) ->
-                                                      (S:UInt64, CY:UInt64) {
+  @inlinable static func add_carry_out(
+    _ X:UInt64, _ Y:UInt64) -> (S:UInt64, CY:UInt64) {
       let S = X &+ Y
       return (S, S < X ? 1 : 0)  // allow overflow
   }
 
-  @inlinable static func add_carry_in_out(_ X:UInt64, _ Y:UInt64, _ CI:UInt64)
-                                            -> (S:UInt64, CY:UInt64) {
+  @inlinable static func add_carry_in_out(
+    _ X:UInt64, _ Y:UInt64, _ CI:UInt64) -> (S:UInt64, CY:UInt64) {
       let X1 = X &+ CI
       let S = X1 &+ Y
       return (S, ((S<X1) || (X1<CI)) ? 1 : 0)
@@ -3253,7 +3071,7 @@ extension IntDecimal {
           // kx = 10^(-x) = bid_ten2mk64[ind - 1]
           // C* = (C1 + 1/2 * 10^x) * 10^(-x)
           // the approximation of 10^(-x) was rounded up to 64 bits
-          P128 = mul64x64to128(UInt64(C1), bid_ten2mk64(ind - 1)).components
+          P128 = UInt64(C1).multipliedFullWidth(by: bid_ten2mk64(ind - 1))
           
           // if (0 < f* < 10^(-x)) then the result is a midpoint
           //   if floor(C*) is even then C* = floor(C*) - logical right
@@ -3286,31 +3104,6 @@ extension IntDecimal {
           //   the result is exact
           // else // if (f* - 1/2 > T*) then
           //   the result is inexact
-//          if (ind - 1 <= 2) {
-//            if (fstar.low > MASK_SIGN) {
-//              // f* > 1/2 and the result may be exact
-//              // fstar.low - MASK_SIGN is f* - 1/2
-//              if ((fstar.low - MASK_SIGN) > bid_ten2mk64[ind - 1]) {
-//                // set the inexact flag
-//                //pfpsf.insert(.inexact)
-//              }    // else the result is exact
-//            } else {    // the result is inexact; f2* <= 1/2
-//              // set the inexact flag
-//              //pfpsf.insert(.inexact)
-//            }
-//          } else {    // if 3 <= ind - 1 <= 21
-//            if fstar.high > bid_onehalf128[ind - 1] || (fstar.high == bid_onehalf128[ind - 1] && fstar.low != 0) {
-//              // f2* > 1/2 and the result may be exact
-//              // Calculate f2* - 1/2
-//              if fstar.high > bid_onehalf128[ind - 1] || fstar.low > bid_ten2mk64[ind - 1] {
-//                // set the inexact flag
-//                pfpsf.insert(.inexact)
-//              }    // else the result is exact
-//            } else {    // the result is inexact; f2* <= 1/2
-//              // set the inexact flag
-//              pfpsf.insert(.inexact)
-//            }
-//          }
           // set exponent to zero as it was negative before.
           // res = x_sign | zero | res;
           return Self(sign: x_sign, expBitPattern: exponentBias,
@@ -3336,7 +3129,7 @@ extension IntDecimal {
           // kx = 10^(-x) = bid_ten2mk64[ind - 1]
           // C* = (C1 + 1/2 * 10^x) * 10^(-x)
           // the approximation of 10^(-x) was rounded up to 64 bits
-          P128 = mul64x64to128(UInt64(C1), bid_ten2mk64(ind - 1)).components
+          P128 = UInt64(C1).multipliedFullWidth(by: bid_ten2mk64(ind - 1))
           
           // if (0 < f* < 10^(-x)) then the result is a midpoint
           //   C* = floor(C*) - logical right shift; C* has p decimal digits,
@@ -3362,31 +3155,6 @@ extension IntDecimal {
           //   the result is exact
           // else // if (f* - 1/2 > T*) then
           //   the result is inexact
-//          if ind - 1 <= 2 {
-//            if fstar.low > MASK_SIGN {
-//              // f* > 1/2 and the result may be exact
-//              // fstar.low - MASK_SIGN is f* - 1/2
-//              if (fstar.low - MASK_SIGN) > bid_ten2mk64[ind - 1] {
-//                // set the inexact flag
-//                pfpsf.insert(.inexact)
-//              }    // else the result is exact
-//            } else {    // the result is inexact; f2* <= 1/2
-//              // set the inexact flag
-//              pfpsf.insert(.inexact)
-//            }
-//          } else {    // if 3 <= ind - 1 <= 21
-//            if fstar.high > bid_onehalf128[ind - 1] || (fstar.high == bid_onehalf128[ind - 1] && fstar.low != 0) {
-//              // f2* > 1/2 and the result may be exact
-//              // Calculate f2* - 1/2
-//              if fstar.high > bid_onehalf128[ind - 1] || fstar.low > bid_ten2mk64[ind - 1] {
-//                // set the inexact flag
-//                pfpsf.insert(.inexact)
-//              }    // else the result is exact
-//            } else {    // the result is inexact; f2* <= 1/2
-//              // set the inexact flag
-//              pfpsf.insert(.inexact)
-//            }
-//          }
           // set exponent to zero as it was negative before.
           return Self(sign: x_sign, expBitPattern: exponentBias, sigBitPattern: res)
         } else {    // if exp < 0 and q + exp < 0
@@ -3407,7 +3175,7 @@ extension IntDecimal {
           // kx = 10^(-x) = bid_ten2mk64[ind - 1]
           // C* = C1 * 10^(-x)
           // the approximation of 10^(-x) was rounded up to 64 bits
-          P128 = mul64x64to128(UInt64(C1), bid_ten2mk64(ind - 1)).components
+          P128 = UInt64(C1).multipliedFullWidth(by: bid_ten2mk64(ind - 1))
           
           // C* = floor(C*) (logical right shift; C has p decimal digits,
           //       correct by Property 1)
@@ -3458,8 +3226,8 @@ extension IntDecimal {
           // kx = 10^(-x) = bid_ten2mk64[ind - 1]
           // C* = C1 * 10^(-x)
           // the approximation of 10^(-x) was rounded up to 64 bits
-          P128 = mul64x64to128(UInt64(C1), bid_ten2mk64(ind - 1)).components
-          
+          P128 = UInt64(C1).multipliedFullWidth(by: bid_ten2mk64(ind - 1))
+
           // C* = floor(C*) (logical right shift; C has p decimal digits,
           //       correct by Property 1)
           // if (0 < f* < 10^(-x)) then the result is exact
@@ -3507,8 +3275,8 @@ extension IntDecimal {
           // kx = 10^(-x) = bid_ten2mk64[ind - 1]
           // C* = C1 * 10^(-x)
           // the approximation of 10^(-x) was rounded up to 64 bits
-          P128 = mul64x64to128(UInt64(C1), bid_ten2mk64(ind - 1)).components
-          
+          P128 = UInt64(C1).multipliedFullWidth(by: bid_ten2mk64(ind - 1))
+ 
           // C* = floor(C*) (logical right shift; C has p decimal digits,
           //       correct by Property 1)
           // if (0 < f* < 10^(-x)) then the result is exact
@@ -3525,9 +3293,6 @@ extension IntDecimal {
             fstar.low = P128.low
           }
           // if (f* > 10^(-x)) then the result is inexact
-//          if (fstar.high != 0) || (fstar.low >= bid_ten2mk64[ind - 1]) {
-//            pfpsf.insert(.inexact)
-//          }
           // set exponent to zero as it was negative before.
           return Self(sign: x_sign, expBitPattern: exponentBias,
                       sigBitPattern: RawBitPattern(res))
